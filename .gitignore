@@ -1,11 +1,12 @@
 # project-specific
+nextflow/pipeline_*.txt
+nextflow/pipeline_*.html
 
 
 # nextflow
 .nextflow*
 work
-nextflow/pipeline_*.txt
-nextflow/pipeline_*.html
+
 
 # python build
 .idea
