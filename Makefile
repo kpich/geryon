@@ -28,10 +28,6 @@ mypy:
 etl:
 	./scripts/etl.sh
 
-.PHONY: etl-resume
-etl-resume:
-	./scripts/etl.sh -resume
-
 .PHONY: etl-clean
 etl-clean:
 	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*

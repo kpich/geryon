@@ -7,7 +7,6 @@
 #
 # Examples:
 #   ./scripts/etl.sh                                    # Run with defaults
-#   ./scripts/etl.sh -resume                            # Resume failed run
 #   ./scripts/etl.sh --data_root /path/to/other/data   # Override data location
 
 set -euo pipefail
