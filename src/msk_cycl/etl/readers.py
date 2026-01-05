@@ -62,10 +62,12 @@ def read_tsv(
         raise FileNotFoundError(f"File not found: {file_path}")
 
     # Read TSV with standard parameters
+    # Use low_memory=False to avoid dtype warnings on large files with mixed types
     df = pd.read_csv(
         file_path,
         sep=sep,
         comment=comment,
+        low_memory=False,
         **kwargs,
     )
 

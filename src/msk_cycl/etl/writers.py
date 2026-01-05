@@ -10,6 +10,35 @@ from typing import Any
 import pandas as pd
 
 
+def _clean_dataframe_for_parquet(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean DataFrame for parquet writing.
+
+    Strips whitespace from string columns to avoid type conversion issues.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to clean
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned DataFrame
+    """
+    df_clean = df.copy()
+
+    # Strip whitespace from object/string columns
+    for col in df_clean.columns:
+        if df_clean[col].dtype == "object":
+            # Only apply str methods to non-null values
+            df_clean[col] = df_clean[col].apply(
+                lambda x: x.strip() if isinstance(x, str) else x
+            )
+
+    return df_clean
+
+
 def write_parquet(
     df: pd.DataFrame,
     output_path: str | Path,
@@ -53,8 +82,11 @@ def write_parquet(
     # Create parent directory if it doesn't exist
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Clean DataFrame (strip whitespace from string columns)
+    df_clean = _clean_dataframe_for_parquet(df)
+
     # Write to parquet
-    df.to_parquet(
+    df_clean.to_parquet(
         output_path,
         compression=compression,
         index=index,
