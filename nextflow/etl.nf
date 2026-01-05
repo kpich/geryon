@@ -32,10 +32,10 @@ process extractTSV {
 
     script:
     """
-    python -m msk_cycl.etl.process_file \
+    python -m msk_cycl.etl.process_cbioportal_file \
         --input ${tsv_file} \
         --output ${tsv_file.baseName}.parquet \
-        --verbose
+        --log-level INFO
     """
 }
 

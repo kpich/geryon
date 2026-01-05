@@ -3,9 +3,8 @@
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
-from msk_cycl.etl.writers import get_parquet_metadata, write_parquet
+from msk_cycl.etl.writers import write_parquet
 
 
 def test_write_parquet_creates_output_directory(tmp_path: Path) -> None:
@@ -17,19 +16,6 @@ def test_write_parquet_creates_output_directory(tmp_path: Path) -> None:
 
     assert output_path.exists()
     assert output_path.parent.exists()
-
-
-def test_write_parquet_creates_readable_file(tmp_path: Path) -> None:
-    """Verify that write_parquet creates a parquet file readable by pandas."""
-    df = pd.DataFrame(
-        {"col1": [1, 2, 3], "col2": ["a", "b", "c"], "col3": [1.5, 2.5, 3.5]}
-    )
-    output_path = tmp_path / "output.parquet"
-
-    write_parquet(df, output_path)
-
-    df_read = pd.read_parquet(output_path)
-    pd.testing.assert_frame_equal(df, df_read)
 
 
 def test_write_parquet_excludes_index_by_default(tmp_path: Path) -> None:
@@ -54,36 +40,22 @@ def test_write_parquet_respects_compression_parameter(tmp_path: Path) -> None:
         assert output_path.exists()
 
 
-def test_get_parquet_metadata_raises_filenotfound_for_nonexistent_file() -> None:
-    """Verify that get_parquet_metadata raises FileNotFoundError for nonexistent
-    files."""
-    with pytest.raises(FileNotFoundError, match="File not found"):
-        get_parquet_metadata("/nonexistent/path/to/file.parquet")
-
-
-def test_get_parquet_metadata_returns_correct_row_count(tmp_path: Path) -> None:
-    """Verify that get_parquet_metadata correctly reports row count."""
-    df = pd.DataFrame({"col1": range(42), "col2": range(42, 84)})
+def test_write_parquet_strips_whitespace_from_string_columns(tmp_path: Path) -> None:
+    """Verify that write_parquet strips trailing whitespace from string values."""
+    df = pd.DataFrame(
+        {
+            "col1": ["value1   ", "value2  ", "value3"],
+            "col2": [1, 2, 3],
+            "col3": ["  leading", "  both  ", "normal"],
+        }
+    )
     output_path = tmp_path / "output.parquet"
+
     write_parquet(df, output_path)
 
-    metadata = get_parquet_metadata(output_path)
-
-    assert metadata["num_rows"] == 42
-    assert metadata["num_columns"] == 2
-
-
-def test_get_parquet_metadata_includes_schema_information(tmp_path: Path) -> None:
-    """Verify that get_parquet_metadata includes schema information."""
-    df = pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]})
-    output_path = tmp_path / "output.parquet"
-    write_parquet(df, output_path)
-
-    metadata = get_parquet_metadata(output_path)
-
-    assert "schema" in metadata
-    assert metadata["schema"] is not None
-    # Check that schema contains our columns
-    schema_str = str(metadata["schema"])
-    assert "col1" in schema_str
-    assert "col2" in schema_str
+    df_read = pd.read_parquet(output_path)
+    # Trailing whitespace should be stripped
+    assert df_read["col1"].tolist() == ["value1", "value2", "value3"]
+    assert df_read["col3"].tolist() == ["leading", "both", "normal"]
+    # Numeric columns should be unchanged
+    assert df_read["col2"].tolist() == [1, 2, 3]

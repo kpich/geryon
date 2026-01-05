@@ -1,9 +1,8 @@
 """
 ETL module for MSK CYCL project.
 
-This module provides functionality for extracting TSV files from MSK-IMPACT
-datasets, transforming them, and loading into parquet format for efficient
-querying and analysis.
+This module provides functionality for extracting cBioPortal TSV files,
+and loading them into parquet format for efficient querying and analysis.
 """
 
 from msk_cycl.etl.readers import get_table_name, read_tsv

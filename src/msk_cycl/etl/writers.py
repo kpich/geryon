@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 
 def _clean_dataframe_for_parquet(df: pd.DataFrame) -> pd.DataFrame:
@@ -121,8 +122,6 @@ def get_parquet_metadata(file_path: str | Path) -> dict[str, Any]:
     >>> metadata = get_parquet_metadata("output.parquet")
     >>> print(f"Rows: {metadata['num_rows']}")
     """
-    import pyarrow.parquet as pq
-
     file_path = Path(file_path)
 
     if not file_path.exists():
