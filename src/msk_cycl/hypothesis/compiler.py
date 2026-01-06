@@ -4,7 +4,7 @@ Compiler for translating CYCL hypothesis specs to SQL.
 Provides deterministic compilation from Pydantic models to DuckDB-compatible SQL.
 """
 
-from msk_cycl.hypothesis.spec import CohortFilter, CyclHyp, SelectCohort
+from msk_cycl.hypothesis.spec import CohortFilter, SelectCohort
 
 
 def _escape_sql_value(value: str | int | float) -> str:
@@ -89,20 +89,3 @@ def compile_select_cohort_ids(query: SelectCohort) -> str:
 
     sql = f"SELECT PATIENT_ID FROM {table} WHERE {where_sql}"
     return sql
-
-
-def compile_hypothesis(spec: CyclHyp) -> str:
-    """
-    Compile CyclHyp to SQL (DEPRECATED).
-
-    This function is deprecated because CyclHyp now only accepts
-    CompareCohorts, which requires multiple SQL queries and cannot
-    be represented as a single SQL string.
-
-    Use HypothesisExecutor.execute() instead.
-    """
-    raise DeprecationWarning(
-        "compile_hypothesis is deprecated. CyclHyp now only supports "
-        "CompareCohorts which requires execution through HypothesisExecutor. "
-        "Use executor.execute(spec) instead."
-    )
