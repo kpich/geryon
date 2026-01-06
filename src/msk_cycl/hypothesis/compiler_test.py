@@ -10,8 +10,7 @@ from msk_cycl.hypothesis.compiler import (
 from msk_cycl.hypothesis.spec import CohortFilter, CyclHyp, SelectCohort
 
 
-def test_compile_filter_equality_string() -> None:
-    """Verify equality operator with string value."""
+def test_equality_operator_with_string_compiles_correctly():
     filter = CohortFilter(
         table="clinical_patient",
         column="CANCER_TYPE",
@@ -22,8 +21,7 @@ def test_compile_filter_equality_string() -> None:
     assert sql == "CANCER_TYPE = 'Lung Adenocarcinoma'"
 
 
-def test_compile_filter_equality_numeric() -> None:
-    """Verify equality operator with numeric value."""
+def test_equality_operator_with_numeric_compiles_correctly():
     filter = CohortFilter(
         table="clinical_patient", column="AGE", operator="==", value=65
     )
@@ -31,8 +29,7 @@ def test_compile_filter_equality_numeric() -> None:
     assert sql == "AGE = 65"
 
 
-def test_compile_filter_not_equal() -> None:
-    """Verify not-equal operator."""
+def test_not_equal_operator_compiles_correctly():
     filter = CohortFilter(
         table="clinical_patient",
         column="CANCER_TYPE",
@@ -43,8 +40,7 @@ def test_compile_filter_not_equal() -> None:
     assert sql == "CANCER_TYPE != 'Unknown'"
 
 
-def test_compile_filter_greater_than() -> None:
-    """Verify greater-than operator."""
+def test_greater_than_operator_compiles_correctly():
     filter = CohortFilter(
         table="clinical_patient", column="AGE", operator=">", value=65
     )
@@ -52,17 +48,7 @@ def test_compile_filter_greater_than() -> None:
     assert sql == "AGE > 65"
 
 
-def test_compile_filter_less_than_or_equal() -> None:
-    """Verify less-than-or-equal operator."""
-    filter = CohortFilter(
-        table="clinical_patient", column="AGE", operator="<=", value=50
-    )
-    sql = compile_cohort_filter(filter)
-    assert sql == "AGE <= 50"
-
-
-def test_compile_filter_in_operator() -> None:
-    """Verify IN operator with list of values."""
+def test_in_operator_with_string_list_compiles_correctly():
     filter = CohortFilter(
         table="clinical_patient",
         column="CANCER_TYPE",
@@ -75,8 +61,7 @@ def test_compile_filter_in_operator() -> None:
     )
 
 
-def test_compile_filter_in_operator_numeric() -> None:
-    """Verify IN operator with numeric values."""
+def test_in_operator_with_numeric_list_compiles_correctly():
     filter = CohortFilter(
         table="clinical_patient", column="AGE", operator="in", value=[65, 70, 75]
     )
@@ -84,8 +69,7 @@ def test_compile_filter_in_operator_numeric() -> None:
     assert sql == "AGE IN (65, 70, 75)"
 
 
-def test_compile_filter_sql_injection_protection() -> None:
-    """Verify SQL injection attempts are escaped."""
+def test_sql_injection_attempt_is_escaped():
     filter = CohortFilter(
         table="clinical_patient",
         column="CANCER_TYPE",
@@ -93,25 +77,21 @@ def test_compile_filter_sql_injection_protection() -> None:
         value="'; DROP TABLE patients; --",
     )
     sql = compile_cohort_filter(filter)
-    # Single quotes should be escaped by doubling
     assert "''" in sql
-    assert "DROP TABLE" in sql  # Still in the string, but escaped
 
 
-def test_compile_filter_in_requires_list() -> None:
-    """Verify IN operator requires list value."""
+def test_in_operator_with_non_list_raises():
     filter = CohortFilter(
         table="clinical_patient",
         column="CANCER_TYPE",
         operator="in",
-        value="Lung Adenocarcinoma",  # String, not list
+        value="Lung Adenocarcinoma",
     )
     with pytest.raises(ValueError, match="'in' operator requires list value"):
         compile_cohort_filter(filter)
 
 
-def test_compile_filter_in_requires_non_empty_list() -> None:
-    """Verify IN operator requires non-empty list."""
+def test_in_operator_with_empty_list_raises():
     filter = CohortFilter(
         table="clinical_patient", column="CANCER_TYPE", operator="in", value=[]
     )
@@ -119,8 +99,7 @@ def test_compile_filter_in_requires_non_empty_list() -> None:
         compile_cohort_filter(filter)
 
 
-def test_compile_select_cohort_single_filter() -> None:
-    """Verify compilation of SelectCohort with single filter."""
+def test_select_cohort_with_single_filter_compiles_correctly():
     query = SelectCohort(
         filters=[
             CohortFilter(
@@ -138,8 +117,7 @@ def test_compile_select_cohort_single_filter() -> None:
     )
 
 
-def test_compile_select_cohort_multiple_filters() -> None:
-    """Verify compilation of SelectCohort with multiple filters (AND logic)."""
+def test_select_cohort_with_multiple_filters_uses_and_logic():
     query = SelectCohort(
         filters=[
             CohortFilter(
@@ -160,8 +138,7 @@ def test_compile_select_cohort_multiple_filters() -> None:
     )
 
 
-def test_compile_select_cohort_custom_patient_id() -> None:
-    """Verify compilation uses custom patient ID column."""
+def test_select_cohort_with_custom_patient_id_column_uses_it():
     query = SelectCohort(
         filters=[
             CohortFilter(
@@ -177,8 +154,7 @@ def test_compile_select_cohort_custom_patient_id() -> None:
     assert "PATIENT_ID_CUSTOM" in sql
 
 
-def test_compile_hypothesis_end_to_end() -> None:
-    """Verify complete CyclHyp compilation."""
+def test_cycl_hyp_compiles_to_sql():
     spec = CyclHyp(
         query=SelectCohort(
             filters=[

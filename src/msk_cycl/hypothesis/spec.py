@@ -8,6 +8,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Query language version for backward compatibility tracking
+QUERY_LANGUAGE_VERSION = 1
+
 
 class CohortFilter(BaseModel):
     """Single filter criterion for cohort selection."""
@@ -35,6 +38,9 @@ class SelectCohort(BaseModel):
 class CyclHyp(BaseModel):
     """Top-level CYCL hypothesis specification."""
 
+    version: Literal[1] = Field(
+        default=1, description="Query language version for compatibility"
+    )
     query: SelectCohort
 
     # Future: add comparison, outcome, adjustment, etc.
