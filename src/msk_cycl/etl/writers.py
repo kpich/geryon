@@ -12,21 +12,7 @@ import pyarrow.parquet as pq
 
 
 def _clean_dataframe_for_parquet(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean DataFrame for parquet writing.
-
-    Strips whitespace from string columns to avoid type conversion issues.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to clean
-
-    Returns
-    -------
-    pd.DataFrame
-        Cleaned DataFrame
-    """
+    """Strip whitespace from string columns to avoid parquet type conversion errors."""
     df_clean = df.copy()
 
     # Strip whitespace from object/string columns
@@ -48,36 +34,7 @@ def write_parquet(
     index: bool = False,
     **kwargs: Any,
 ) -> None:
-    """
-    Write a DataFrame to parquet format.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to write
-    output_path : str or Path
-        Output file path (should end with .parquet)
-    compression : str, default="snappy"
-        Compression algorithm. Options: 'snappy', 'gzip', 'brotli', 'lz4', 'zstd'
-        'snappy' provides good balance of speed and compression
-    index : bool, default=False
-        Whether to include DataFrame index in output
-    **kwargs
-        Additional arguments passed to pandas.to_parquet
-
-    Examples
-    --------
-    >>> df = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
-    >>> write_parquet(df, "output.parquet")
-    >>> write_parquet(df, "output.parquet", compression="gzip")
-
-    Notes
-    -----
-    This is a boilerplate implementation. Future enhancements may include:
-    - Schema enforcement
-    - Partitioning for large datasets
-    - Metadata embedding
-    """
+    """Write DataFrame to parquet, stripping whitespace from string columns first."""
     output_path = Path(output_path)
 
     # Create parent directory if it doesn't exist
@@ -97,31 +54,7 @@ def write_parquet(
 
 
 def get_parquet_metadata(file_path: str | Path) -> dict[str, Any]:
-    """
-    Extract metadata from a parquet file.
-
-    Useful for validation and debugging.
-
-    Parameters
-    ----------
-    file_path : str or Path
-        Path to parquet file
-
-    Returns
-    -------
-    dict
-        Metadata including schema, row count, etc.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the file does not exist
-
-    Examples
-    --------
-    >>> metadata = get_parquet_metadata("output.parquet")
-    >>> print(f"Rows: {metadata['num_rows']}")
-    """
+    """Extract parquet file metadata (row count, column count, schema, etc.)."""
     file_path = Path(file_path)
 
     if not file_path.exists():

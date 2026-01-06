@@ -22,18 +22,7 @@ def process_cbioportal_file(
     output_path: Path,
     compression: str = "snappy",
 ) -> None:
-    """
-    Process a cBioPortal TSV file and convert it to parquet format.
-
-    Parameters
-    ----------
-    input_path : Path
-        Path to input TSV file
-    output_path : Path
-        Path to output parquet file
-    compression : str, default="snappy"
-        Compression algorithm for parquet
-    """
+    """Convert cBioPortal TSV file to parquet format."""
     logger.info(f"Reading TSV file: {input_path}")
     df = read_tsv(input_path)
 
@@ -46,15 +35,8 @@ def process_cbioportal_file(
     logger.info("Success!")
 
 
-def main() -> int:
-    """
-    Main entry point for the process_cbioportal_file CLI.
-
-    Returns
-    -------
-    int
-        Exit code (0 for success, non-zero for error)
-    """
+def main() -> None:
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Convert cBioPortal TSV file to parquet format",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -115,8 +97,6 @@ Examples:
         compression=args.compression,
     )
 
-    return 0
-
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
