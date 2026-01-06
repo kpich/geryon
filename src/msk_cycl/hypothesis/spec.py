@@ -27,7 +27,13 @@ class CohortFilter(BaseModel):
 
 
 class SelectCohort(BaseModel):
-    """Select patients matching filter criteria."""
+    """
+    Select patients matching filter criteria.
+
+    INTERNAL USE ONLY: This class is used internally by CompareCohorts
+    to define cohorts. Users should not create CyclHyp objects with
+    bare SelectCohort queries - use CompareCohorts instead.
+    """
 
     operation: Literal["select_cohort"] = "select_cohort"
     filters: list[CohortFilter] = Field(..., description="Filter criteria (ANDed)")
@@ -86,4 +92,4 @@ class CyclHyp(BaseModel):
     version: Literal[1] = Field(
         default=1, description="Query language version for compatibility"
     )
-    query: SelectCohort | CompareCohorts
+    query: CompareCohorts

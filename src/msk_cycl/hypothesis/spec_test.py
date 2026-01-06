@@ -9,7 +9,7 @@ from msk_cycl.hypothesis.spec import (
     ComparisonMethod,
     CyclHyp,
     OverallSurvival,
-    SelectCohort,
+    SelectCohort,  # For negative tests only
 )
 
 
@@ -46,16 +46,31 @@ def test_cohort_filter_with_invalid_operator_raises():
 
 
 def test_cycl_hyp_defaults_to_version_1():
+    """CyclHyp defaults to version 1."""
     spec = CyclHyp(
-        query=SelectCohort(
-            filters=[
-                CohortFilter(
-                    table="clinical_patient",
-                    column="CANCER_TYPE",
-                    operator="==",
-                    value="Lung Adenocarcinoma",
-                )
-            ]
+        query=CompareCohorts(
+            cohort_a=SelectCohort(
+                filters=[
+                    CohortFilter(
+                        table="clinical_patient",
+                        column="TREATMENT",
+                        operator="==",
+                        value="Drug A",
+                    )
+                ]
+            ),
+            cohort_b=SelectCohort(
+                filters=[
+                    CohortFilter(
+                        table="clinical_patient",
+                        column="TREATMENT",
+                        operator="==",
+                        value="Placebo",
+                    )
+                ]
+            ),
+            outcome=OverallSurvival(),
+            method=ComparisonMethod.HAZARD_RATIO_COX,
         )
     )
     assert spec.version == 1
@@ -125,18 +140,21 @@ def test_compare_cohorts_with_valid_cox_and_os_succeeds():
     assert comparison.method == ComparisonMethod.HAZARD_RATIO_COX
 
 
-def test_cycl_hyp_accepts_select_cohort_query():
-    """CyclHyp accepts SelectCohort as query."""
-    spec = CyclHyp(
-        query=SelectCohort(
-            filters=[
-                CohortFilter(
-                    table="clinical_patient", column="AGE", operator=">", value=65
-                )
-            ]
+def test_cycl_hyp_rejects_select_cohort_query():
+    """CyclHyp rejects bare SelectCohort (must use CompareCohorts)."""
+    with pytest.raises(ValidationError):
+        CyclHyp(
+            query=SelectCohort(
+                filters=[
+                    CohortFilter(
+                        table="clinical_patient",
+                        column="AGE",
+                        operator=">",
+                        value=65,
+                    )
+                ]
+            )
         )
-    )
-    assert isinstance(spec.query, SelectCohort)
 
 
 def test_cycl_hyp_accepts_compare_cohorts_query():

@@ -6,8 +6,16 @@ from msk_cycl.hypothesis.compiler import (
     compile_cohort_filter,
     compile_hypothesis,
     compile_select_cohort,
+    compile_select_cohort_ids,
 )
-from msk_cycl.hypothesis.spec import CohortFilter, CyclHyp, SelectCohort
+from msk_cycl.hypothesis.spec import (
+    CohortFilter,
+    CompareCohorts,
+    ComparisonMethod,
+    CyclHyp,
+    OverallSurvival,
+    SelectCohort,
+)
 
 
 def test_equality_operator_with_string_compiles_correctly():
@@ -137,20 +145,52 @@ def test_select_cohort_with_multiple_filters_uses_and_logic():
     )
 
 
-def test_cycl_hyp_compiles_to_sql():
+def test_compile_select_cohort_ids_returns_only_patient_id():
+    """compile_select_cohort_ids returns only PATIENT_ID column."""
+    query = SelectCohort(
+        filters=[
+            CohortFilter(
+                table="clinical_patient",
+                column="CANCER_TYPE",
+                operator="==",
+                value="Lung Adenocarcinoma",
+            )
+        ]
+    )
+    sql = compile_select_cohort_ids(query)
+    assert sql == (
+        "SELECT PATIENT_ID FROM clinical_patient "
+        "WHERE CANCER_TYPE = 'Lung Adenocarcinoma'"
+    )
+
+
+def test_compile_hypothesis_raises_deprecation_warning():
+    """compile_hypothesis is deprecated for CompareCohorts-only CyclHyp."""
     spec = CyclHyp(
-        query=SelectCohort(
-            filters=[
-                CohortFilter(
-                    table="clinical_patient",
-                    column="CANCER_TYPE",
-                    operator="==",
-                    value="Lung Adenocarcinoma",
-                )
-            ]
+        query=CompareCohorts(
+            cohort_a=SelectCohort(
+                filters=[
+                    CohortFilter(
+                        table="clinical_patient",
+                        column="TREATMENT",
+                        operator="==",
+                        value="Drug A",
+                    )
+                ]
+            ),
+            cohort_b=SelectCohort(
+                filters=[
+                    CohortFilter(
+                        table="clinical_patient",
+                        column="TREATMENT",
+                        operator="==",
+                        value="Placebo",
+                    )
+                ]
+            ),
+            outcome=OverallSurvival(),
+            method=ComparisonMethod.HAZARD_RATIO_COX,
         )
     )
-    sql = compile_hypothesis(spec)
-    assert "SELECT *" in sql
-    assert "FROM clinical_patient" in sql
-    assert "WHERE CANCER_TYPE = 'Lung Adenocarcinoma'" in sql
+    with pytest.raises(DeprecationWarning, match="compile_hypothesis is deprecated"):
+        compile_hypothesis(spec)

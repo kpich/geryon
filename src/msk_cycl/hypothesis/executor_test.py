@@ -3,10 +3,9 @@
 from pathlib import Path
 
 import pandas as pd  # type: ignore
-import pytest
 
 from msk_cycl.hypothesis.db import Database
-from msk_cycl.hypothesis.executor import HypothesisExecutor
+from msk_cycl.hypothesis.executor import ComparisonResult, HypothesisExecutor
 from msk_cycl.hypothesis.spec import (
     CohortFilter,
     CompareCohorts,
@@ -17,23 +16,75 @@ from msk_cycl.hypothesis.spec import (
 )
 
 
-def test_executor_executes_select_cohort_query(tmp_path: Path):
-    """Executor returns DataFrame for SelectCohort queries."""
+def test_executor_executes_compare_cohorts_query(tmp_path: Path):
+    """Executor returns ComparisonResult for CompareCohorts queries."""
     df = pd.DataFrame(
         {
-            "PATIENT_ID": ["P001", "P002", "P003"],
-            "TREATMENT": ["Drug A", "Placebo", "Drug A"],
-            "AGE": [65, 70, 68],
+            "PATIENT_ID": ["P001", "P002", "P003", "P004"],
+            "TREATMENT": ["Drug A", "Placebo", "Drug A", "Placebo"],
+            "OS_MONTHS": [12.5, 8.3, 15.2, 9.1],
+            "OS_STATUS": [1, 1, 0, 1],
         }
     )
     parquet_file = tmp_path / "data_clinical_patient.parquet"
     df.to_parquet(parquet_file, index=False)
 
-    db = Database(tmp_path)
-    executor = HypothesisExecutor(db)
+    with Database(tmp_path) as db:
+        executor = HypothesisExecutor(db)
 
-    spec = CyclHyp(
-        query=SelectCohort(
+        spec = CyclHyp(
+            query=CompareCohorts(
+                cohort_a=SelectCohort(
+                    filters=[
+                        CohortFilter(
+                            table="clinical_patient",
+                            column="TREATMENT",
+                            operator="==",
+                            value="Drug A",
+                        )
+                    ]
+                ),
+                cohort_b=SelectCohort(
+                    filters=[
+                        CohortFilter(
+                            table="clinical_patient",
+                            column="TREATMENT",
+                            operator="==",
+                            value="Placebo",
+                        )
+                    ]
+                ),
+                outcome=OverallSurvival(),
+                method=ComparisonMethod.HAZARD_RATIO_COX,
+            )
+        )
+
+        result = executor.execute(spec)
+
+        assert isinstance(result, ComparisonResult)
+        assert result.cohort_a_ids == ["P001", "P003"]
+        assert result.cohort_b_ids == ["P002", "P004"]
+        assert result.cohort_a_size == 2
+        assert result.cohort_b_size == 2
+        assert result.hazard_ratio is not None
+        assert result.p_value is not None
+
+
+def test_executor_get_cohort_ids_returns_list_of_patient_ids(tmp_path: Path):
+    """_get_cohort_ids internal method returns list of patient IDs."""
+    df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003"],
+            "TREATMENT": ["Drug A", "Placebo", "Drug A"],
+        }
+    )
+    parquet_file = tmp_path / "data_clinical_patient.parquet"
+    df.to_parquet(parquet_file, index=False)
+
+    with Database(tmp_path) as db:
+        executor = HypothesisExecutor(db)
+
+        cohort = SelectCohort(
             filters=[
                 CohortFilter(
                     table="clinical_patient",
@@ -43,90 +94,9 @@ def test_executor_executes_select_cohort_query(tmp_path: Path):
                 )
             ]
         )
-    )
 
-    result = executor.execute(spec)
+        ids = executor._get_cohort_ids(cohort)
 
-    assert result.query_type == "select_cohort"
-    assert isinstance(result.data, pd.DataFrame)
-    assert len(result.data) == 2
-    assert result.data["PATIENT_ID"].tolist() == ["P001", "P003"]
-
-    db.close()
-
-
-def test_executor_raises_not_implemented_for_compare_cohorts(tmp_path: Path):
-    """Executor raises NotImplementedError for CompareCohorts (stub)."""
-    df = pd.DataFrame(
-        {
-            "PATIENT_ID": ["P001", "P002"],
-            "TREATMENT": ["Drug A", "Placebo"],
-            "OS_MONTHS": [12.5, 8.3],
-            "OS_STATUS": [1, 1],
-        }
-    )
-    parquet_file = tmp_path / "data_clinical_patient.parquet"
-    df.to_parquet(parquet_file, index=False)
-
-    db = Database(tmp_path)
-    executor = HypothesisExecutor(db)
-
-    spec = CyclHyp(
-        query=CompareCohorts(
-            cohort_a=SelectCohort(
-                filters=[
-                    CohortFilter(
-                        table="clinical_patient",
-                        column="TREATMENT",
-                        operator="==",
-                        value="Drug A",
-                    )
-                ]
-            ),
-            cohort_b=SelectCohort(
-                filters=[
-                    CohortFilter(
-                        table="clinical_patient",
-                        column="TREATMENT",
-                        operator="==",
-                        value="Placebo",
-                    )
-                ]
-            ),
-            outcome=OverallSurvival(),
-            method=ComparisonMethod.HAZARD_RATIO_COX,
-        )
-    )
-
-    with pytest.raises(
-        NotImplementedError, match="Cohort comparison execution not yet implemented"
-    ):
-        executor.execute(spec)
-
-    db.close()
-
-
-def test_executor_works_with_database_context_manager(tmp_path: Path):
-    """Executor works with Database context manager pattern."""
-    df = pd.DataFrame({"PATIENT_ID": ["P001"], "AGE": [65]})
-    parquet_file = tmp_path / "data_clinical_patient.parquet"
-    df.to_parquet(parquet_file, index=False)
-
-    with Database(tmp_path) as db:
-        executor = HypothesisExecutor(db)
-
-        spec = CyclHyp(
-            query=SelectCohort(
-                filters=[
-                    CohortFilter(
-                        table="clinical_patient",
-                        column="AGE",
-                        operator=">=",
-                        value=65,
-                    )
-                ]
-            )
-        )
-
-        result = executor.execute(spec)
-        assert len(result.data) == 1
+        assert isinstance(ids, list)
+        assert all(isinstance(id, str) for id in ids)
+        assert ids == ["P001", "P003"]
