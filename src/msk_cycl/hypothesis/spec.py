@@ -30,9 +30,6 @@ class SelectCohort(BaseModel):
 
     operation: Literal["select_cohort"] = "select_cohort"
     filters: list[CohortFilter] = Field(..., description="Filter criteria (ANDed)")
-    patient_id_column: str = Field(
-        default="PATIENT_ID", description="Column containing patient IDs"
-    )
 
 
 class CyclHyp(BaseModel):

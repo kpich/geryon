@@ -67,8 +67,7 @@ def compile_select_cohort(query: SelectCohort) -> str:
     where_sql = " AND ".join(where_clauses)
 
     # Build query
-    patient_id_col = query.patient_id_column
-    sql = f"SELECT DISTINCT {patient_id_col} FROM {table} WHERE {where_sql}"
+    sql = f"SELECT * FROM {table} WHERE {where_sql}"
 
     return sql
 
