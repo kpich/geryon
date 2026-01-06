@@ -10,6 +10,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
+from typing import Literal
 
 from msk_cycl.etl.readers import read_tsv
 from msk_cycl.etl.writers import write_parquet
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 def process_cbioportal_file(
     input_path: Path,
     output_path: Path,
-    compression: str = "snappy",
+    compression: Literal["snappy", "gzip", "brotli", "lz4", "zstd"] = "snappy",
 ) -> None:
     """Convert cBioPortal TSV file to parquet format."""
     logger.info(f"Reading TSV file: {input_path}")

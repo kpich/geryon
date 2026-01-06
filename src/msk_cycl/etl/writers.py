@@ -5,10 +5,10 @@ Handles writing DataFrames to parquet format for efficient storage and querying.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
-import pyarrow.parquet as pq
+import pyarrow.parquet as pq  # type: ignore
 
 
 def _clean_dataframe_for_parquet(df: pd.DataFrame) -> pd.DataFrame:
@@ -30,7 +30,7 @@ def write_parquet(
     df: pd.DataFrame,
     output_path: str | Path,
     *,
-    compression: str = "snappy",
+    compression: Literal["snappy", "gzip", "brotli", "lz4", "zstd"] = "snappy",
     index: bool = False,
     **kwargs: Any,
 ) -> None:
@@ -45,10 +45,10 @@ def write_parquet(
 
     # Write to parquet
     df_clean.to_parquet(
-        output_path,
+        path=output_path,
+        engine="pyarrow",
         compression=compression,
         index=index,
-        engine="pyarrow",  # Explicit engine for consistency
         **kwargs,
     )
 

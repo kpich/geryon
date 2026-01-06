@@ -34,10 +34,13 @@ def test_write_parquet_respects_compression_parameter(tmp_path: Path) -> None:
     """Verify that write_parquet accepts different compression algorithms."""
     df = pd.DataFrame({"col1": range(100)})
 
-    for compression in ["snappy", "gzip"]:
-        output_path = tmp_path / f"output_{compression}.parquet"
-        write_parquet(df, output_path, compression=compression)
-        assert output_path.exists()
+    output_path_snappy = tmp_path / "output_snappy.parquet"
+    write_parquet(df, output_path_snappy, compression="snappy")
+    assert output_path_snappy.exists()
+
+    output_path_gzip = tmp_path / "output_gzip.parquet"
+    write_parquet(df, output_path_gzip, compression="gzip")
+    assert output_path_gzip.exists()
 
 
 def test_write_parquet_strips_whitespace_from_string_columns(tmp_path: Path) -> None:
