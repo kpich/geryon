@@ -23,3 +23,11 @@ clean:
 .PHONY: mypy
 mypy:
 	mypy --check-untyped-defs src/msk_cycl
+
+.PHONY: etl
+etl:
+	./scripts/etl.sh
+
+.PHONY: etl-clean
+etl-clean:
+	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*
