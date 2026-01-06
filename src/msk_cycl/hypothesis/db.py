@@ -7,7 +7,7 @@ Provides in-memory database with auto-registered parquet files.
 from pathlib import Path
 
 import duckdb
-import pandas as pd
+import pandas as pd  # type: ignore
 
 
 def _get_table_name(parquet_path: Path) -> str:

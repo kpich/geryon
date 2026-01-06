@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import pandas as pd
+import pandas as pd  # type: ignore
 import pytest
 
 from msk_cycl.hypothesis.db import Database, _get_table_name

@@ -9,6 +9,7 @@ description = "cancer hypothesis generation"
 requires-python = ">=3.11, <4"
 dependencies = [
     "duckdb>=1.4",
+    "lifelines>=0.27.0",
     "pandas>=2.3",
     "pyarrow>=22.0",
     "pydantic>=2.12",

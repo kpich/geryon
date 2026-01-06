@@ -11,7 +11,8 @@ def _escape_sql_value(value: str | int | float) -> str:
     """Escape value for SQL (basic protection, DuckDB params are better)."""
     if isinstance(value, str):
         # Escape single quotes by doubling them
-        return f"'{value.replace("'", "''")}'"
+        escaped = value.replace("'", "''")
+        return f"'{escaped}'"
     return str(value)
 
 
