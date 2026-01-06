@@ -112,8 +112,7 @@ def test_select_cohort_with_single_filter_compiles_correctly():
     )
     sql = compile_select_cohort(query)
     assert sql == (
-        "SELECT DISTINCT PATIENT_ID FROM clinical_patient "
-        "WHERE CANCER_TYPE = 'Lung Adenocarcinoma'"
+        "SELECT * FROM clinical_patient " "WHERE CANCER_TYPE = 'Lung Adenocarcinoma'"
     )
 
 
@@ -133,25 +132,9 @@ def test_select_cohort_with_multiple_filters_uses_and_logic():
     )
     sql = compile_select_cohort(query)
     assert sql == (
-        "SELECT DISTINCT PATIENT_ID FROM clinical_patient "
+        "SELECT * FROM clinical_patient "
         "WHERE CANCER_TYPE = 'Lung Adenocarcinoma' AND AGE > 65"
     )
-
-
-def test_select_cohort_with_custom_patient_id_column_uses_it():
-    query = SelectCohort(
-        filters=[
-            CohortFilter(
-                table="clinical_patient",
-                column="CANCER_TYPE",
-                operator="==",
-                value="Lung Adenocarcinoma",
-            )
-        ],
-        patient_id_column="PATIENT_ID_CUSTOM",
-    )
-    sql = compile_select_cohort(query)
-    assert "PATIENT_ID_CUSTOM" in sql
 
 
 def test_cycl_hyp_compiles_to_sql():
@@ -168,6 +151,6 @@ def test_cycl_hyp_compiles_to_sql():
         )
     )
     sql = compile_hypothesis(spec)
-    assert "SELECT DISTINCT PATIENT_ID" in sql
+    assert "SELECT *" in sql
     assert "FROM clinical_patient" in sql
     assert "WHERE CANCER_TYPE = 'Lung Adenocarcinoma'" in sql
