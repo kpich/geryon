@@ -32,9 +32,12 @@ def calculate_cox_hazard_ratio(
 
     combined = pd.concat([cohort_a_data, cohort_b_data])
 
+    # Select only columns needed for Cox model (exclude PATIENT_ID)
+    cox_data = combined[["time", "event", "cohort"]]
+
     # Fit Cox model
     cph = CoxPHFitter()
-    cph.fit(combined, duration_col="time", event_col="event")
+    cph.fit(cox_data, duration_col="time", event_col="event")
 
     # Extract results
     hr = cph.hazard_ratios_["cohort"]
