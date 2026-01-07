@@ -7,6 +7,7 @@ Executes compiled hypotheses against database and returns statistical results.
 import pandas as pd  # type: ignore
 from pydantic import BaseModel, ConfigDict, Field
 
+from msk_cycl.hypothesis.compiler import compile_select_cohort_ids
 from msk_cycl.hypothesis.db import Database
 from msk_cycl.hypothesis.spec import (
     CompareCohorts,
@@ -15,6 +16,7 @@ from msk_cycl.hypothesis.spec import (
     OverallSurvival,
     SelectCohort,
 )
+from msk_cycl.hypothesis.statistics import calculate_cox_hazard_ratio
 
 
 class ComparisonResult(BaseModel):
@@ -51,8 +53,6 @@ class HypothesisExecutor:
 
     def _get_cohort_ids(self, cohort: SelectCohort) -> list[str]:
         """INTERNAL: Execute cohort selection and return patient IDs."""
-        from msk_cycl.hypothesis.compiler import compile_select_cohort_ids
-
         sql = compile_select_cohort_ids(cohort)
         df = self.db.execute(sql)
         return df["PATIENT_ID"].tolist()
@@ -101,6 +101,4 @@ class HypothesisExecutor:
         self, cohort_a_data: pd.DataFrame, cohort_b_data: pd.DataFrame
     ) -> dict[str, float]:
         """Calculate hazard ratio using Cox proportional hazards model."""
-        from msk_cycl.hypothesis.statistics import calculate_cox_hazard_ratio
-
         return calculate_cox_hazard_ratio(cohort_a_data, cohort_b_data)
