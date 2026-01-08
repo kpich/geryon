@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd  # type: ignore
 import pytest
 
-from msk_cycl.hypothesis.db import Database, _get_table_name
+from msk_cycl.db.database import Database, _get_table_name
 
 
 def test_get_table_name_removes_data_prefix():

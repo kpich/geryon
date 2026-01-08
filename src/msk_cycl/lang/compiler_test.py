@@ -2,12 +2,12 @@
 
 import pytest
 
-from msk_cycl.hypothesis.compiler import (
+from msk_cycl.lang.compiler import (
     compile_cohort_filter,
     compile_select_cohort,
     compile_select_cohort_ids,
 )
-from msk_cycl.hypothesis.spec import CohortFilter, SelectCohort
+from msk_cycl.lang.spec import CohortFilter, SelectCohort
 
 
 def test_equality_operator_with_string_compiles_correctly():

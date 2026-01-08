@@ -4,10 +4,12 @@ Pydantic models for CYCL hypothesis specifications.
 Defines type-safe structures for expressing cohort selection queries.
 """
 
-from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
+
+from msk_cycl.lang.methods import ComparisonMethod
+from msk_cycl.lang.outcomes import OverallSurvival
 
 # Query language version for backward compatibility tracking
 QUERY_LANGUAGE_VERSION = 1
@@ -37,30 +39,6 @@ class SelectCohort(BaseModel):
 
     operation: Literal["select_cohort"] = "select_cohort"
     filters: list[CohortFilter] = Field(..., description="Filter criteria (ANDed)")
-
-
-class OverallSurvival(BaseModel):
-    """Overall survival outcome definition for time-to-event analysis."""
-
-    outcome_type: Literal["overall_survival"] = "overall_survival"
-    time_column: str = Field(
-        default="OS_MONTHS",
-        description="Column containing survival time (cBioPortal default: OS_MONTHS)",
-    )
-    event_column: str = Field(
-        default="OS_STATUS",
-        description="Column containing event indicator (1=death, 0=censored)",
-    )
-    table: str = Field(
-        default="clinical_patient",
-        description="Table containing outcome data (typically same as cohort table)",
-    )
-
-
-class ComparisonMethod(str, Enum):
-    """Statistical method for comparing cohorts."""
-
-    HAZARD_RATIO_COX = "hazard_ratio_cox"
 
 
 class CompareCohorts(BaseModel):

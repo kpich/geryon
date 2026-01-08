@@ -5,12 +5,13 @@ from pathlib import Path
 import pandas as pd  # type: ignore
 import pytest
 
-from msk_cycl.hypothesis.db import Database
-from msk_cycl.hypothesis.executor import ComparisonResult, HypothesisExecutor
-from msk_cycl.hypothesis.spec import (
+from msk_cycl.db import Database
+from msk_cycl.engine import HypothesisExecutor
+from msk_cycl.lang import (
     CohortFilter,
     CompareCohorts,
     ComparisonMethod,
+    ComparisonResult,
     CyclHyp,
     OverallSurvival,
     SelectCohort,

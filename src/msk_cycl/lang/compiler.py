@@ -4,7 +4,7 @@ Compiler for translating CYCL hypothesis specs to SQL.
 Provides deterministic compilation from Pydantic models to DuckDB-compatible SQL.
 """
 
-from msk_cycl.hypothesis.spec import CohortFilter, SelectCohort
+from msk_cycl.lang.spec import CohortFilter, SelectCohort
 
 
 def _escape_sql_value(value: str | int | float) -> str:
