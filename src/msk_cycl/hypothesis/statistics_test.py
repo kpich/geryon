@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from msk_cycl.hypothesis.statistics import calculate_cox_hazard_ratio
+from msk_cycl.engine.methods.cox import CoxHazardRatioMethod
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -28,7 +28,8 @@ def test_calculate_cox_hazard_ratio_with_known_data():
         }
     )
 
-    result = calculate_cox_hazard_ratio(cohort_a, cohort_b)
+    method = CoxHazardRatioMethod()
+    result = method.calculate(cohort_a, cohort_b)
 
     assert "hazard_ratio" in result
     assert "confidence_interval_lower" in result

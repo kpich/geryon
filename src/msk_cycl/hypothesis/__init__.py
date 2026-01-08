@@ -1,11 +1,19 @@
-"""Hypothesis generation system for MSK CYCL project."""
+"""Hypothesis generation system for MSK CYCL project.
 
-from msk_cycl.hypothesis.db import Database
-from msk_cycl.hypothesis.executor import ComparisonResult, HypothesisExecutor
-from msk_cycl.hypothesis.spec import (
+DEPRECATED: This module provides backward compatibility. New code should import from:
+- msk_cycl.lang (hypothesis language, outcomes, methods, results)
+- msk_cycl.db (database abstraction)
+- msk_cycl.engine (execution engine)
+"""
+
+# Backward compatibility re-exports from new module structure
+from msk_cycl.db import Database
+from msk_cycl.engine import HypothesisExecutor
+from msk_cycl.lang import (
     CohortFilter,
     CompareCohorts,
     ComparisonMethod,
+    ComparisonResult,
     CyclHyp,
     OverallSurvival,
 )

@@ -3,12 +3,12 @@
 from pydantic import ValidationError
 import pytest
 
-from msk_cycl.hypothesis.spec import (
+from msk_cycl.lang.methods import ComparisonMethod
+from msk_cycl.lang.outcomes import OverallSurvival
+from msk_cycl.lang.spec import (
     CohortFilter,
     CompareCohorts,
-    ComparisonMethod,
     CyclHyp,
-    OverallSurvival,
     SelectCohort,  # For negative tests only
 )
 
