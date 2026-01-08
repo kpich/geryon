@@ -80,7 +80,7 @@ def test_cycl_hyp_with_invalid_version_raises():
     with pytest.raises(ValidationError):
         CyclHyp(
             version=99,  # type: ignore
-            query=SelectCohort(
+            query=SelectCohort(  # type: ignore
                 filters=[
                     CohortFilter(
                         table="clinical_patient",
@@ -144,7 +144,7 @@ def test_cycl_hyp_rejects_select_cohort_query():
     """CyclHyp rejects bare SelectCohort (must use CompareCohorts)."""
     with pytest.raises(ValidationError):
         CyclHyp(
-            query=SelectCohort(
+            query=SelectCohort(  # type: ignore
                 filters=[
                     CohortFilter(
                         table="clinical_patient",
