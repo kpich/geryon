@@ -46,7 +46,7 @@ def calculate_cox_hazard_ratio(
 
     return {
         "hazard_ratio": float(hr),
-        "confidence_interval_lower": float(ci[0]),
-        "confidence_interval_upper": float(ci[1]),
+        "confidence_interval_lower": float(ci.iloc[0]),
+        "confidence_interval_upper": float(ci.iloc[1]),
         "p_value": float(p_value),
     }

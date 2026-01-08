@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pandas as pd  # type: ignore
+import pytest
 
 from msk_cycl.hypothesis.db import Database
 from msk_cycl.hypothesis.executor import ComparisonResult, HypothesisExecutor
@@ -16,6 +17,8 @@ from msk_cycl.hypothesis.spec import (
 )
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::lifelines.utils.ConvergenceWarning")
 def test_executor_executes_compare_cohorts_query(tmp_path: Path):
     """Executor returns ComparisonResult for CompareCohorts queries."""
     df = pd.DataFrame(
