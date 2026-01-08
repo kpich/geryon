@@ -4,14 +4,15 @@ Compiler for translating CYCL hypothesis specs to SQL.
 Provides deterministic compilation from Pydantic models to DuckDB-compatible SQL.
 """
 
-from msk_cycl.hypothesis.spec import CohortFilter, CyclHyp, SelectCohort
+from msk_cycl.hypothesis.spec import CohortFilter, SelectCohort
 
 
 def _escape_sql_value(value: str | int | float) -> str:
     """Escape value for SQL (basic protection, DuckDB params are better)."""
     if isinstance(value, str):
         # Escape single quotes by doubling them
-        return f"'{value.replace("'", "''")}'"
+        escaped = value.replace("'", "''")
+        return f"'{escaped}'"
     return str(value)
 
 
@@ -72,9 +73,19 @@ def compile_select_cohort(query: SelectCohort) -> str:
     return sql
 
 
-def compile_hypothesis(spec: CyclHyp) -> str:
-    """Compile CyclHyp specification to SQL."""
-    if not isinstance(spec.query, SelectCohort):
-        raise ValueError("Only select_cohort operation supported")
+def compile_select_cohort_ids(query: SelectCohort) -> str:
+    """
+    Compile SelectCohort to SQL query that returns PATIENT_ID only.
 
-    return compile_select_cohort(spec.query)
+    INTERNAL USE: This is used by the executor to get cohort IDs.
+    Returns SQL like: "SELECT PATIENT_ID FROM table WHERE ..."
+    """
+    if len(query.filters) == 0:
+        raise ValueError("SelectCohort requires at least one filter")
+
+    table = query.filters[0].table
+    where_clauses = [compile_cohort_filter(f) for f in query.filters]
+    where_sql = " AND ".join(where_clauses)
+
+    sql = f"SELECT PATIENT_ID FROM {table} WHERE {where_sql}"
+    return sql
