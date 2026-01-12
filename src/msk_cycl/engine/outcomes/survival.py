@@ -29,10 +29,11 @@ class OverallSurvivalHandler:
             DataFrame with columns: PATIENT_ID, time, event
         """
         ids_str = ", ".join(f"'{id}'" for id in cohort_ids)
+        # Quote identifiers to handle special characters
         sql = f"""
-            SELECT PATIENT_ID, {outcome.time_column} as time,
-                   {outcome.event_column} as event
-            FROM {outcome.table}
-            WHERE PATIENT_ID IN ({ids_str})
+            SELECT "PATIENT_ID", "{outcome.time_column}" as time,
+                   "{outcome.event_column}" as event
+            FROM "{outcome.table}"
+            WHERE "PATIENT_ID" IN ({ids_str})
         """
         return db.execute(sql)

@@ -41,7 +41,8 @@ def compile_cohort_filter(filter: CohortFilter) -> str:
 
         escaped_values = [_escape_sql_value(v) for v in value]
         values_str = ", ".join(escaped_values)
-        return f"{column} IN ({values_str})"
+        # Quote column name to handle special characters
+        return f'"{column}" IN ({values_str})'
 
     # Handle other operators
     if operator not in sql_operators:
@@ -52,7 +53,8 @@ def compile_cohort_filter(filter: CohortFilter) -> str:
 
     sql_op = sql_operators[operator]
     escaped_value = _escape_sql_value(value)
-    return f"{column} {sql_op} {escaped_value}"
+    # Quote column name to handle special characters
+    return f'"{column}" {sql_op} {escaped_value}'
 
 
 def compile_select_cohort(query: SelectCohort) -> str:
@@ -67,8 +69,8 @@ def compile_select_cohort(query: SelectCohort) -> str:
     where_clauses = [compile_cohort_filter(f) for f in query.filters]
     where_sql = " AND ".join(where_clauses)
 
-    # Build query
-    sql = f"SELECT * FROM {table} WHERE {where_sql}"
+    # Build query (quote table name to handle special characters)
+    sql = f'SELECT * FROM "{table}" WHERE {where_sql}'
 
     return sql
 
@@ -87,5 +89,6 @@ def compile_select_cohort_ids(query: SelectCohort) -> str:
     where_clauses = [compile_cohort_filter(f) for f in query.filters]
     where_sql = " AND ".join(where_clauses)
 
-    sql = f"SELECT PATIENT_ID FROM {table} WHERE {where_sql}"
+    # Quote identifiers to handle special characters
+    sql = f'SELECT "PATIENT_ID" FROM "{table}" WHERE {where_sql}'
     return sql
