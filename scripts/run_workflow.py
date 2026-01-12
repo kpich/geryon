@@ -2,6 +2,7 @@
 """Run the LinearWorkflow to generate and test hypotheses."""
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -43,7 +44,7 @@ def get_latest_etl_output(base_dir: Path) -> Path:
 
 
 def run_workflow(
-    output_dir: Path,
+    output_dir: Path | None = None,
     data_dir: Path | None = None,
     data_base: Path | None = None,
     provider: Literal["ollama", "openai", "anthropic"] = "ollama",
@@ -55,8 +56,9 @@ def run_workflow(
 
     Parameters
     ----------
-    output_dir : Path
+    output_dir : Path, optional
         Output directory for hypothesis JSONL files
+        (default: ~/msk_cycle_hyps/YYYY-MM-DD)
     data_dir : Path, optional
         ETL output directory (default: auto-detect latest from data_base)
     data_base : Path, optional
@@ -75,6 +77,11 @@ def run_workflow(
     list[LabeledHypothesis]
         All generated hypotheses
     """
+    # Set default output_dir if not provided
+    if output_dir is None:
+        today = datetime.now().strftime("%Y-%m-%d")
+        output_dir = Path.home() / "msk_cycle_hyps" / today
+
     # Set default data_base if not provided
     if data_base is None:
         data_base = Path.home() / "data" / "msk_cycle_data"
@@ -120,13 +127,14 @@ def main():
     """Parse arguments and run workflow."""
     parser = argparse.ArgumentParser(description="Run hypothesis generation workflow")
 
-    # Required args
+    # Output directory (optional, defaults to ~/msk_cycle_hyps/YYYY-MM-DD)
     parser.add_argument(
         "-o",
         "--output-dir",
         type=Path,
-        required=True,
-        help="Output directory for hypothesis JSONL files",
+        default=None,
+        help="Output directory for hypothesis JSONL files "
+        "(default: ~/msk_cycle_hyps/YYYY-MM-DD)",
     )
 
     # Optional args
