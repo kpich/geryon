@@ -18,7 +18,7 @@ def test_equality_operator_with_string_compiles_correctly():
         value="Lung Adenocarcinoma",
     )
     sql = compile_cohort_filter(filter)
-    assert sql == "CANCER_TYPE = 'Lung Adenocarcinoma'"
+    assert sql == "\"CANCER_TYPE\" = 'Lung Adenocarcinoma'"
 
 
 def test_equality_operator_with_numeric_compiles_correctly():
@@ -26,7 +26,7 @@ def test_equality_operator_with_numeric_compiles_correctly():
         table="clinical_patient", column="AGE", operator="==", value=65
     )
     sql = compile_cohort_filter(filter)
-    assert sql == "AGE = 65"
+    assert sql == '"AGE" = 65'
 
 
 def test_not_equal_operator_compiles_correctly():
@@ -37,7 +37,7 @@ def test_not_equal_operator_compiles_correctly():
         value="Unknown",
     )
     sql = compile_cohort_filter(filter)
-    assert sql == "CANCER_TYPE != 'Unknown'"
+    assert sql == "\"CANCER_TYPE\" != 'Unknown'"
 
 
 def test_greater_than_operator_compiles_correctly():
@@ -45,7 +45,7 @@ def test_greater_than_operator_compiles_correctly():
         table="clinical_patient", column="AGE", operator=">", value=65
     )
     sql = compile_cohort_filter(filter)
-    assert sql == "AGE > 65"
+    assert sql == '"AGE" > 65'
 
 
 def test_in_operator_with_string_list_compiles_correctly():
@@ -56,8 +56,8 @@ def test_in_operator_with_string_list_compiles_correctly():
         value=["Lung Adenocarcinoma", "Lung Squamous Cell Carcinoma"],
     )
     sql = compile_cohort_filter(filter)
-    assert (
-        sql == "CANCER_TYPE IN ('Lung Adenocarcinoma', 'Lung Squamous Cell Carcinoma')"
+    assert sql == (
+        "\"CANCER_TYPE\" IN ('Lung Adenocarcinoma', 'Lung Squamous Cell Carcinoma')"
     )
 
 
@@ -66,7 +66,7 @@ def test_in_operator_with_numeric_list_compiles_correctly():
         table="clinical_patient", column="AGE", operator="in", value=[65, 70, 75]
     )
     sql = compile_cohort_filter(filter)
-    assert sql == "AGE IN (65, 70, 75)"
+    assert sql == '"AGE" IN (65, 70, 75)'
 
 
 def test_sql_injection_attempt_is_escaped():
@@ -112,7 +112,8 @@ def test_select_cohort_with_single_filter_compiles_correctly():
     )
     sql = compile_select_cohort(query)
     assert sql == (
-        "SELECT * FROM clinical_patient " "WHERE CANCER_TYPE = 'Lung Adenocarcinoma'"
+        'SELECT * FROM "clinical_patient" '
+        "WHERE \"CANCER_TYPE\" = 'Lung Adenocarcinoma'"
     )
 
 
@@ -132,8 +133,8 @@ def test_select_cohort_with_multiple_filters_uses_and_logic():
     )
     sql = compile_select_cohort(query)
     assert sql == (
-        "SELECT * FROM clinical_patient "
-        "WHERE CANCER_TYPE = 'Lung Adenocarcinoma' AND AGE > 65"
+        'SELECT * FROM "clinical_patient" '
+        'WHERE "CANCER_TYPE" = \'Lung Adenocarcinoma\' AND "AGE" > 65'
     )
 
 
@@ -151,6 +152,6 @@ def test_compile_select_cohort_ids_returns_only_patient_id():
     )
     sql = compile_select_cohort_ids(query)
     assert sql == (
-        "SELECT PATIENT_ID FROM clinical_patient "
-        "WHERE CANCER_TYPE = 'Lung Adenocarcinoma'"
+        'SELECT "PATIENT_ID" FROM "clinical_patient" '
+        "WHERE \"CANCER_TYPE\" = 'Lung Adenocarcinoma'"
     )

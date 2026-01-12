@@ -49,7 +49,8 @@ def discover_schema(db: Database, sample_limit: int = 10) -> DatabaseSchema:
 
     for table_name in db.list_tables():
         # Get column info using DESCRIBE
-        describe_sql = f"DESCRIBE {table_name}"
+        # Quote table name to handle special characters
+        describe_sql = f'DESCRIBE "{table_name}"'
         describe_df = db.execute(describe_sql)
 
         columns = []
@@ -63,9 +64,10 @@ def discover_schema(db: Database, sample_limit: int = 10) -> DatabaseSchema:
 
             # Only sample for string columns or small numeric columns
             if "VARCHAR" in col_type or "TEXT" in col_type:
+                # Quote identifiers to handle special characters
                 sample_sql = (
-                    f"SELECT DISTINCT {col_name} FROM {table_name} "
-                    f"WHERE {col_name} IS NOT NULL LIMIT {sample_limit}"
+                    f'SELECT DISTINCT "{col_name}" FROM "{table_name}" '
+                    f'WHERE "{col_name}" IS NOT NULL LIMIT {sample_limit}'
                 )
                 try:
                     sample_df = db.execute(sample_sql)
@@ -73,7 +75,8 @@ def discover_schema(db: Database, sample_limit: int = 10) -> DatabaseSchema:
 
                     # Get distinct count
                     count_sql = (
-                        f"SELECT COUNT(DISTINCT {col_name}) as cnt FROM {table_name}"
+                        f'SELECT COUNT(DISTINCT "{col_name}") as cnt '
+                        f'FROM "{table_name}"'
                     )
                     count_df = db.execute(count_sql)
                     distinct_count = int(count_df["cnt"].iloc[0])
@@ -91,7 +94,7 @@ def discover_schema(db: Database, sample_limit: int = 10) -> DatabaseSchema:
             )
 
         # Get row count
-        count_sql = f"SELECT COUNT(*) as cnt FROM {table_name}"
+        count_sql = f'SELECT COUNT(*) as cnt FROM "{table_name}"'
         count_df = db.execute(count_sql)
         row_count = int(count_df["cnt"].iloc[0])
 

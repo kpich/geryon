@@ -59,7 +59,8 @@ class Database:
 
             # Create view pointing to parquet file
             # Using views is more efficient than loading into memory
-            sql = f"CREATE VIEW {table_name} AS SELECT * FROM '{parquet_file}'"
+            # Quote table name to handle special characters like hyphens
+            sql = f"CREATE VIEW \"{table_name}\" AS SELECT * FROM '{parquet_file}'"
             self.conn.execute(sql)
 
     def execute(self, sql: str) -> pd.DataFrame:
