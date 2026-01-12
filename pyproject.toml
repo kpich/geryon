@@ -13,6 +13,7 @@ dependencies = [
     "pandas>=2.3",
     "pyarrow>=22.0",
     "pydantic>=2.12",
+    "requests>=2.31",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,143 @@
+"""JSONL storage for labeled hypotheses."""
+
+from datetime import datetime
+import json
+from pathlib import Path
+
+import pandas as pd  # type: ignore
+
+from msk_cycl.labeling.models import LabeledHypothesis
+from msk_cycl.labeling.schema import HypothesisRecord, SessionFileMetadata
+
+
+class HypothesisStore:
+    """JSONL storage for labeled hypotheses.
+
+    Simple append-only interface: save() creates session files as needed,
+    load_session() reads all hypotheses from a session.
+    """
+
+    def __init__(self, storage_dir: Path | str):
+        """Initialize storage.
+
+        Parameters
+        ----------
+        storage_dir : Path | str
+            Directory for JSONL session files
+        """
+        self.storage_dir = Path(storage_dir)
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+
+    def save(self, hypothesis: LabeledHypothesis) -> None:
+        """Append hypothesis to session file (creates if needed).
+
+        Parameters
+        ----------
+        hypothesis : LabeledHypothesis
+            Hypothesis to save
+        """
+        session_file = self.storage_dir / f"{hypothesis.session_id}.jsonl"
+
+        # Create session file with metadata if it doesn't exist
+        if not session_file.exists():
+            metadata = SessionFileMetadata(
+                session_id=hypothesis.session_id,
+                created_at=datetime.utcnow(),
+            )
+            with open(session_file, "w") as f:
+                f.write(metadata.model_dump_json() + "\n")
+
+        # Create hypothesis record
+        record = HypothesisRecord(data=hypothesis)
+
+        # Serialize with custom encoder for pandas DataFrames
+        json_line = self._serialize_record(record) + "\n"
+
+        with open(session_file, "a") as f:
+            f.write(json_line)
+
+    def load_session(self, session_id: str) -> list[LabeledHypothesis]:
+        """Load all hypotheses from a session.
+
+        Parameters
+        ----------
+        session_id : str
+            Session identifier
+
+        Returns
+        -------
+        list[LabeledHypothesis]
+            Hypotheses in the session
+        """
+        session_file = self.storage_dir / f"{session_id}.jsonl"
+
+        if not session_file.exists():
+            return []
+
+        hypotheses = []
+        with open(session_file) as f:
+            for line in f:
+                data = json.loads(line)
+
+                # Skip metadata line
+                if data.get("record_type") == "metadata":
+                    continue
+
+                # Parse hypothesis record
+                record = self._deserialize_record(data)
+                hypotheses.append(record.data)
+
+        return hypotheses
+
+    def _serialize_record(self, record: HypothesisRecord) -> str:
+        """Serialize record with custom DataFrame handling.
+
+        Parameters
+        ----------
+        record : HypothesisRecord
+            Record to serialize
+
+        Returns
+        -------
+        str
+            JSON string
+        """
+        # Convert to dict with custom DataFrame serialization
+        data = record.model_dump()
+
+        # Convert DataFrames in result to dict
+        if "data" in data and "result" in data["data"]:
+            result = data["data"]["result"]
+            if "cohort_a_data" in result:
+                result["cohort_a_data"] = result["cohort_a_data"].to_dict(
+                    orient="records"
+                )
+            if "cohort_b_data" in result:
+                result["cohort_b_data"] = result["cohort_b_data"].to_dict(
+                    orient="records"
+                )
+
+        return json.dumps(data, default=str)
+
+    def _deserialize_record(self, data: dict) -> HypothesisRecord:
+        """Deserialize record with custom DataFrame handling.
+
+        Parameters
+        ----------
+        data : dict
+            JSON data
+
+        Returns
+        -------
+        HypothesisRecord
+            Deserialized record
+        """
+        # Convert dict DataFrames back to pandas
+        if "data" in data and "result" in data["data"]:
+            result = data["data"]["result"]
+            if "cohort_a_data" in result and isinstance(result["cohort_a_data"], list):
+                result["cohort_a_data"] = pd.DataFrame(result["cohort_a_data"])
+            if "cohort_b_data" in result and isinstance(result["cohort_b_data"], list):
+                result["cohort_b_data"] = pd.DataFrame(result["cohort_b_data"])
+
+        return HypothesisRecord(**data)
