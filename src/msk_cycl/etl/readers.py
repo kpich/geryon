@@ -39,10 +39,10 @@ def read_tsv(
 def write_cna_matrix_to_parquet(
     input_path: str | Path, output_path: str | Path
 ) -> None:
-    """Write CNA wide matrix directly to parquet in long format using DuckDB.
+    """Write CNA wide matrix directly to parquet in long format.
 
-    Bypasses pandas to avoid materializing 110M rows in memory.
-    Transforms directly from wide TSV to long-format parquet.
+    Processes file line-by-line to avoid loading 156k columns into memory.
+    Writes in batches using pyarrow for efficiency.
 
     Parameters
     ----------
@@ -51,44 +51,67 @@ def write_cna_matrix_to_parquet(
     output_path : str | Path
         Path to output parquet file (long format)
     """
-    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
 
     input_path = Path(input_path)
     output_path = Path(output_path)
 
-    conn = duckdb.connect(":memory:")
+    # Read header to get patient IDs
+    with open(input_path) as f:
+        header = f.readline().strip().split("\t")
 
-    # Read TSV into DuckDB (handles 156k columns efficiently)
-    # Increase max_line_size to handle 156k+ columns (~3MB per line)
-    conn.execute(f"""
-        CREATE TABLE cna_wide AS
-        SELECT * FROM read_csv_auto(
-            '{input_path}',
-            delim='\t',
-            header=true,
-            max_line_size=10000000
-        )
-    """)
+    # First column is gene name, rest are patient IDs
+    patient_ids = header[1:]
 
-    # Get the first column name (gene identifier)
-    gene_col = conn.execute(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name='cna_wide' LIMIT 1"
-    ).fetchone()[0]
+    # Process file line by line and write in batches
+    batch_size = 10000  # Write every 10k genes
+    batch_data = {"patient_id": [], "gene": [], "cna_value": []}
 
-    # UNPIVOT to long format and write directly to parquet
-    # DuckDB streams this without materializing in memory
-    conn.execute(f"""
-        COPY (
-            UNPIVOT cna_wide
-            ON COLUMNS(* EXCLUDE ("{gene_col}"))
-            INTO
-                NAME patient_id
-                VALUE cna_value
-        ) TO '{output_path}' (FORMAT PARQUET)
-    """)
+    writer = None
+    schema = pa.schema(
+        [
+            ("patient_id", pa.string()),
+            ("gene", pa.string()),
+            ("cna_value", pa.float64()),
+        ]
+    )
 
-    conn.close()
+    with open(input_path) as f:
+        f.readline()  # Skip header
+
+        for line in f:
+            parts = line.strip().split("\t")
+            gene = parts[0]
+            values = parts[1:]
+
+            # Add all patient-gene pairs for this gene
+            for patient_id, value in zip(patient_ids, values, strict=False):
+                batch_data["patient_id"].append(patient_id)
+                batch_data["gene"].append(gene)
+                # Convert to float, handle empty/NA values
+                try:
+                    batch_data["cna_value"].append(float(value))
+                except (ValueError, IndexError):
+                    batch_data["cna_value"].append(None)
+
+            # Write batch when it reaches batch_size genes
+            if len(batch_data["gene"]) >= batch_size * len(patient_ids):
+                table = pa.table(batch_data, schema=schema)
+                if writer is None:
+                    writer = pq.ParquetWriter(output_path, schema)
+                writer.write_table(table)
+                batch_data = {"patient_id": [], "gene": [], "cna_value": []}
+
+    # Write remaining data
+    if batch_data["gene"]:
+        table = pa.table(batch_data, schema=schema)
+        if writer is None:
+            writer = pq.ParquetWriter(output_path, schema)
+        writer.write_table(table)
+
+    if writer:
+        writer.close()
 
 
 def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
