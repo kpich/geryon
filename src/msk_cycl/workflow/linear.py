@@ -42,9 +42,6 @@ class LinearWorkflow:
         self.schema = discover_schema(self.db)
         self.store = HypothesisStore(config.storage_dir)
 
-        # Initialize session file
-        self.store.initialize_session(self.session.session_id)
-
     def run_iteration(self, n_proposals: int | None = None) -> list[LabeledHypothesis]:
         """Run one iteration: generate N hypotheses, execute, narrate, store.
 

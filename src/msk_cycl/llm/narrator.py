@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import CyclHyp
 from msk_cycl.llm.prompts import NARRATOR_SYSTEM_PROMPT
-from msk_cycl.llm.providers.base import LLMProvider, Message
+from msk_cycl.llm.providers.base import ChatMessage, LLMProvider
 
 
 class HypothesisNarrative(BaseModel):
@@ -58,8 +58,8 @@ class ResultNarrator:
         user_prompt = self._build_user_prompt(spec, result, proposal_rationale)
 
         messages = [
-            Message(role="system", content=system_prompt),
-            Message(role="user", content=user_prompt),
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=user_prompt),
         ]
 
         response = self.provider.generate(messages, temperature=0.3)

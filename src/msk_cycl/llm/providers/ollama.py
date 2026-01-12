@@ -2,7 +2,7 @@
 
 import requests
 
-from msk_cycl.llm.providers.base import LLMResponse, Message
+from msk_cycl.llm.providers.base import ChatMessage, LLMResponse
 
 
 class OllamaProvider:
@@ -30,7 +30,7 @@ class OllamaProvider:
 
     def generate(
         self,
-        messages: list[Message],
+        messages: list[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> LLMResponse:
@@ -38,7 +38,7 @@ class OllamaProvider:
 
         Parameters
         ----------
-        messages : list[Message]
+        messages : list[ChatMessage]
             Conversation history
         temperature : float
             Sampling temperature

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from msk_cycl.labeling.labels import HypothesisLabel
 from msk_cycl.lang.results import ComparisonResult
@@ -15,7 +15,12 @@ class LabeledHypothesis(BaseModel):
     """Complete hypothesis lifecycle: proposal → execution → narrative → label.
 
     This model captures the full workflow from LLM generation through human review.
+
+    Note: arbitrary_types_allowed is needed because ComparisonResult contains
+    pandas DataFrames (cohort_a_data, cohort_b_data) which aren't Pydantic types.
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # Identity
     hypothesis_id: str = Field(..., description="Unique identifier (UUID)")
@@ -51,9 +56,3 @@ class LabeledHypothesis(BaseModel):
         default=None, description="Timestamp of labeling"
     )
     labeled_by: str | None = Field(default=None, description="Reviewer identifier")
-
-    class Config:
-        """Pydantic config."""
-
-        # Allow arbitrary types for pandas DataFrames in ComparisonResult
-        arbitrary_types_allowed = True

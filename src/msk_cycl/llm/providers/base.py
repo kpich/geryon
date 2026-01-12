@@ -5,8 +5,8 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, Field
 
 
-class Message(BaseModel):
-    """Single message in a conversation."""
+class ChatMessage(BaseModel):
+    """Single message in a chat conversation."""
 
     role: Literal["system", "user", "assistant"]
     content: str
@@ -30,7 +30,7 @@ class LLMProvider(Protocol):
 
     def generate(
         self,
-        messages: list[Message],
+        messages: list[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> LLMResponse:
@@ -38,7 +38,7 @@ class LLMProvider(Protocol):
 
         Parameters
         ----------
-        messages : list[Message]
+        messages : list[ChatMessage]
             Conversation history
         temperature : float
             Sampling temperature (0.0 = deterministic, 1.0 = creative)

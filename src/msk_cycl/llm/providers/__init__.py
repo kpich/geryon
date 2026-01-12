@@ -1,5 +1,5 @@
 """LLM provider implementations."""
 
-from msk_cycl.llm.providers.base import LLMProvider, LLMResponse, Message
+from msk_cycl.llm.providers.base import ChatMessage, LLMProvider, LLMResponse
 
-__all__ = ["LLMProvider", "LLMResponse", "Message"]
+__all__ = ["ChatMessage", "LLMProvider", "LLMResponse"]

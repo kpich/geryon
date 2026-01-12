@@ -6,13 +6,16 @@ from pathlib import Path
 
 import pandas as pd  # type: ignore
 
-from msk_cycl.labeling.labels import HypothesisLabel
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.schema import HypothesisRecord, SessionFileMetadata
 
 
 class HypothesisStore:
-    """JSONL storage for labeled hypotheses with schema validation."""
+    """JSONL storage for labeled hypotheses.
+
+    Simple append-only interface: save() creates session files as needed,
+    load_session() reads all hypotheses from a session.
+    """
 
     def __init__(self, storage_dir: Path | str):
         """Initialize storage.
@@ -25,29 +28,8 @@ class HypothesisStore:
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-    def initialize_session(self, session_id: str) -> None:
-        """Initialize session file with metadata record.
-
-        Parameters
-        ----------
-        session_id : str
-            Session identifier
-        """
-        session_file = self.storage_dir / f"{session_id}.jsonl"
-
-        if session_file.exists():
-            return  # Already initialized
-
-        metadata = SessionFileMetadata(
-            session_id=session_id,
-            created_at=datetime.utcnow(),
-        )
-
-        with open(session_file, "w") as f:
-            f.write(metadata.model_dump_json() + "\n")
-
     def save(self, hypothesis: LabeledHypothesis) -> None:
-        """Append hypothesis to session JSONL file.
+        """Append hypothesis to session file (creates if needed).
 
         Parameters
         ----------
@@ -56,9 +38,14 @@ class HypothesisStore:
         """
         session_file = self.storage_dir / f"{hypothesis.session_id}.jsonl"
 
-        # Ensure session file exists with metadata
+        # Create session file with metadata if it doesn't exist
         if not session_file.exists():
-            self.initialize_session(hypothesis.session_id)
+            metadata = SessionFileMetadata(
+                session_id=hypothesis.session_id,
+                created_at=datetime.utcnow(),
+            )
+            with open(session_file, "w") as f:
+                f.write(metadata.model_dump_json() + "\n")
 
         # Create hypothesis record
         record = HypothesisRecord(data=hypothesis)
@@ -101,80 +88,6 @@ class HypothesisStore:
                 hypotheses.append(record.data)
 
         return hypotheses
-
-    def load_all(self) -> list[LabeledHypothesis]:
-        """Load all hypotheses across all sessions.
-
-        Returns
-        -------
-        list[LabeledHypothesis]
-            All hypotheses
-        """
-        all_hypotheses = []
-        for session_file in self.storage_dir.glob("*.jsonl"):
-            session_id = session_file.stem
-            hypotheses = self.load_session(session_id)
-            all_hypotheses.extend(hypotheses)
-        return all_hypotheses
-
-    def update_label(
-        self,
-        hypothesis_id: str,
-        session_id: str,
-        label: HypothesisLabel,
-        notes: str | None = None,
-        labeled_by: str | None = None,
-    ) -> None:
-        """Update label for a hypothesis (rewrites session file).
-
-        Parameters
-        ----------
-        hypothesis_id : str
-            Hypothesis identifier
-        session_id : str
-            Session identifier
-        label : HypothesisLabel
-            New label
-        notes : str, optional
-            Reviewer notes
-        labeled_by : str, optional
-            Reviewer identifier
-        """
-        hypotheses = self.load_session(session_id)
-
-        # Find and update hypothesis
-        found = False
-        for hyp in hypotheses:
-            if hyp.hypothesis_id == hypothesis_id:
-                hyp.label = label
-                hyp.label_notes = notes
-                hyp.labeled_by = labeled_by
-                hyp.labeled_at = datetime.utcnow()
-                found = True
-                break
-
-        if not found:
-            raise ValueError(
-                f"Hypothesis {hypothesis_id} not found in session {session_id}"
-            )
-
-        # Rewrite session file
-        session_file = self.storage_dir / f"{session_id}.jsonl"
-
-        # Write metadata
-        metadata = SessionFileMetadata(
-            session_id=session_id,
-            created_at=hypotheses[0].created_at if hypotheses else datetime.utcnow(),
-        )
-
-        with open(session_file, "w") as f:
-            f.write(metadata.model_dump_json() + "\n")
-
-            # Write updated hypotheses
-            for hyp in hypotheses:
-                record = HypothesisRecord(data=hyp)
-                json_line = self._serialize_record(record) + "\n"
-                f.write(json_line)
 
     def _serialize_record(self, record: HypothesisRecord) -> str:
         """Serialize record with custom DataFrame handling.

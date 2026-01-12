@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from msk_cycl.lang.spec import CyclHyp
 from msk_cycl.llm.prompts import GENERATOR_SYSTEM_PROMPT
-from msk_cycl.llm.providers.base import LLMProvider, Message
+from msk_cycl.llm.providers.base import ChatMessage, LLMProvider
 from msk_cycl.llm.schema import DatabaseSchema, schema_to_context
 
 
@@ -64,8 +64,8 @@ class HypothesisGenerator:
         )
 
         messages = [
-            Message(role="system", content=system_prompt),
-            Message(role="user", content=user_prompt),
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=user_prompt),
         ]
 
         response = self.provider.generate(messages, temperature=0.8)
