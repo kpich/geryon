@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""Run the LinearWorkflow to generate and test hypotheses."""
+
+import argparse
+from pathlib import Path
+from typing import Literal
+
+from msk_cycl.labeling.models import LabeledHypothesis
+from msk_cycl.workflow import LinearWorkflow, SessionConfig
+
+
+def get_latest_etl_output(base_dir: Path) -> Path:
+    """Find latest ETL output directory by name.
+
+    Parameters
+    ----------
+    base_dir : Path
+        Base directory containing timestamped subdirectories
+
+    Returns
+    -------
+    Path
+        Latest subdirectory (by name sort)
+
+    Raises
+    ------
+    FileNotFoundError
+        If no subdirectories found or base_dir doesn't exist
+    """
+    base_path = base_dir.expanduser()
+
+    if not base_path.exists():
+        raise FileNotFoundError(f"Base directory not found: {base_path}")
+
+    # Get all subdirectories
+    subdirs = sorted([d for d in base_path.iterdir() if d.is_dir()])
+
+    if not subdirs:
+        raise FileNotFoundError(f"No subdirectories found in {base_path}")
+
+    # Return last one (YYYY-MM-DD format sorts chronologically)
+    return subdirs[-1]
+
+
+def run_workflow(
+    output_dir: Path,
+    data_dir: Path | None = None,
+    data_base: Path | None = None,
+    provider: Literal["ollama", "openai", "anthropic"] = "ollama",
+    model: str = "mixtral:8x7b",
+    num_proposals: int = 5,
+    max_iterations: int = 10,
+) -> list[LabeledHypothesis]:
+    """Run hypothesis generation workflow.
+
+    Parameters
+    ----------
+    output_dir : Path
+        Output directory for hypothesis JSONL files
+    data_dir : Path, optional
+        ETL output directory (default: auto-detect latest from data_base)
+    data_base : Path, optional
+        Base directory for ETL outputs (default: ~/data/msk_cycle_data)
+    provider : Literal["ollama", "openai", "anthropic"]
+        LLM provider (default: ollama)
+    model : str
+        Model name (default: mixtral:8x7b)
+    num_proposals : int
+        Number of proposals per iteration (default: 5)
+    max_iterations : int
+        Maximum iterations (default: 10)
+
+    Returns
+    -------
+    list[LabeledHypothesis]
+        All generated hypotheses
+    """
+    # Set default data_base if not provided
+    if data_base is None:
+        data_base = Path.home() / "data" / "msk_cycle_data"
+
+    # Determine data directory
+    if data_dir is None:
+        parquet_dir = get_latest_etl_output(data_base)
+    else:
+        parquet_dir = data_dir
+
+    print(f"Using ETL data from: {parquet_dir}")
+    print(f"Output directory: {output_dir}")
+    print()
+
+    # Create config
+    config = SessionConfig(
+        parquet_dir=parquet_dir,
+        storage_dir=output_dir,
+        provider_type=provider,
+        model=model,
+        num_proposals_per_iteration=num_proposals,
+        max_iterations=max_iterations,
+    )
+
+    # Run workflow
+    print("Initializing workflow...")
+    workflow = LinearWorkflow(config)
+
+    print(f"Running full session (up to {max_iterations} iterations)...")
+    print()
+
+    hypotheses = workflow.run_full_session()
+
+    print()
+    print("✓ Session complete!")
+    print(f"  Generated {len(hypotheses)} hypotheses")
+    print(f"  Stored in: {output_dir}")
+
+    return hypotheses
+
+
+def main():
+    """Parse arguments and run workflow."""
+    parser = argparse.ArgumentParser(description="Run hypothesis generation workflow")
+
+    # Required args
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory for hypothesis JSONL files",
+    )
+
+    # Optional args
+    parser.add_argument(
+        "-d",
+        "--data-dir",
+        type=Path,
+        help="ETL output directory (default: auto-detect latest)",
+    )
+    parser.add_argument(
+        "--data-base",
+        type=Path,
+        default=Path.home() / "data" / "msk_cycle_data",
+        help="Base directory for ETL outputs (default: ~/data/msk_cycle_data)",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["ollama", "openai", "anthropic"],
+        default="ollama",
+        help="LLM provider (default: ollama)",
+    )
+    parser.add_argument(
+        "--model",
+        default="mixtral:8x7b",
+        help="Model name (default: mixtral:8x7b)",
+    )
+    parser.add_argument(
+        "--num-proposals",
+        type=int,
+        default=5,
+        help="Number of proposals per iteration (default: 5)",
+    )
+    parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=10,
+        help="Maximum iterations (default: 10)",
+    )
+
+    args = parser.parse_args()
+
+    # Call run_workflow with parsed args
+    run_workflow(
+        output_dir=args.output_dir,
+        data_dir=args.data_dir,
+        data_base=args.data_base,
+        provider=args.provider,
+        model=args.model,
+        num_proposals=args.num_proposals,
+        max_iterations=args.max_iterations,
+    )
+
+
+if __name__ == "__main__":
+    main()
