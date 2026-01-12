@@ -39,79 +39,40 @@ def read_tsv(
 def write_cna_matrix_to_parquet(
     input_path: str | Path, output_path: str | Path
 ) -> None:
-    """Write CNA wide matrix directly to parquet in long format.
+    """Transpose CNA matrix: patients as rows, genes as columns.
 
-    Processes file line-by-line to avoid loading 156k columns into memory.
-    Writes in batches using pyarrow for efficiency.
+    Original format (genes as rows, patients as columns):
+        Hugo_Symbol | P-001 | P-002 | ... (156,450 patient columns)
+        KRAS        | 0     | 1     | ...
+        TP53        | -1    | 0     | ...
+
+    Output format (patients as rows, genes as columns):
+        PATIENT_ID | KRAS | TP53 | ... (706 gene columns)
+        P-001      | 0    | -1   | ...
+        P-002      | 1    | 0    | ...
+
+    Result: 156,450 rows × 707 columns (reasonable for SQL schema discovery)
 
     Parameters
     ----------
     input_path : str | Path
-        Path to CNA TSV file (wide format)
+        Path to CNA TSV file
     output_path : str | Path
-        Path to output parquet file (long format)
+        Path to output parquet file
     """
-    import pyarrow as pa
-    import pyarrow.parquet as pq
+    # Use pandas transpose - simple and efficient for this case
+    df = read_tsv(input_path)
 
-    input_path = Path(input_path)
-    output_path = Path(output_path)
+    # Transpose: genes become columns, patients become rows
+    df = df.set_index(df.columns[0])  # Gene names as index
+    df = df.T  # Transpose
+    df.index.name = "PATIENT_ID"
+    df = df.reset_index()
 
-    # Read header to get patient IDs
-    with open(input_path) as f:
-        header = f.readline().strip().split("\t")
+    # Write to parquet
+    from msk_cycl.etl.writers import write_parquet
 
-    # First column is gene name, rest are patient IDs
-    patient_ids = header[1:]
-
-    # Process file line by line and write in batches
-    batch_size = 10000  # Write every 10k genes
-    batch_data = {"patient_id": [], "gene": [], "cna_value": []}
-
-    writer = None
-    schema = pa.schema(
-        [
-            ("patient_id", pa.string()),
-            ("gene", pa.string()),
-            ("cna_value", pa.float64()),
-        ]
-    )
-
-    with open(input_path) as f:
-        f.readline()  # Skip header
-
-        for line in f:
-            parts = line.strip().split("\t")
-            gene = parts[0]
-            values = parts[1:]
-
-            # Add all patient-gene pairs for this gene
-            for patient_id, value in zip(patient_ids, values, strict=False):
-                batch_data["patient_id"].append(patient_id)
-                batch_data["gene"].append(gene)
-                # Convert to float, handle empty/NA values
-                try:
-                    batch_data["cna_value"].append(float(value))
-                except (ValueError, IndexError):
-                    batch_data["cna_value"].append(None)
-
-            # Write batch when it reaches batch_size genes
-            if len(batch_data["gene"]) >= batch_size * len(patient_ids):
-                table = pa.table(batch_data, schema=schema)
-                if writer is None:
-                    writer = pq.ParquetWriter(output_path, schema)
-                writer.write_table(table)
-                batch_data = {"patient_id": [], "gene": [], "cna_value": []}
-
-    # Write remaining data
-    if batch_data["gene"]:
-        table = pa.table(batch_data, schema=schema)
-        if writer is None:
-            writer = pq.ParquetWriter(output_path, schema)
-        writer.write_table(table)
-
-    if writer:
-        writer.close()
+    write_parquet(df, output_path)
 
 
 def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
