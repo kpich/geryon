@@ -39,7 +39,11 @@ class LinearWorkflow:
             config.provider_type,
             model=config.model,
         )
-        self.schema = discover_schema(self.db)
+
+        # Schema discovery with progress bar
+        print("Discovering database schema...")
+        self.schema = discover_schema(self.db, show_progress=True)
+
         self.store = HypothesisStore(config.storage_dir)
 
     def run_iteration(self, n_proposals: int | None = None) -> list[LabeledHypothesis]:

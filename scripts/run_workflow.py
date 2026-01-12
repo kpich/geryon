@@ -108,7 +108,9 @@ def run_workflow(
 
     # Run workflow
     print("Initializing workflow...")
+    print()
     workflow = LinearWorkflow(config)
+    print()
 
     print(f"Running full session (up to {max_iterations} iterations)...")
     print()
