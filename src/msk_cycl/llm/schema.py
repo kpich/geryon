@@ -1,6 +1,7 @@
 """Database schema discovery for LLM context."""
 
 from pydantic import BaseModel, Field
+from tqdm import tqdm
 
 from msk_cycl.db import Database
 
@@ -28,7 +29,9 @@ class DatabaseSchema(BaseModel):
     tables: list[TableInfo]
 
 
-def discover_schema(db: Database, sample_limit: int = 10) -> DatabaseSchema:
+def discover_schema(
+    db: Database, sample_limit: int = 10, show_progress: bool = True
+) -> DatabaseSchema:
     """Extract schema information from database.
 
     Queries database for table names, column types, sample values, and row counts.
@@ -39,6 +42,8 @@ def discover_schema(db: Database, sample_limit: int = 10) -> DatabaseSchema:
         Database connection
     sample_limit : int
         Number of sample values to extract per column
+    show_progress : bool
+        Show progress bar during schema discovery (default: True)
 
     Returns
     -------
@@ -46,15 +51,33 @@ def discover_schema(db: Database, sample_limit: int = 10) -> DatabaseSchema:
         Schema information for all tables
     """
     tables = []
+    table_names = db.list_tables()
 
-    for table_name in db.list_tables():
+    # Wrap table iteration with tqdm if requested
+    table_iter = table_names
+    if show_progress:
+        table_iter = tqdm(table_names, desc="Discovering schema", unit="table")
+
+    for table_name in table_iter:
         # Get column info using DESCRIBE
         # Quote table name to handle special characters
         describe_sql = f'DESCRIBE "{table_name}"'
         describe_df = db.execute(describe_sql)
 
         columns = []
-        for _, row in describe_df.iterrows():
+
+        # Show progress for columns too
+        column_iter = describe_df.iterrows()
+        if show_progress:
+            column_iter = tqdm(
+                describe_df.iterrows(),
+                desc=f"  {table_name}",
+                total=len(describe_df),
+                unit="col",
+                leave=False,
+            )
+
+        for _, row in column_iter:
             col_name = row["column_name"]
             col_type = row["column_type"]
 
