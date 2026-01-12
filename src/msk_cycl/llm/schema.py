@@ -1,6 +1,7 @@
 """Database schema discovery for LLM context."""
 
 from pydantic import BaseModel, Field
+from tqdm import tqdm
 
 from msk_cycl.db import Database
 
@@ -49,18 +50,12 @@ def discover_schema(
     DatabaseSchema
         Schema information for all tables
     """
-    # Try to import tqdm, fall back to no progress if not available
-    try:
-        from tqdm import tqdm
-    except ImportError:
-        tqdm = None
-
     tables = []
     table_names = db.list_tables()
 
-    # Wrap table iteration with tqdm if available and requested
+    # Wrap table iteration with tqdm if requested
     table_iter = table_names
-    if show_progress and tqdm is not None:
+    if show_progress:
         table_iter = tqdm(table_names, desc="Discovering schema", unit="table")
 
     for table_name in table_iter:
@@ -73,7 +68,7 @@ def discover_schema(
 
         # Show progress for columns too
         column_iter = describe_df.iterrows()
-        if show_progress and tqdm is not None:
+        if show_progress:
             column_iter = tqdm(
                 describe_df.iterrows(),
                 desc=f"  {table_name}",
