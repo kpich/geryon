@@ -36,6 +36,61 @@ def read_tsv(
     return df
 
 
+def write_cna_matrix_to_parquet(
+    input_path: str | Path, output_path: str | Path
+) -> None:
+    """Write CNA wide matrix directly to parquet in long format using DuckDB.
+
+    Bypasses pandas to avoid materializing 110M rows in memory.
+    Transforms directly from wide TSV to long-format parquet.
+
+    Parameters
+    ----------
+    input_path : str | Path
+        Path to CNA TSV file (wide format)
+    output_path : str | Path
+        Path to output parquet file (long format)
+    """
+    import duckdb
+
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+
+    conn = duckdb.connect(":memory:")
+
+    # Read TSV into DuckDB (handles 156k columns efficiently)
+    # Increase max_line_size to handle 156k+ columns (~3MB per line)
+    conn.execute(f"""
+        CREATE TABLE cna_wide AS
+        SELECT * FROM read_csv_auto(
+            '{input_path}',
+            delim='\t',
+            header=true,
+            max_line_size=10000000
+        )
+    """)
+
+    # Get the first column name (gene identifier)
+    gene_col = conn.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name='cna_wide' LIMIT 1"
+    ).fetchone()[0]
+
+    # UNPIVOT to long format and write directly to parquet
+    # DuckDB streams this without materializing in memory
+    conn.execute(f"""
+        COPY (
+            UNPIVOT cna_wide
+            ON COLUMNS(* EXCLUDE ("{gene_col}"))
+            INTO
+                NAME patient_id
+                VALUE cna_value
+        ) TO '{output_path}' (FORMAT PARQUET)
+    """)
+
+    conn.close()
+
+
 def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     """Read CNA wide matrix and convert to long format.
 
@@ -77,9 +132,15 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     conn = duckdb.connect(":memory:")
 
     # Read TSV into DuckDB (handles 156k columns efficiently)
+    # Increase max_line_size to handle 156k+ columns (~3MB per line)
     conn.execute(f"""
         CREATE TABLE cna_wide AS
-        SELECT * FROM read_csv_auto('{file_path}', delim='\t', header=true)
+        SELECT * FROM read_csv_auto(
+            '{file_path}',
+            delim='\t',
+            header=true,
+            max_line_size=10000000
+        )
     """)
 
     # Get the first column name (gene identifier)
