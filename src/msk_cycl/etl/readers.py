@@ -39,19 +39,9 @@ def read_tsv(
 def write_cna_matrix_to_parquet(
     input_path: str | Path, output_path: str | Path
 ) -> None:
-    """Transpose CNA matrix: patients as rows, genes as columns.
+    """Transpose CNA: genes as columns, patients as rows.
 
-    Original format (genes as rows, patients as columns):
-        Hugo_Symbol | P-001 | P-002 | ... (156,450 patient columns)
-        KRAS        | 0     | 1     | ...
-        TP53        | -1    | 0     | ...
-
-    Output format (patients as rows, genes as columns):
-        PATIENT_ID | KRAS | TP53 | ... (706 gene columns)
-        P-001      | 0    | -1   | ...
-        P-002      | 1    | 0    | ...
-
-    Result: 156,450 rows × 707 columns (reasonable for SQL schema discovery)
+    Fast approach: read as strings (no type inference), transpose, write.
 
     Parameters
     ----------
@@ -60,16 +50,18 @@ def write_cna_matrix_to_parquet(
     output_path : str | Path
         Path to output parquet file
     """
-    # Use pandas transpose - simple and efficient for this case
-    df = read_tsv(input_path)
+    # Read all columns as strings - much faster than type inference on 156k columns
+    df = pd.read_csv(input_path, sep="\t", dtype=str, low_memory=False)
 
-    # Transpose: genes become columns, patients become rows
-    df = df.set_index(df.columns[0])  # Gene names as index
-    df = df.T  # Transpose
+    # Transpose
+    df = df.set_index(df.columns[0]).T
     df.index.name = "PATIENT_ID"
     df = df.reset_index()
 
-    # Write to parquet
+    # Convert gene columns to float (now only 706 columns)
+    for col in df.columns[1:]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
     from msk_cycl.etl.writers import write_parquet
 
     write_parquet(df, output_path)
