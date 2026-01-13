@@ -31,3 +31,7 @@ etl:
 .PHONY: etl-clean
 etl-clean:
 	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*
+
+.PHONY: workflow
+workflow:
+	./scripts/run.sh
