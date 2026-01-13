@@ -1,5 +1,7 @@
-#!/usr/bin/env python3
-"""Run the LinearWorkflow to generate and test hypotheses."""
+"""Workflow runner module.
+
+Can be run as: python -m msk_cycl.workflow.runner
+"""
 
 import argparse
 from datetime import datetime
@@ -125,8 +127,8 @@ def run_workflow(
     return hypotheses
 
 
-def main():
-    """Parse arguments and run workflow."""
+def main() -> None:
+    """CLI entry point."""
     parser = argparse.ArgumentParser(description="Run hypothesis generation workflow")
 
     # Output directory (optional, defaults to ~/msk_cycle_hyps/YYYY-MM-DD)
