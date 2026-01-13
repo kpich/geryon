@@ -118,25 +118,47 @@ class HypothesisGenerator:
         list[HypothesisProposal]
             Parsed proposals
         """
-        # Extract JSON from content (may be wrapped in markdown)
+        # Strip whitespace
         content = content.strip()
+
+        # With format="json", Ollama returns pure JSON (no markdown)
+        # But keep markdown handling as fallback for other providers
         if content.startswith("```"):
             # Remove markdown code blocks
             lines = content.split("\n")
-            # Find first and last ``` markers
-            start_idx = 0
-            end_idx = len(lines)
+
+            # Find the lines with ``` markers
+            code_block_markers = []
             for i, line in enumerate(lines):
                 if line.strip().startswith("```"):
-                    if start_idx == 0:
-                        start_idx = i + 1
-                    else:
-                        end_idx = i
-                        break
-            content = "\n".join(lines[start_idx:end_idx])
+                    code_block_markers.append(i)
 
-        # Parse JSON
-        data = json.loads(content)
+            # Extract content between first and last markers
+            if len(code_block_markers) >= 2:
+                start_idx = code_block_markers[0] + 1
+                end_idx = code_block_markers[-1]
+                content = "\n".join(lines[start_idx:end_idx])
+            elif len(code_block_markers) == 1:
+                # Only opening marker, take everything after it
+                start_idx = code_block_markers[0] + 1
+                content = "\n".join(lines[start_idx:])
+
+        content = content.strip()
+
+        # Add better error handling
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            # Print diagnostic info
+            print(f"ERROR: Failed to parse JSON: {e}")
+            print("Content (first 500 chars):")
+            print("=" * 80)
+            print(content[:500])
+            print("=" * 80)
+            raise ValueError(
+                f"Failed to parse LLM response as JSON. "
+                f"Error: {e}. Content starts with: {content[:100]}"
+            ) from e
 
         # Handle both {"proposals": [...]} and direct array
         if isinstance(data, dict) and "proposals" in data:

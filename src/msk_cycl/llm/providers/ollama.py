@@ -110,6 +110,7 @@ class OllamaProvider:
                 "model": self.model,
                 "messages": ollama_messages,
                 "stream": False,
+                "format": "json",  # Force JSON output (no markdown wrapping)
                 "options": {
                     "temperature": temperature,
                     "num_predict": max_tokens,
