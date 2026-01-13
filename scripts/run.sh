@@ -48,6 +48,7 @@ if [[ "$PROVIDER" == "ollama" ]]; then
     else
         echo "Ollama is already running"
     fi
+
 fi
 
 # Run the workflow module directly with all arguments
