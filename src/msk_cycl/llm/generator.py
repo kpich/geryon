@@ -1,12 +1,12 @@
 """Hypothesis proposal generation using LLM."""
 
-import json
-
+import instructor
+from openai import OpenAI
 from pydantic import BaseModel
 
 from msk_cycl.lang.spec import CyclHyp
 from msk_cycl.llm.prompts import GENERATOR_SYSTEM_PROMPT
-from msk_cycl.llm.providers.base import ChatMessage, LLMProvider
+from msk_cycl.llm.providers.base import LLMProvider
 from msk_cycl.llm.schema import DatabaseSchema, schema_to_context
 
 
@@ -18,6 +18,12 @@ class HypothesisProposal(BaseModel):
     outcome_description: str
     rationale: str
     cycl_spec: CyclHyp
+
+
+class ProposalsList(BaseModel):
+    """Wrapper for list of proposals."""
+
+    proposals: list[HypothesisProposal]
 
 
 class HypothesisGenerator:
@@ -44,6 +50,17 @@ class HypothesisGenerator:
         self.schema = schema
         self.previous_hypotheses = previous_hypotheses or []
 
+        # Set up Instructor client for structured output
+        # Ollama is OpenAI-compatible via /v1 endpoint
+        base_url = getattr(provider, "base_url", "http://localhost:11434")
+        self.client = instructor.from_openai(
+            OpenAI(
+                base_url=f"{base_url}/v1",
+                api_key="ollama",  # Dummy key for Ollama
+            ),
+            mode=instructor.Mode.JSON,
+        )
+
     def propose(self, n: int = 1) -> list[HypothesisProposal]:
         """Generate N hypothesis proposals.
 
@@ -58,21 +75,20 @@ class HypothesisGenerator:
             Generated proposals
         """
         system_prompt = self._build_system_prompt()
-        user_prompt = (
-            f"Propose {n} novel hypothesis(es) for cancer cohort comparison. "
-            "Return ONLY valid JSON matching the schema above."
+        user_prompt = f"Propose {n} novel hypothesis(es) for cancer cohort comparison."
+
+        # Use Instructor for structured output
+        response = self.client.chat.completions.create(
+            model=self.provider.model,
+            response_model=ProposalsList,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.8,
         )
 
-        messages = [
-            ChatMessage(role="system", content=system_prompt),
-            ChatMessage(role="user", content=user_prompt),
-        ]
-
-        response = self.provider.generate(messages, temperature=0.8)
-
-        # Parse JSON response
-        proposals = self._parse_proposals(response.content)
-        return proposals
+        return response.proposals
 
     def _build_system_prompt(self) -> str:
         """Construct system prompt with schema and instructions."""
@@ -104,74 +120,3 @@ class HypothesisGenerator:
             lines.append(f"... and {len(self.previous_hypotheses) - 10} more")
 
         return "\n".join(lines)
-
-    def _parse_proposals(self, content: str) -> list[HypothesisProposal]:
-        """Parse LLM JSON response into proposals.
-
-        Parameters
-        ----------
-        content : str
-            LLM response content
-
-        Returns
-        -------
-        list[HypothesisProposal]
-            Parsed proposals
-        """
-        # Strip whitespace
-        content = content.strip()
-
-        # With format="json", Ollama returns pure JSON (no markdown)
-        # But keep markdown handling as fallback for other providers
-        if content.startswith("```"):
-            # Remove markdown code blocks
-            lines = content.split("\n")
-
-            # Find the lines with ``` markers
-            code_block_markers = []
-            for i, line in enumerate(lines):
-                if line.strip().startswith("```"):
-                    code_block_markers.append(i)
-
-            # Extract content between first and last markers
-            if len(code_block_markers) >= 2:
-                start_idx = code_block_markers[0] + 1
-                end_idx = code_block_markers[-1]
-                content = "\n".join(lines[start_idx:end_idx])
-            elif len(code_block_markers) == 1:
-                # Only opening marker, take everything after it
-                start_idx = code_block_markers[0] + 1
-                content = "\n".join(lines[start_idx:])
-
-        content = content.strip()
-
-        # Add better error handling
-        try:
-            data = json.loads(content)
-        except json.JSONDecodeError as e:
-            # Print diagnostic info
-            print(f"ERROR: Failed to parse JSON: {e}")
-            print("Content (first 500 chars):")
-            print("=" * 80)
-            print(content[:500])
-            print("=" * 80)
-            raise ValueError(
-                f"Failed to parse LLM response as JSON. "
-                f"Error: {e}. Content starts with: {content[:100]}"
-            ) from e
-
-        # Handle both {"proposals": [...]} and direct array
-        if isinstance(data, dict) and "proposals" in data:
-            proposals_data = data["proposals"]
-        elif isinstance(data, list):
-            proposals_data = data
-        else:
-            raise ValueError(f"Unexpected JSON structure: {type(data)}")
-
-        # Parse each proposal
-        proposals = []
-        for prop_data in proposals_data:
-            proposal = HypothesisProposal(**prop_data)
-            proposals.append(proposal)
-
-        return proposals
