@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch datasette to view ETL output data."""
+"""Launch harlequin TUI to view ETL output data."""
 
 import argparse
 from pathlib import Path
@@ -42,19 +42,17 @@ def get_latest_etl_output(base_dir: Path) -> Path:
     return subdirs[-1]
 
 
-def launch_viewer(data_dir: Path, port: int = 8001) -> None:
-    """Launch datasette to view parquet files.
+def launch_viewer(data_dir: Path) -> None:
+    """Launch harlequin TUI to view parquet files.
 
     Parameters
     ----------
     data_dir : Path
         Directory containing parquet files
-    port : int
-        Port for datasette server (default: 8001)
     """
     # Create temporary DuckDB database with views to parquet files
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-        db_path = tmp.name
+    # Use mktemp to get path without creating file (DuckDB needs to create it)
+    db_path = tempfile.mktemp(suffix=".duckdb")
 
     conn = duckdb.connect(db_path)
 
@@ -70,22 +68,18 @@ def launch_viewer(data_dir: Path, port: int = 8001) -> None:
 
     conn.close()
 
-    print(f"Launching datasette for: {data_dir}")
+    print(f"Launching harlequin TUI for: {data_dir}")
     print(f"Registered {registered} tables")
-    print(f"Opening browser at http://localhost:{port}")
-    print("Press Ctrl+C to stop")
+    print()
+    print("Harlequin keyboard shortcuts:")
+    print("  Ctrl+Q: Quit")
+    print("  F2: Focus query editor")
+    print("  F5: Run query")
+    print("  F6: Focus results")
     print()
 
-    # Launch datasette
-    subprocess.run(
-        [
-            "datasette",
-            db_path,
-            "--port",
-            str(port),
-            "--open",  # Auto-open browser
-        ]
-    )
+    # Launch harlequin
+    subprocess.run(["harlequin", db_path])
 
 
 def main() -> None:
@@ -104,12 +98,6 @@ def main() -> None:
         default=Path.home() / "data" / "msk_cycle_data",
         help="Base directory for ETL outputs (default: ~/data/msk_cycle_data)",
     )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=8001,
-        help="Port for datasette server (default: 8001)",
-    )
 
     args = parser.parse_args()
 
@@ -118,7 +106,7 @@ def main() -> None:
     else:
         data_dir = args.data_dir
 
-    launch_viewer(data_dir, args.port)
+    launch_viewer(data_dir)
 
 
 if __name__ == "__main__":

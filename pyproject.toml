@@ -26,8 +26,7 @@ test = [
     "pytest",
 ]
 viewer = [
-    "datasette>=1.0",
-    "datasette-duckdb>=0.7",
+    "harlequin[duckdb]>=1.0",
 ]
 
 [tool.setuptools.packages.find]
