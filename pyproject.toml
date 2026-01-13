@@ -25,6 +25,9 @@ dev = [
 test = [
     "pytest",
 ]
+viewer = [
+    "harlequin[duckdb]>=1.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

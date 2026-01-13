@@ -5,7 +5,7 @@ install_precommit_hooks:
 
 .PHONY: dev
 dev:
-	pip install -e '.[dev,test]'
+	pip install -e '.[dev,test,viewer]'
 
 .PHONY: install
 install:
