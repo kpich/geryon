@@ -25,6 +25,10 @@ dev = [
 test = [
     "pytest",
 ]
+viewer = [
+    "datasette>=1.0",
+    "datasette-duckdb>=0.7",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
