@@ -1,5 +1,9 @@
 """Database schema discovery for LLM context."""
 
+from collections.abc import Iterable, Iterator
+from typing import Any
+
+from pandas import Series
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
@@ -54,7 +58,7 @@ def discover_schema(
     table_names = db.list_tables()
 
     # Wrap table iteration with tqdm if requested
-    table_iter = table_names
+    table_iter: Iterable[str] = table_names
     if show_progress:
         table_iter = tqdm(table_names, desc="Discovering schema", unit="table")
 
@@ -67,9 +71,9 @@ def discover_schema(
         columns = []
 
         # Show progress for columns too
-        column_iter = describe_df.iterrows()
+        column_iter: Iterator[tuple[Any, Series[Any]]] = describe_df.iterrows()
         if show_progress:
-            column_iter = tqdm(
+            column_iter = tqdm(  # type: ignore[assignment]
                 describe_df.iterrows(),
                 desc=f"  {table_name}",
                 total=len(describe_df),

@@ -1,17 +1,14 @@
 """Result narration - LLM generates human-readable interpretations."""
 
 import json
-from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import CyclHyp
+from msk_cycl.llm.conversation_logger import ConversationLogger
 from msk_cycl.llm.prompts import NARRATOR_SYSTEM_PROMPT
 from msk_cycl.llm.providers.base import ChatMessage, LLMProvider
-
-if TYPE_CHECKING:
-    from msk_cycl.llm.conversation_logger import ConversationLogger
 
 
 class HypothesisNarrative(BaseModel):
@@ -26,9 +23,7 @@ class HypothesisNarrative(BaseModel):
 class ResultNarrator:
     """Generate human-readable narratives from ComparisonResult."""
 
-    def __init__(
-        self, provider: LLMProvider, logger: "ConversationLogger | None" = None
-    ):
+    def __init__(self, provider: LLMProvider, logger: ConversationLogger | None = None):
         """Initialize narrator.
 
         Parameters

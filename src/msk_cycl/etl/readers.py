@@ -7,7 +7,10 @@ Handles reading TSV files with various formats from MSK-IMPACT datasets.
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pandas as pd
+
+from msk_cycl.etl.writers import write_parquet
 
 
 def read_tsv(
@@ -62,8 +65,6 @@ def write_cna_matrix_to_parquet(
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    from msk_cycl.etl.writers import write_parquet
-
     write_parquet(df, output_path)
 
 
@@ -100,8 +101,6 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     pd.DataFrame
         Long-format DataFrame with columns: patient_id, gene, cna_value
     """
-    import duckdb
-
     file_path = Path(file_path)
 
     # Use DuckDB to efficiently UNPIVOT without loading full result into memory
@@ -120,14 +119,17 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     """)
 
     # Get the first column name (gene identifier)
-    gene_col = conn.execute(
+    col_result = conn.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_name='cna_wide' LIMIT 1"
-    ).fetchone()[0]
+    ).fetchone()
+    if col_result is None:
+        raise ValueError("No columns found in cna_wide table")
+    gene_col = col_result[0]
 
     # UNPIVOT to long format - DuckDB streams this efficiently
     # Quote column name to handle special characters (colons, spaces, etc)
-    result = conn.execute(f"""
+    df = conn.execute(f"""
         UNPIVOT cna_wide
         ON COLUMNS(* EXCLUDE ("{gene_col}"))
         INTO
@@ -136,12 +138,12 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     """).df()
 
     # Rename gene column and reorder
-    result = result.rename(columns={gene_col: "gene"})
-    result = result[["patient_id", "gene", "cna_value"]]
+    df = df.rename(columns={gene_col: "gene"})
+    df = df[["patient_id", "gene", "cna_value"]]
 
     conn.close()
 
-    return result
+    return df
 
 
 def get_table_name(file_path: str | Path) -> str:
