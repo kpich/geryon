@@ -85,6 +85,12 @@ class LinearWorkflow:
         )
         proposals = generator.propose(n=n_proposals)
 
+        # Handle case where generation failed
+        if not proposals:
+            print("⚠ WARNING: No valid proposals generated in this iteration")
+            print("  Continuing to next iteration...")
+            return []  # Return empty list, workflow will continue
+
         print(f"Generated {len(proposals)} proposals. Executing...")
 
         # 2. Execute and narrate each proposal
@@ -154,13 +160,15 @@ class LinearWorkflow:
             print(f"=== Iteration {i+1}/{self.config.max_iterations} ===")
 
             hypotheses = self.run_iteration()
+
+            # Check if we got any hypotheses this iteration
+            if not hypotheses:
+                print(f"⚠ No hypotheses generated in iteration {i+1}, continuing...")
+                print()
+                continue
+
             all_hypotheses.extend(hypotheses)
-
-            # Early stopping if no new hypotheses generated
-            if len(hypotheses) == 0:
-                print("No new hypotheses generated. Stopping early.")
-                break
-
+            print(f"✓ Iteration {i+1} complete: {len(hypotheses)} hypotheses")
             print()
 
         print(f"Session complete. Generated {len(all_hypotheses)} hypotheses total.")

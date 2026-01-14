@@ -78,7 +78,7 @@ class HypothesisGenerator:
         Returns
         -------
         list[HypothesisProposal]
-            Generated proposals
+            Generated proposals (may be empty if LLM fails validation)
         """
         system_prompt = self._build_system_prompt()
         user_prompt = f"Propose {n} novel hypothesis(es) for cancer cohort comparison."
@@ -125,8 +125,14 @@ class HypothesisGenerator:
                     usage=None,
                     metadata={"temperature": 0.8, "status": "error"},
                 )
-            # Re-raise the exception
-            raise
+
+            # Log to console for visibility
+            print("⚠ WARNING: Hypothesis generation failed after retries")
+            print(f"  Error: {type(e).__name__}")
+            print("  Details logged to LLM chat file")
+
+            # Return empty list - don't crash the workflow
+            return []
 
     def _build_system_prompt(self) -> str:
         """Construct system prompt with schema and instructions."""
