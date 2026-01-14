@@ -1,18 +1,14 @@
 """Hypothesis proposal generation using LLM."""
 
-from typing import TYPE_CHECKING
-
 import instructor
 from openai import OpenAI
 from pydantic import BaseModel
 
 from msk_cycl.lang.spec import CyclHyp
+from msk_cycl.llm.conversation_logger import ConversationLogger
 from msk_cycl.llm.prompts import GENERATOR_SYSTEM_PROMPT
 from msk_cycl.llm.providers.base import LLMProvider
 from msk_cycl.llm.schema import DatabaseSchema, schema_to_context
-
-if TYPE_CHECKING:
-    from msk_cycl.llm.conversation_logger import ConversationLogger
 
 
 class HypothesisProposal(BaseModel):
@@ -39,7 +35,7 @@ class HypothesisGenerator:
         provider: LLMProvider,
         schema: DatabaseSchema,
         previous_hypotheses: list | None = None,
-        logger: "ConversationLogger | None" = None,
+        logger: ConversationLogger | None = None,
     ):
         """Initialize generator.
 
