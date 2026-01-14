@@ -1,6 +1,7 @@
 """Result narration - LLM generates human-readable interpretations."""
 
 import json
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -8,6 +9,9 @@ from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import CyclHyp
 from msk_cycl.llm.prompts import NARRATOR_SYSTEM_PROMPT
 from msk_cycl.llm.providers.base import ChatMessage, LLMProvider
+
+if TYPE_CHECKING:
+    from msk_cycl.llm.conversation_logger import ConversationLogger
 
 
 class HypothesisNarrative(BaseModel):
@@ -22,15 +26,20 @@ class HypothesisNarrative(BaseModel):
 class ResultNarrator:
     """Generate human-readable narratives from ComparisonResult."""
 
-    def __init__(self, provider: LLMProvider):
+    def __init__(
+        self, provider: LLMProvider, logger: "ConversationLogger | None" = None
+    ):
         """Initialize narrator.
 
         Parameters
         ----------
         provider : LLMProvider
             LLM provider for narrative generation
+        logger : ConversationLogger, optional
+            Logger for LLM conversations
         """
         self.provider = provider
+        self.logger = logger
 
     def narrate(
         self,
@@ -63,6 +72,18 @@ class ResultNarrator:
         ]
 
         response = self.provider.generate(messages, temperature=0.3)
+
+        # Log interaction
+        if self.logger:
+            self.logger.log_interaction(
+                interaction_type="result_narration",
+                messages=[
+                    {"role": msg.role, "content": msg.content} for msg in messages
+                ],
+                response={"content": response.content, "model": response.model},
+                usage=response.usage,
+                metadata={"temperature": 0.3},
+            )
 
         # Parse JSON response
         narrative = self._parse_narrative(response.content)

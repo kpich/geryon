@@ -7,6 +7,7 @@ from msk_cycl.db import Database
 from msk_cycl.engine import HypothesisExecutor
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.storage import HypothesisStore
+from msk_cycl.llm.conversation_logger import ConversationLogger
 from msk_cycl.llm.generator import HypothesisGenerator
 from msk_cycl.llm.narrator import ResultNarrator
 from msk_cycl.llm.provider import create_provider
@@ -46,6 +47,14 @@ class LinearWorkflow:
 
         self.store = HypothesisStore(config.storage_dir)
 
+        # Initialize LLM conversation logger
+        self.llm_logger = None
+        if config.enable_llm_logging:
+            self.llm_logger = ConversationLogger(
+                storage_dir=config.storage_dir,
+                session_id=config.session_id,
+            )
+
     def run_iteration(self, n_proposals: int | None = None) -> list[LabeledHypothesis]:
         """Run one iteration: generate N hypotheses, execute, narrate, store.
 
@@ -72,6 +81,7 @@ class LinearWorkflow:
             provider=self.provider,
             schema=self.schema,
             previous_hypotheses=previous,
+            logger=self.llm_logger,
         )
         proposals = generator.propose(n=n_proposals)
 
@@ -79,7 +89,7 @@ class LinearWorkflow:
 
         # 2. Execute and narrate each proposal
         labeled_hypotheses = []
-        narrator = ResultNarrator(self.provider)
+        narrator = ResultNarrator(self.provider, logger=self.llm_logger)
 
         for i, proposal in enumerate(proposals, 1):
             a_desc = proposal.cohort_a_description
