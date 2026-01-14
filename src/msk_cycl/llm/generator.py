@@ -92,27 +92,44 @@ class HypothesisGenerator:
         ]
 
         # Use Instructor for structured output
-        response = self.client.chat.completions.create(
-            model=self.provider.model,
-            response_model=ProposalsList,
-            messages=messages,
-            temperature=0.8,
-        )
-
-        # Log interaction
-        if self.logger:
-            self.logger.log_interaction(
-                interaction_type="hypothesis_generation",
+        try:
+            response = self.client.chat.completions.create(
+                model=self.provider.model,
+                response_model=ProposalsList,
                 messages=messages,
-                response={
-                    "content": response.model_dump_json(indent=2),
-                    "model": self.provider.model_id(),
-                },
-                usage=None,  # Instructor doesn't expose usage stats easily
-                metadata={"temperature": 0.8},
+                temperature=0.8,
             )
 
-        return response.proposals
+            # Log successful interaction
+            if self.logger:
+                self.logger.log_interaction(
+                    interaction_type="hypothesis_generation",
+                    messages=messages,
+                    response={
+                        "content": response.model_dump_json(indent=2),
+                        "model": self.provider.model_id(),
+                    },
+                    usage=None,  # Instructor doesn't expose usage stats easily
+                    metadata={"temperature": 0.8, "status": "success"},
+                )
+
+            return response.proposals
+
+        except Exception as e:
+            # Log failed interaction
+            if self.logger:
+                self.logger.log_interaction(
+                    interaction_type="hypothesis_generation",
+                    messages=messages,
+                    response={
+                        "content": f"ERROR: {type(e).__name__}: {str(e)}",
+                        "model": self.provider.model_id(),
+                    },
+                    usage=None,
+                    metadata={"temperature": 0.8, "status": "error"},
+                )
+            # Re-raise the exception
+            raise
 
     def _build_system_prompt(self) -> str:
         """Construct system prompt with schema and instructions."""

@@ -7,54 +7,10 @@ import argparse
 from datetime import datetime
 import logging
 from pathlib import Path
-import sys
 from typing import Literal
 
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.workflow import LinearWorkflow, SessionConfig
-
-
-class TeeLogger:
-    """Write to both file and original stream."""
-
-    def __init__(self, file_path: Path, original_stream):
-        """Initialize tee logger.
-
-        Parameters
-        ----------
-        file_path : Path
-            Path to log file
-        original_stream
-            Original stdout/stderr stream
-        """
-        self.file_path = file_path
-        self.original = original_stream
-        self.file = None
-
-    def __enter__(self):
-        """Open file on context manager entry."""
-        self.file = open(self.file_path, "w")
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Close file on context manager exit."""
-        if self.file:
-            self.file.close()
-        return False
-
-    def write(self, message: str) -> None:
-        """Write message to both file and original stream."""
-        if self.file:
-            self.file.write(message)
-            self.file.flush()
-        self.original.write(message)
-        self.original.flush()
-
-    def flush(self) -> None:
-        """Flush both file and original stream."""
-        if self.file:
-            self.file.flush()
-        self.original.flush()
 
 
 def get_latest_etl_output(base_dir: Path) -> Path:
@@ -135,72 +91,48 @@ def run_workflow(
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Set up stdout/stderr logging to files
-    stdout_log = output_dir / "stdout.log"
-    stderr_log = output_dir / "stderr.log"
+    # Set default data_base if not provided
+    if data_base is None:
+        data_base = Path.home() / "data" / "msk_cycle_data"
 
-    original_stdout = sys.stdout
-    original_stderr = sys.stderr
+    # Determine data directory
+    if data_dir is None:
+        parquet_dir = get_latest_etl_output(data_base)
+    else:
+        parquet_dir = data_dir
 
-    with (
-        TeeLogger(stdout_log, sys.stdout) as stdout_tee,
-        TeeLogger(stderr_log, sys.stderr) as stderr_tee,
-    ):
-        try:
-            # Redirect stdout/stderr
-            sys.stdout = stdout_tee
-            sys.stderr = stderr_tee
+    print(f"Using ETL data from: {parquet_dir}")
+    print(f"Output directory: {output_dir}")
+    print()
 
-            # Set default data_base if not provided
-            if data_base is None:
-                data_base = Path.home() / "data" / "msk_cycle_data"
+    # Create config
+    config = SessionConfig(
+        parquet_dir=parquet_dir,
+        storage_dir=output_dir,
+        provider_type=provider,
+        model=model,
+        num_proposals_per_iteration=num_proposals,
+        max_iterations=max_iterations,
+        enable_llm_logging=enable_llm_logging,
+    )
 
-            # Determine data directory
-            if data_dir is None:
-                parquet_dir = get_latest_etl_output(data_base)
-            else:
-                parquet_dir = data_dir
+    # Run workflow
+    print("Initializing workflow...")
+    print()
+    workflow = LinearWorkflow(config)
+    print()
 
-            print(f"Using ETL data from: {parquet_dir}")
-            print(f"Output directory: {output_dir}")
-            print()
+    print(f"Running full session (up to {max_iterations} iterations)...")
+    print()
 
-            # Create config
-            config = SessionConfig(
-                parquet_dir=parquet_dir,
-                storage_dir=output_dir,
-                provider_type=provider,
-                model=model,
-                num_proposals_per_iteration=num_proposals,
-                max_iterations=max_iterations,
-                enable_llm_logging=enable_llm_logging,
-            )
+    hypotheses = workflow.run_full_session()
 
-            # Run workflow
-            print("Initializing workflow...")
-            print()
-            workflow = LinearWorkflow(config)
-            print()
+    print()
+    print("✓ Session complete!")
+    print(f"  Generated {len(hypotheses)} hypotheses")
+    print(f"  Stored in: {output_dir}")
 
-            print(f"Running full session (up to {max_iterations} iterations)...")
-            print()
-
-            hypotheses = workflow.run_full_session()
-
-            print()
-            print("✓ Session complete!")
-            print(f"  Generated {len(hypotheses)} hypotheses")
-            print(f"  Stored in: {output_dir}")
-
-            return hypotheses
-
-        finally:
-            # Restore original stdout/stderr
-            sys.stdout = original_stdout
-            sys.stderr = original_stderr
-
-    # Print output directory as final line (after context manager closes files)
-    print(f"\nOutput directory: {output_dir}")
+    return hypotheses
 
 
 def setup_logging(verbose: bool = False) -> None:
