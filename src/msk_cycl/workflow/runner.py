@@ -119,7 +119,7 @@ def run_workflow(
     if workflow_type == "autonomous":
         from msk_cycl.workflow.autonomous import AutonomousWorkflow
 
-        workflow = AutonomousWorkflow(config)
+        workflow: AutonomousWorkflow | LinearWorkflow = AutonomousWorkflow(config)
     else:
         workflow = LinearWorkflow(config)
 

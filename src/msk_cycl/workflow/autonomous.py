@@ -122,8 +122,10 @@ class AutonomousWorkflow:
             from langchain_anthropic import ChatAnthropic
 
             return ChatAnthropic(
-                model=self.config.model,
+                model_name=self.config.model,
                 temperature=0.8,
+                timeout=300.0,
+                stop=None,
             )
         else:
             raise ValueError(f"Unknown provider type: {self.config.provider_type}")

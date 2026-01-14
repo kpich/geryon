@@ -122,6 +122,6 @@ def query_data(db: Database, sql: str) -> str:
 
     try:
         df = db.execute(sql)
-        return df.to_markdown(index=False)
+        return df.to_string(index=False)
     except Exception as e:
         return f"ERROR: {type(e).__name__}: {str(e)}"
