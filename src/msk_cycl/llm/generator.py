@@ -8,7 +8,8 @@ from msk_cycl.lang.spec import CyclHyp
 from msk_cycl.llm.conversation_logger import ConversationLogger
 from msk_cycl.llm.prompts import GENERATOR_SYSTEM_PROMPT
 from msk_cycl.llm.providers.base import LLMProvider
-from msk_cycl.llm.schema import DatabaseSchema, schema_to_context
+from msk_cycl.llm.schema import DatabaseSchema
+from msk_cycl.llm.schema_cbioportal import schema_to_cbioportal_context
 
 
 class HypothesisProposal(BaseModel):
@@ -131,7 +132,9 @@ class HypothesisGenerator:
 
     def _build_system_prompt(self) -> str:
         """Construct system prompt with schema and instructions."""
-        schema_context = schema_to_context(self.schema)
+        schema_context = schema_to_cbioportal_context(
+            self.schema, max_columns_per_table=10
+        )
         previous_context = self._format_previous_hypotheses()
 
         return GENERATOR_SYSTEM_PROMPT.format(
