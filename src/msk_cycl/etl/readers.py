@@ -119,17 +119,17 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     """)
 
     # Get the first column name (gene identifier)
-    result = conn.execute(
+    col_result = conn.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_name='cna_wide' LIMIT 1"
     ).fetchone()
-    if result is None:
+    if col_result is None:
         raise ValueError("No columns found in cna_wide table")
-    gene_col = result[0]
+    gene_col = col_result[0]
 
     # UNPIVOT to long format - DuckDB streams this efficiently
     # Quote column name to handle special characters (colons, spaces, etc)
-    result = conn.execute(f"""
+    df = conn.execute(f"""
         UNPIVOT cna_wide
         ON COLUMNS(* EXCLUDE ("{gene_col}"))
         INTO
@@ -138,12 +138,12 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     """).df()
 
     # Rename gene column and reorder
-    result = result.rename(columns={gene_col: "gene"})
-    result = result[["patient_id", "gene", "cna_value"]]
+    df = df.rename(columns={gene_col: "gene"})
+    df = df[["patient_id", "gene", "cna_value"]]
 
     conn.close()
 
-    return result
+    return df
 
 
 def get_table_name(file_path: str | Path) -> str:
