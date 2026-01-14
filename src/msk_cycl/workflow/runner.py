@@ -61,7 +61,7 @@ def run_workflow(
     ----------
     output_dir : Path, optional
         Output directory for hypothesis JSONL files
-        (default: ~/msk_cycle_hyps/YYYY-MM-DD)
+        (default: cycl_run_outputs/YYYY-MM-DD)
     data_dir : Path, optional
         ETL output directory (default: auto-detect latest from data_base)
     data_base : Path, optional
@@ -84,7 +84,7 @@ def run_workflow(
     """
     if output_dir is None:
         today = datetime.now().strftime("%Y-%m-%d")
-        output_dir = Path.home() / "msk_cycle_hyps" / today
+        output_dir = Path.cwd() / "cycl_run_outputs" / today
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -155,7 +155,7 @@ def main() -> None:
         type=Path,
         default=None,
         help="Output directory for hypothesis JSONL files "
-        "(default: ~/msk_cycle_hyps/YYYY-MM-DD)",
+        "(default: cycl_run_outputs/YYYY-MM-DD)",
     )
 
     parser.add_argument(

@@ -1,6 +1,7 @@
 # project-specific
 nextflow/pipeline_*.txt
 nextflow/pipeline_*.html
+cycl_run_outputs/
 
 
 # nextflow
