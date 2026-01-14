@@ -7,7 +7,10 @@ Handles reading TSV files with various formats from MSK-IMPACT datasets.
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pandas as pd
+
+from msk_cycl.etl.writers import write_parquet
 
 
 def read_tsv(
@@ -62,8 +65,6 @@ def write_cna_matrix_to_parquet(
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    from msk_cycl.etl.writers import write_parquet
-
     write_parquet(df, output_path)
 
 
@@ -100,8 +101,6 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     pd.DataFrame
         Long-format DataFrame with columns: patient_id, gene, cna_value
     """
-    import duckdb
-
     file_path = Path(file_path)
 
     # Use DuckDB to efficiently UNPIVOT without loading full result into memory
