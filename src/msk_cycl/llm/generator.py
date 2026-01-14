@@ -58,6 +58,7 @@ class HypothesisGenerator:
         # Set up Instructor client for structured output
         # Ollama is OpenAI-compatible via /v1 endpoint
         base_url = getattr(provider, "base_url", "http://localhost:11434")
+        self.model = getattr(provider, "model", "mixtral:8x7b")
         self.client = instructor.from_openai(
             OpenAI(
                 base_url=f"{base_url}/v1",
@@ -82,7 +83,7 @@ class HypothesisGenerator:
         system_prompt = self._build_system_prompt()
         user_prompt = f"Propose {n} novel hypothesis(es) for cancer cohort comparison."
 
-        messages = [
+        messages: list[dict[str, str]] = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
@@ -90,9 +91,9 @@ class HypothesisGenerator:
         # Use Instructor for structured output
         try:
             response = self.client.chat.completions.create(
-                model=self.provider.model,
+                model=self.model,
                 response_model=ProposalsList,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 temperature=0.8,
             )
 
