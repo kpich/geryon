@@ -54,6 +54,7 @@ def run_workflow(
     num_proposals: int = 5,
     max_iterations: int = 10,
     enable_llm_logging: bool = True,
+    workflow_type: Literal["autonomous", "linear"] = "autonomous",
 ) -> list[LabeledHypothesis]:
     """Run hypothesis generation workflow.
 
@@ -76,6 +77,8 @@ def run_workflow(
         Maximum iterations (default: 10)
     enable_llm_logging : bool
         Enable LLM conversation logging (default: True)
+    workflow_type : Literal["autonomous", "linear"]
+        Workflow type (default: autonomous)
 
     Returns
     -------
@@ -110,9 +113,16 @@ def run_workflow(
         enable_llm_logging=enable_llm_logging,
     )
 
-    print("Initializing workflow...")
+    print(f"Initializing {workflow_type} workflow...")
     print()
-    workflow = LinearWorkflow(config)
+
+    if workflow_type == "autonomous":
+        from msk_cycl.workflow.autonomous import AutonomousWorkflow
+
+        workflow = AutonomousWorkflow(config)
+    else:
+        workflow = LinearWorkflow(config)
+
     print()
 
     print(f"Running full session (up to {max_iterations} iterations)...")
@@ -171,6 +181,12 @@ def main() -> None:
         help="Base directory for ETL outputs (default: ~/data/msk_cycle_data)",
     )
     parser.add_argument(
+        "--workflow",
+        choices=["autonomous", "linear"],
+        default="autonomous",
+        help="Workflow type (default: autonomous)",
+    )
+    parser.add_argument(
         "--provider",
         choices=["ollama", "openai", "anthropic"],
         default="ollama",
@@ -213,6 +229,7 @@ def main() -> None:
         output_dir=args.output_dir,
         data_dir=args.data_dir,
         data_base=args.data_base,
+        workflow_type=args.workflow,
         provider=args.provider,
         model=args.model,
         num_proposals=args.num_proposals,
