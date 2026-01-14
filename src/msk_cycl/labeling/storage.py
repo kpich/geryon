@@ -38,7 +38,6 @@ class HypothesisStore:
         """
         session_file = self.storage_dir / f"{hypothesis.session_id}.jsonl"
 
-        # Create session file with metadata if it doesn't exist
         if not session_file.exists():
             metadata = SessionFileMetadata(
                 session_id=hypothesis.session_id,
@@ -47,10 +46,8 @@ class HypothesisStore:
             with open(session_file, "w") as f:
                 f.write(metadata.model_dump_json() + "\n")
 
-        # Create hypothesis record
         record = HypothesisRecord(data=hypothesis)
 
-        # Serialize with custom encoder for pandas DataFrames
         json_line = self._serialize_record(record) + "\n"
 
         with open(session_file, "a") as f:
@@ -79,11 +76,9 @@ class HypothesisStore:
             for line in f:
                 data = json.loads(line)
 
-                # Skip metadata line
                 if data.get("record_type") == "metadata":
                     continue
 
-                # Parse hypothesis record
                 record = self._deserialize_record(data)
                 hypotheses.append(record.data)
 
@@ -102,10 +97,8 @@ class HypothesisStore:
         str
             JSON string
         """
-        # Convert to dict with custom DataFrame serialization
         data = record.model_dump()
 
-        # Convert DataFrames in result to dict
         if "data" in data and "result" in data["data"]:
             result = data["data"]["result"]
             if "cohort_a_data" in result:
@@ -132,7 +125,6 @@ class HypothesisStore:
         HypothesisRecord
             Deserialized record
         """
-        # Convert dict DataFrames back to pandas
         if "data" in data and "result" in data["data"]:
             result = data["data"]["result"]
             if "cohort_a_data" in result and isinstance(result["cohort_a_data"], list):

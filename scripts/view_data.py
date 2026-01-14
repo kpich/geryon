@@ -32,7 +32,6 @@ def get_latest_etl_output(base_dir: Path) -> Path:
     if not base_path.exists():
         raise FileNotFoundError(f"Base directory not found: {base_path}")
 
-    # Get all subdirectories
     subdirs = sorted([d for d in base_path.iterdir() if d.is_dir()])
 
     if not subdirs:
@@ -56,7 +55,6 @@ def launch_viewer(data_dir: Path) -> None:
 
     conn = duckdb.connect(db_path)
 
-    # Register all parquet files as views
     parquet_files = sorted(data_dir.glob("*.parquet"))
     registered = 0
     for pf in parquet_files:
@@ -78,7 +76,6 @@ def launch_viewer(data_dir: Path) -> None:
     print("  F6: Focus results")
     print()
 
-    # Launch harlequin
     subprocess.run(["harlequin", db_path])
 
 

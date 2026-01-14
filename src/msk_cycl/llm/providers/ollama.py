@@ -30,20 +30,17 @@ class OllamaProvider:
         self.model = model
         self.base_url = base_url.rstrip("/")
 
-        # Ensure model is available
         self._ensure_model_available()
 
     def _ensure_model_available(self) -> None:
         """Check if model is available, pull it if not."""
         print(f"Checking if model '{self.model}' is available...")
 
-        # List available models
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             response.raise_for_status()
             data = response.json()
 
-            # Check if our model is in the list
             available_models = [m["name"] for m in data.get("models", [])]
 
             if self.model not in available_models:
@@ -52,7 +49,6 @@ class OllamaProvider:
                     f"Pulling it now (this may take a while)..."
                 )
 
-                # Pull the model using ollama CLI
                 subprocess.run(
                     ["ollama", "pull", self.model],
                     check=True,
@@ -98,12 +94,10 @@ class OllamaProvider:
         requests.exceptions.HTTPError
             If API returns error status
         """
-        # Convert to Ollama format
         ollama_messages = [
             {"role": msg.role, "content": msg.content} for msg in messages
         ]
 
-        # Call Ollama /api/chat endpoint
         response = requests.post(
             f"{self.base_url}/api/chat",
             json={
@@ -123,10 +117,8 @@ class OllamaProvider:
 
         data = response.json()
 
-        # Extract response content
         content = data["message"]["content"]
 
-        # Extract token usage if available
         usage = None
         if "prompt_eval_count" in data and "eval_count" in data:
             usage = {

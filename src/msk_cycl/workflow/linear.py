@@ -33,7 +33,6 @@ class LinearWorkflow:
         self.config = config
         self.session = Session(config)
 
-        # Initialize components
         self.db = Database(config.parquet_dir)
         self.executor = HypothesisExecutor(self.db)
         self.provider = create_provider(
@@ -47,7 +46,6 @@ class LinearWorkflow:
 
         self.store = HypothesisStore(config.storage_dir)
 
-        # Initialize LLM conversation logger
         self.llm_logger = None
         if config.enable_llm_logging:
             self.llm_logger = ConversationLogger(
@@ -76,7 +74,6 @@ class LinearWorkflow:
 
         print(f"Generating {n_proposals} hypotheses...")
 
-        # 1. Generate proposals
         generator = HypothesisGenerator(
             provider=self.provider,
             schema=self.schema,
@@ -93,7 +90,6 @@ class LinearWorkflow:
 
         print(f"Generated {len(proposals)} proposals. Executing...")
 
-        # 2. Execute and narrate each proposal
         labeled_hypotheses = []
         narrator = ResultNarrator(self.provider, logger=self.llm_logger)
 
@@ -103,21 +99,18 @@ class LinearWorkflow:
             print(f"  [{i}/{len(proposals)}] Executing: {a_desc} vs {b_desc}")
 
             try:
-                # Execute
                 start_time = datetime.utcnow()
                 result = self.executor.execute(proposal.cycl_spec)
                 execution_time = (datetime.utcnow() - start_time).total_seconds()
 
                 print(f"    Executed in {execution_time:.1f}s. Narrating...")
 
-                # Narrate
                 narrative = narrator.narrate(
                     spec=proposal.cycl_spec,
                     result=result,
                     proposal_rationale=proposal.rationale,
                 )
 
-                # Create labeled hypothesis (pending human review)
                 labeled = LabeledHypothesis(
                     hypothesis_id=str(uuid.uuid4()),
                     session_id=self.session.session_id,
@@ -129,7 +122,6 @@ class LinearWorkflow:
                     llm_model=self.provider.model_id(),
                 )
 
-                # Save to storage
                 self.store.save(labeled)
                 labeled_hypotheses.append(labeled)
 

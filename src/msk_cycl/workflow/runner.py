@@ -36,7 +36,6 @@ def get_latest_etl_output(base_dir: Path) -> Path:
     if not base_path.exists():
         raise FileNotFoundError(f"Base directory not found: {base_path}")
 
-    # Get all subdirectories
     subdirs = sorted([d for d in base_path.iterdir() if d.is_dir()])
 
     if not subdirs:
@@ -83,19 +82,15 @@ def run_workflow(
     list[LabeledHypothesis]
         All generated hypotheses
     """
-    # Set default output_dir if not provided
     if output_dir is None:
         today = datetime.now().strftime("%Y-%m-%d")
         output_dir = Path.home() / "msk_cycle_hyps" / today
 
-    # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Set default data_base if not provided
     if data_base is None:
         data_base = Path.home() / "data" / "msk_cycle_data"
 
-    # Determine data directory
     if data_dir is None:
         parquet_dir = get_latest_etl_output(data_base)
     else:
@@ -105,7 +100,6 @@ def run_workflow(
     print(f"Output directory: {output_dir}")
     print()
 
-    # Create config
     config = SessionConfig(
         parquet_dir=parquet_dir,
         storage_dir=output_dir,
@@ -116,7 +110,6 @@ def run_workflow(
         enable_llm_logging=enable_llm_logging,
     )
 
-    # Run workflow
     print("Initializing workflow...")
     print()
     workflow = LinearWorkflow(config)
@@ -165,7 +158,6 @@ def main() -> None:
         "(default: ~/msk_cycle_hyps/YYYY-MM-DD)",
     )
 
-    # Optional args
     parser.add_argument(
         "-d",
         "--data-dir",
@@ -215,10 +207,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Set up Python logging
     setup_logging(verbose=args.verbose)
 
-    # Call run_workflow with parsed args
     run_workflow(
         output_dir=args.output_dir,
         data_dir=args.data_dir,

@@ -68,7 +68,6 @@ class ResultNarrator:
 
         response = self.provider.generate(messages, temperature=0.3)
 
-        # Log interaction
         if self.logger:
             self.logger.log_interaction(
                 interaction_type="result_narration",
@@ -80,7 +79,6 @@ class ResultNarrator:
                 metadata={"temperature": 0.3},
             )
 
-        # Parse JSON response
         narrative = self._parse_narrative(response.content)
         return narrative
 
@@ -91,11 +89,9 @@ class ResultNarrator:
         proposal_rationale: str,
     ) -> str:
         """Build user prompt with hypothesis and results."""
-        # Extract comparison details
         query = spec.query
         outcome = query.outcome
 
-        # Format results
         stats_lines = [
             "# STATISTICAL RESULTS",
             "",
@@ -144,10 +140,8 @@ as specified in your instructions. Return ONLY valid JSON.
         HypothesisNarrative
             Parsed narrative
         """
-        # Extract JSON from content (may be wrapped in markdown)
         content = content.strip()
         if content.startswith("```"):
-            # Remove markdown code blocks
             lines = content.split("\n")
             start_idx = 0
             end_idx = len(lines)
@@ -160,6 +154,5 @@ as specified in your instructions. Return ONLY valid JSON.
                         break
             content = "\n".join(lines[start_idx:end_idx])
 
-        # Parse JSON
         data = json.loads(content)
         return HypothesisNarrative(**data)

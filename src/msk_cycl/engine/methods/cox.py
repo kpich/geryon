@@ -25,7 +25,6 @@ class CoxHazardRatioMethod:
             Keys: hazard_ratio, confidence_interval_lower,
                   confidence_interval_upper, p_value
         """
-        # Combine cohorts and add treatment indicator
         cohort_a_data = cohort_a_data.copy()
         cohort_a_data["cohort"] = 1  # cohort A = treatment
 
@@ -34,14 +33,11 @@ class CoxHazardRatioMethod:
 
         combined = pd.concat([cohort_a_data, cohort_b_data])
 
-        # Select only columns needed for Cox model (exclude PATIENT_ID)
         cox_data = combined[["time", "event", "cohort"]]
 
-        # Fit Cox model
         cph = CoxPHFitter()
         cph.fit(cox_data, duration_col="time", event_col="event")
 
-        # Extract results
         hr = cph.hazard_ratios_["cohort"]
         ci = cph.confidence_intervals_.loc["cohort"]
         p_value = cph.summary.loc["cohort", "p"]

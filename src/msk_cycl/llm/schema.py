@@ -57,20 +57,16 @@ def discover_schema(
     tables = []
     table_names = db.list_tables()
 
-    # Wrap table iteration with tqdm if requested
     table_iter: Iterable[str] = table_names
     if show_progress:
         table_iter = tqdm(table_names, desc="Discovering schema", unit="table")
 
     for table_name in table_iter:
-        # Get column info using DESCRIBE
-        # Quote table name to handle special characters
         describe_sql = f'DESCRIBE "{table_name}"'
         describe_df = db.execute(describe_sql)
 
         columns = []
 
-        # Show progress for columns too
         column_iter: Iterator[tuple[Any, Series[Any]]] = describe_df.iterrows()
         if show_progress:
             column_iter = tqdm(  # type: ignore[assignment]
@@ -85,11 +81,9 @@ def discover_schema(
             col_name = row["column_name"]
             col_type = row["column_type"]
 
-            # Get sample values for categorical-looking columns
             sample_values: list[str | int | float] = []
             distinct_count = None
 
-            # Only sample for string columns or small numeric columns
             if "VARCHAR" in col_type or "TEXT" in col_type:
                 # Quote identifiers to handle special characters
                 sample_sql = (
@@ -100,7 +94,6 @@ def discover_schema(
                     sample_df = db.execute(sample_sql)
                     sample_values = sample_df[col_name].tolist()
 
-                    # Get distinct count
                     count_sql = (
                         f'SELECT COUNT(DISTINCT "{col_name}") as cnt '
                         f'FROM "{table_name}"'
@@ -108,7 +101,6 @@ def discover_schema(
                     count_df = db.execute(count_sql)
                     distinct_count = int(count_df["cnt"].iloc[0])
                 except Exception:
-                    # If sampling fails, just skip
                     pass
 
             columns.append(

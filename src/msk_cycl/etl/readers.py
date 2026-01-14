@@ -56,7 +56,6 @@ def write_cna_matrix_to_parquet(
     # Read all columns as strings - much faster than type inference on 156k columns
     df = pd.read_csv(input_path, sep="\t", dtype=str, low_memory=False)
 
-    # Transpose
     df = df.set_index(df.columns[0]).T
     df.index.name = "PATIENT_ID"
     df = df.reset_index()
@@ -118,7 +117,6 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
         )
     """)
 
-    # Get the first column name (gene identifier)
     col_result = conn.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_name='cna_wide' LIMIT 1"
@@ -127,8 +125,6 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
         raise ValueError("No columns found in cna_wide table")
     gene_col = col_result[0]
 
-    # UNPIVOT to long format - DuckDB streams this efficiently
-    # Quote column name to handle special characters (colons, spaces, etc)
     df = conn.execute(f"""
         UNPIVOT cna_wide
         ON COLUMNS(* EXCLUDE ("{gene_col}"))
@@ -137,7 +133,6 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
             VALUE cna_value
     """).df()
 
-    # Rename gene column and reorder
     df = df.rename(columns={gene_col: "gene"})
     df = df[["patient_id", "gene", "cna_value"]]
 

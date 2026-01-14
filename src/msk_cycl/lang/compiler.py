@@ -22,7 +22,6 @@ def compile_cohort_filter(filter: CohortFilter) -> str:
     operator = filter.operator
     value = filter.value
 
-    # Map Python operators to SQL
     sql_operators = {
         "==": "=",
         "!=": "!=",
@@ -33,7 +32,6 @@ def compile_cohort_filter(filter: CohortFilter) -> str:
     }
 
     if operator == "in":
-        # Handle IN operator with list of values
         if not isinstance(value, list):
             raise ValueError(f"'in' operator requires list value, got {type(value)}")
         if len(value) == 0:
@@ -41,10 +39,8 @@ def compile_cohort_filter(filter: CohortFilter) -> str:
 
         escaped_values = [_escape_sql_value(v) for v in value]
         values_str = ", ".join(escaped_values)
-        # Quote column name to handle special characters
         return f'"{column}" IN ({values_str})'
 
-    # Handle other operators
     if operator not in sql_operators:
         raise ValueError(f"Unsupported operator: {operator}")
 
@@ -62,14 +58,11 @@ def compile_select_cohort(query: SelectCohort) -> str:
     if len(query.filters) == 0:
         raise ValueError("SelectCohort requires at least one filter")
 
-    # Get table from first filter (all filters should be from same table for now)
     table = query.filters[0].table
 
-    # Compile all filters
     where_clauses = [compile_cohort_filter(f) for f in query.filters]
     where_sql = " AND ".join(where_clauses)
 
-    # Build query (quote table name to handle special characters)
     sql = f'SELECT * FROM "{table}" WHERE {where_sql}'
 
     return sql
