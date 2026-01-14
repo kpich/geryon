@@ -37,11 +37,9 @@ class HypothesisExecutor:
 
         This makes the code declarative and extensible - no if/elif chains!
         """
-        # Step 1: Get cohort IDs
         cohort_a_ids = self._get_cohort_ids(query.cohort_a)
         cohort_b_ids = self._get_cohort_ids(query.cohort_b)
 
-        # Step 2: Get outcome data using registry-based handler
         outcome_handler = get_outcome_handler(query.outcome)
         cohort_a_data = outcome_handler.extract_data(
             cohort_a_ids, query.outcome, self.db
@@ -50,11 +48,9 @@ class HypothesisExecutor:
             cohort_b_ids, query.outcome, self.db
         )
 
-        # Step 3: Calculate statistics using registry-based method implementation
         method_impl = get_method_implementation(query.method)
         stats = method_impl.calculate(cohort_a_data, cohort_b_data)
 
-        # Step 4: Return results
         return ComparisonResult(
             cohort_a_ids=cohort_a_ids,
             cohort_b_ids=cohort_b_ids,

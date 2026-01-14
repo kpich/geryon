@@ -27,14 +27,11 @@ class ConversationLogger:
         self.session_id = session_id
         self.interaction_count = 0
 
-        # Create storage directory if it doesn't exist
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        # File paths
         self.txt_path = self.storage_dir / f"{session_id}_llm_chat.txt"
         self.json_path = self.storage_dir / f"{session_id}_llm_chat.json"
 
-        # Initialize files
         self._init_txt_log()
         self._init_json_log()
 
@@ -46,9 +43,7 @@ class ConversationLogger:
 
     def _init_json_log(self) -> None:
         """Initialize JSON log file."""
-        # JSON file will contain one object per line (JSONL format)
         with open(self.json_path, "w") as f:
-            # Write metadata header
             metadata = {
                 "type": "metadata",
                 "session_id": self.session_id,
@@ -82,12 +77,10 @@ class ConversationLogger:
         self.interaction_count += 1
         timestamp = datetime.utcnow().isoformat() + "Z"
 
-        # Log to human-readable file
         self._append_txt_log(
             interaction_type, timestamp, messages, response, usage, metadata
         )
 
-        # Log to JSON file
         self._append_json_log(
             interaction_type, timestamp, messages, response, usage, metadata
         )
@@ -107,14 +100,12 @@ class ConversationLogger:
             f.write(f"## Interaction {self.interaction_count}: {interaction_type}\n")
             f.write(f"Timestamp: {timestamp}\n\n")
 
-            # Write messages
             for msg in messages:
                 role = msg["role"].title()
                 content = msg["content"]
                 f.write(f"### {role} Message\n")
                 f.write(f"{content}\n\n")
 
-            # Write response
             f.write("### Response\n")
             if "model" in response:
                 f.write(f"Model: {response['model']}\n")
@@ -124,7 +115,6 @@ class ConversationLogger:
             f.write("\n")
             f.write(f"{response['content']}\n\n")
 
-            # Write usage if available
             if usage:
                 f.write(
                     f"**Usage:** {usage.get('prompt_tokens', 0)} prompt tokens, "

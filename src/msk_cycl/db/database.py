@@ -14,7 +14,6 @@ def _get_table_name(parquet_path: Path) -> str:
     """Extract table name from parquet filename."""
     stem = parquet_path.stem
 
-    # Remove 'data_' prefix if present
     if stem.startswith("data_"):
         return stem[5:]
 
@@ -41,10 +40,8 @@ class Database:
         if not self.parquet_dir.is_dir():
             raise ValueError(f"Not a directory: {self.parquet_dir}")
 
-        # Connect to in-memory DuckDB
         self.conn = duckdb.connect(":memory:")
 
-        # Register all parquet files as tables
         self._register_tables()
 
     def _register_tables(self) -> None:

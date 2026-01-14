@@ -100,14 +100,12 @@ Examples:
 
     args = parser.parse_args()
 
-    # Configure logging
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(levelname)s: %(message)s",
         stream=sys.stdout,
     )
 
-    # Process file
     process_cbioportal_file(
         input_path=args.input,
         output_path=args.output,

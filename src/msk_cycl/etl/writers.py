@@ -37,13 +37,10 @@ def write_parquet(
     """Write DataFrame to parquet, stripping whitespace from string columns first."""
     output_path = Path(output_path)
 
-    # Create parent directory if it doesn't exist
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Clean DataFrame (strip whitespace from string columns)
     df_clean = _clean_dataframe_for_parquet(df)
 
-    # Write to parquet
     df_clean.to_parquet(
         path=output_path,
         engine="pyarrow",

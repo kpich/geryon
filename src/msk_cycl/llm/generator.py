@@ -88,7 +88,6 @@ class HypothesisGenerator:
             {"role": "user", "content": user_prompt},
         ]
 
-        # Use Instructor for structured output
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -97,7 +96,6 @@ class HypothesisGenerator:
                 temperature=0.8,
             )
 
-            # Log successful interaction
             if self.logger:
                 self.logger.log_interaction(
                     interaction_type="hypothesis_generation",
@@ -113,7 +111,6 @@ class HypothesisGenerator:
             return response.proposals
 
         except Exception as e:
-            # Log failed interaction
             if self.logger:
                 self.logger.log_interaction(
                     interaction_type="hypothesis_generation",
@@ -126,12 +123,10 @@ class HypothesisGenerator:
                     metadata={"temperature": 0.8, "status": "error"},
                 )
 
-            # Log to console for visibility
             print("⚠ WARNING: Hypothesis generation failed after retries")
             print(f"  Error: {type(e).__name__}")
             print("  Details logged to LLM chat file")
 
-            # Return empty list - don't crash the workflow
             return []
 
     def _build_system_prompt(self) -> str:
@@ -150,8 +145,7 @@ class HypothesisGenerator:
             return "No previous hypotheses yet."
 
         lines = ["Previously tested hypotheses (avoid duplicates):"]
-        for i, hyp in enumerate(self.previous_hypotheses[:10], 1):  # Show max 10
-            # Extract description if it's a LabeledHypothesis
+        for i, hyp in enumerate(self.previous_hypotheses[:10], 1):
             if hasattr(hyp, "proposal"):
                 a_desc = hyp.proposal.cohort_a_description
                 b_desc = hyp.proposal.cohort_b_description
