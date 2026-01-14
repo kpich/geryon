@@ -119,10 +119,13 @@ def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
     """)
 
     # Get the first column name (gene identifier)
-    gene_col = conn.execute(
+    result = conn.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_name='cna_wide' LIMIT 1"
-    ).fetchone()[0]
+    ).fetchone()
+    if result is None:
+        raise ValueError("No columns found in cna_wide table")
+    gene_col = result[0]
 
     # UNPIVOT to long format - DuckDB streams this efficiently
     # Quote column name to handle special characters (colons, spaces, etc)
