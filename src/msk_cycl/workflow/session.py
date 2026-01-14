@@ -30,6 +30,11 @@ class SessionConfig(BaseModel):
     parquet_dir: Path = Field(..., description="Directory with parquet files")
     storage_dir: Path = Field(..., description="Directory for JSONL output")
 
+    # Logging
+    enable_llm_logging: bool = Field(
+        default=True, description="Enable LLM conversation logging"
+    )
+
 
 class Session:
     """Manages a hypothesis generation session.

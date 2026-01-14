@@ -5,6 +5,7 @@ Can be run as: python -m msk_cycl.workflow.runner
 
 import argparse
 from datetime import datetime
+import logging
 from pathlib import Path
 from typing import Literal
 
@@ -53,6 +54,7 @@ def run_workflow(
     model: str = "mixtral:8x7b",
     num_proposals: int = 5,
     max_iterations: int = 10,
+    enable_llm_logging: bool = True,
 ) -> list[LabeledHypothesis]:
     """Run hypothesis generation workflow.
 
@@ -73,6 +75,8 @@ def run_workflow(
         Number of proposals per iteration (default: 5)
     max_iterations : int
         Maximum iterations (default: 10)
+    enable_llm_logging : bool
+        Enable LLM conversation logging (default: True)
 
     Returns
     -------
@@ -83,6 +87,9 @@ def run_workflow(
     if output_dir is None:
         today = datetime.now().strftime("%Y-%m-%d")
         output_dir = Path.home() / "msk_cycle_hyps" / today
+
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Set default data_base if not provided
     if data_base is None:
@@ -106,6 +113,7 @@ def run_workflow(
         model=model,
         num_proposals_per_iteration=num_proposals,
         max_iterations=max_iterations,
+        enable_llm_logging=enable_llm_logging,
     )
 
     # Run workflow
@@ -125,6 +133,22 @@ def run_workflow(
     print(f"  Stored in: {output_dir}")
 
     return hypotheses
+
+
+def setup_logging(verbose: bool = False) -> None:
+    """Set up Python logging.
+
+    Parameters
+    ----------
+    verbose : bool
+        If True, set level to DEBUG; otherwise INFO
+    """
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
 
 def main() -> None:
@@ -177,8 +201,22 @@ def main() -> None:
         default=10,
         help="Maximum iterations (default: 10)",
     )
+    parser.add_argument(
+        "--no-log",
+        action="store_true",
+        help="Disable LLM conversation logging (default: logging enabled)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging (DEBUG level)",
+    )
 
     args = parser.parse_args()
+
+    # Set up Python logging
+    setup_logging(verbose=args.verbose)
 
     # Call run_workflow with parsed args
     run_workflow(
@@ -189,6 +227,7 @@ def main() -> None:
         model=args.model,
         num_proposals=args.num_proposals,
         max_iterations=args.max_iterations,
+        enable_llm_logging=not args.no_log,
     )
 
 

@@ -1,5 +1,7 @@
 """Hypothesis proposal generation using LLM."""
 
+from typing import TYPE_CHECKING
+
 import instructor
 from openai import OpenAI
 from pydantic import BaseModel
@@ -8,6 +10,9 @@ from msk_cycl.lang.spec import CyclHyp
 from msk_cycl.llm.prompts import GENERATOR_SYSTEM_PROMPT
 from msk_cycl.llm.providers.base import LLMProvider
 from msk_cycl.llm.schema import DatabaseSchema, schema_to_context
+
+if TYPE_CHECKING:
+    from msk_cycl.llm.conversation_logger import ConversationLogger
 
 
 class HypothesisProposal(BaseModel):
@@ -34,6 +39,7 @@ class HypothesisGenerator:
         provider: LLMProvider,
         schema: DatabaseSchema,
         previous_hypotheses: list | None = None,
+        logger: "ConversationLogger | None" = None,
     ):
         """Initialize generator.
 
@@ -45,10 +51,13 @@ class HypothesisGenerator:
             Database schema for context
         previous_hypotheses : list, optional
             Previously generated hypotheses to avoid duplicates
+        logger : ConversationLogger, optional
+            Logger for LLM conversations
         """
         self.provider = provider
         self.schema = schema
         self.previous_hypotheses = previous_hypotheses or []
+        self.logger = logger
 
         # Set up Instructor client for structured output
         # Ollama is OpenAI-compatible via /v1 endpoint
@@ -77,18 +86,50 @@ class HypothesisGenerator:
         system_prompt = self._build_system_prompt()
         user_prompt = f"Propose {n} novel hypothesis(es) for cancer cohort comparison."
 
-        # Use Instructor for structured output
-        response = self.client.chat.completions.create(
-            model=self.provider.model,
-            response_model=ProposalsList,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.8,
-        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
-        return response.proposals
+        # Use Instructor for structured output
+        try:
+            response = self.client.chat.completions.create(
+                model=self.provider.model,
+                response_model=ProposalsList,
+                messages=messages,
+                temperature=0.8,
+            )
+
+            # Log successful interaction
+            if self.logger:
+                self.logger.log_interaction(
+                    interaction_type="hypothesis_generation",
+                    messages=messages,
+                    response={
+                        "content": response.model_dump_json(indent=2),
+                        "model": self.provider.model_id(),
+                    },
+                    usage=None,  # Instructor doesn't expose usage stats easily
+                    metadata={"temperature": 0.8, "status": "success"},
+                )
+
+            return response.proposals
+
+        except Exception as e:
+            # Log failed interaction
+            if self.logger:
+                self.logger.log_interaction(
+                    interaction_type="hypothesis_generation",
+                    messages=messages,
+                    response={
+                        "content": f"ERROR: {type(e).__name__}: {str(e)}",
+                        "model": self.provider.model_id(),
+                    },
+                    usage=None,
+                    metadata={"temperature": 0.8, "status": "error"},
+                )
+            # Re-raise the exception
+            raise
 
     def _build_system_prompt(self) -> str:
         """Construct system prompt with schema and instructions."""
