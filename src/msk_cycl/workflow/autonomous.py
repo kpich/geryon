@@ -105,10 +105,11 @@ class AutonomousWorkflow:
         if self.config.provider_type == "ollama":
             from langchain_ollama import ChatOllama
 
+            # Don't use format="json" - it breaks tool calling!
+            # Let the model use native tool calling instead
             return ChatOllama(
                 model=self.config.model,
                 base_url="http://localhost:11434",
-                format="json",  # Force JSON output for Ollama
                 temperature=0.8,
             )
         elif self.config.provider_type == "openai":
@@ -154,22 +155,14 @@ class AutonomousWorkflow:
 
     def _agent_node(self, state: AgentState) -> dict:
         """Agent node: calls LLM with tools."""
-        try:
-            # Bind tools to LLM
-            llm_with_tools = self.llm.bind_tools(self.tools)
+        # Bind tools to LLM
+        llm_with_tools = self.llm.bind_tools(self.tools)
 
-            # Invoke LLM
-            response = llm_with_tools.invoke(state["messages"])
+        # Invoke LLM
+        response = llm_with_tools.invoke(state["messages"])
 
-            # Return updated state
-            return {"messages": [response]}
-        except NotImplementedError as e:
-            raise NotImplementedError(
-                f"Tool calling not supported for {self.config.provider_type}. "
-                f"Autonomous workflow requires OpenAI or Anthropic providers. "
-                f"Use --workflow linear for {self.config.provider_type}, or "
-                f"use --provider openai/anthropic for autonomous workflow."
-            ) from e
+        # Return updated state
+        return {"messages": [response]}
 
     def _should_continue(self, state: AgentState) -> Literal["continue", "end"]:
         """Decide whether to continue or end."""
@@ -249,6 +242,31 @@ Start by exploring the database to understand what data is available."""
         # Run LangGraph
         try:
             result = self.graph.invoke({"messages": [initial_message]})
+
+            # Log the full conversation
+            if self.llm_logger:
+                # Convert LangChain messages to dict format for logging
+                messages_for_log = []
+                for msg in result["messages"]:
+                    messages_for_log.append(
+                        {
+                            "role": getattr(msg, "type", "unknown"),
+                            "content": str(msg.content)[
+                                :2000
+                            ],  # Truncate long messages
+                        }
+                    )
+
+                self.llm_logger.log_interaction(
+                    interaction_type="autonomous_exploration",
+                    messages=messages_for_log,
+                    response={
+                        "content": result["messages"][-1].content,
+                        "model": f"{self.config.provider_type}/{self.config.model}",
+                    },
+                    usage=None,
+                    metadata={"num_turns": len(result["messages"])},
+                )
 
             # Extract proposals from final message
             final_message = result["messages"][-1]
