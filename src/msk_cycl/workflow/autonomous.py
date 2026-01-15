@@ -243,30 +243,41 @@ Start by exploring the database to understand what data is available."""
         try:
             result = self.graph.invoke({"messages": [initial_message]})
 
-            # Log the full conversation
+            # Log the full conversation without truncation
             if self.llm_logger:
-                # Convert LangChain messages to dict format for logging
-                messages_for_log = []
-                for msg in result["messages"]:
-                    messages_for_log.append(
-                        {
-                            "role": getattr(msg, "type", "unknown"),
-                            "content": str(msg.content)[
-                                :2000
-                            ],  # Truncate long messages
-                        }
-                    )
+                # Log each message in the conversation
+                for i, msg in enumerate(result["messages"]):
+                    msg_type = getattr(msg, "type", "unknown")
 
-                self.llm_logger.log_interaction(
-                    interaction_type="autonomous_exploration",
-                    messages=messages_for_log,
-                    response={
-                        "content": result["messages"][-1].content,
-                        "model": f"{self.config.provider_type}/{self.config.model}",
-                    },
-                    usage=None,
-                    metadata={"num_turns": len(result["messages"])},
-                )
+                    # Check if this is a tool call message
+                    has_tool_calls = hasattr(msg, "tool_calls") and msg.tool_calls
+
+                    content_dict = {
+                        "message_index": i,
+                        "type": msg_type,
+                        "content": str(msg.content),  # No truncation
+                    }
+
+                    if has_tool_calls:
+                        content_dict["tool_calls"] = [
+                            {
+                                "name": tc.get("name"),
+                                "args": tc.get("args", {}),
+                                "id": tc.get("id"),
+                            }
+                            for tc in msg.tool_calls
+                        ]
+
+                    self.llm_logger.log_interaction(
+                        interaction_type=f"autonomous_msg_{i}_{msg_type}",
+                        messages=[{"role": msg_type, "content": str(content_dict)}],
+                        response={
+                            "content": f"Message {i} of {len(result['messages'])}",
+                            "model": f"{self.config.provider_type}/{self.config.model}",
+                        },
+                        usage=None,
+                        metadata={"total_messages": len(result["messages"])},
+                    )
 
             # Extract proposals from final message
             final_message = result["messages"][-1]
