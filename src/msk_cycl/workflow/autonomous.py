@@ -103,7 +103,7 @@ class AutonomousWorkflow:
     def _create_llm(self):
         """Create LangChain model from provider config."""
         if self.config.provider_type == "ollama":
-            from langchain_community.chat_models import ChatOllama
+            from langchain_ollama import ChatOllama
 
             return ChatOllama(
                 model=self.config.model,
@@ -154,14 +154,22 @@ class AutonomousWorkflow:
 
     def _agent_node(self, state: AgentState) -> dict:
         """Agent node: calls LLM with tools."""
-        # Bind tools to LLM
-        llm_with_tools = self.llm.bind_tools(self.tools)
+        try:
+            # Bind tools to LLM
+            llm_with_tools = self.llm.bind_tools(self.tools)
 
-        # Invoke LLM
-        response = llm_with_tools.invoke(state["messages"])
+            # Invoke LLM
+            response = llm_with_tools.invoke(state["messages"])
 
-        # Return updated state
-        return {"messages": [response]}
+            # Return updated state
+            return {"messages": [response]}
+        except NotImplementedError as e:
+            raise NotImplementedError(
+                f"Tool calling not supported for {self.config.provider_type}. "
+                f"Autonomous workflow requires OpenAI or Anthropic providers. "
+                f"Use --workflow linear for {self.config.provider_type}, or "
+                f"use --provider openai/anthropic for autonomous workflow."
+            ) from e
 
     def _should_continue(self, state: AgentState) -> Literal["continue", "end"]:
         """Decide whether to continue or end."""
@@ -169,9 +177,13 @@ class AutonomousWorkflow:
 
         # If LLM made tool calls, continue to tools node
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            print(f"  → LLM requesting {len(last_message.tool_calls)} tool call(s):")
+            for tc in last_message.tool_calls:
+                print(f"    - {tc['name']}({list(tc.get('args', {}).keys())})")
             return "continue"
 
         # Otherwise, end
+        print("  → LLM finished (no more tool calls)")
         return "end"
 
     def run_iteration(self, n_proposals: int | None = None) -> list[LabeledHypothesis]:
@@ -195,6 +207,7 @@ class AutonomousWorkflow:
         previous_context = self._format_previous_hypotheses(previous)
 
         print(f"Generating {n_proposals} hypothesis(es) with autonomous exploration...")
+        print(f"Using model: {self.config.provider_type}/{self.config.model}")
         print()
 
         # Create initial prompt
@@ -239,10 +252,21 @@ Start by exploring the database to understand what data is available."""
 
             # Extract proposals from final message
             final_message = result["messages"][-1]
+
+            # Log the conversation for debugging
+            print(f"LLM completed after {len(result['messages'])} messages")
+            print(f"Final response type: {type(final_message).__name__}")
+            print("Final response preview (first 500 chars):")
+            print(f"  {str(final_message.content)[:500]}")
+            print()
+
             proposals = self._extract_proposals(final_message.content)
 
             if not proposals:
                 print("⚠ WARNING: No valid proposals extracted from LLM response")
+                print(f"  Raw response length: {len(final_message.content)} chars")
+                print("  Response content:")
+                print(f"  {final_message.content[:1000]}")
                 print("  Continuing to next iteration...")
                 return []
 
@@ -296,6 +320,13 @@ Start by exploring the database to understand what data is available."""
         except Exception as e:
             print("⚠ WARNING: Hypothesis generation failed")
             print(f"  Error: {type(e).__name__}: {str(e)}")
+
+            # Show more details for debugging
+            import traceback
+
+            print("  Full traceback:")
+            traceback.print_exc()
+
             return []
 
     def run_full_session(self) -> list[LabeledHypothesis]:
@@ -377,7 +408,12 @@ Start by exploring the database to understand what data is available."""
         except Exception as e:
             print("⚠ WARNING: Failed to extract proposals from LLM response")
             print(f"  Error: {type(e).__name__}: {str(e)}")
-            print(f"  Response preview: {content[:200]}...")
+            print(f"  Response length: {len(content)} chars")
+            print("  Response preview (first 500 chars):")
+            print(f"  {content[:500]}")
+            if len(content) > 500:
+                print("  Response preview (last 500 chars):")
+                print(f"  {content[-500:]}")
             return []
 
     def _format_previous_hypotheses(self, previous: list[LabeledHypothesis]) -> str:
