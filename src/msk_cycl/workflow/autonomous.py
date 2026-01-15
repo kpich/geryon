@@ -8,8 +8,6 @@ import uuid
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.tools import tool
-from langgraph.graph import END, StateGraph
-from langgraph.prebuilt import ToolNode
 
 from msk_cycl.db import Database
 from msk_cycl.engine import HypothesisExecutor
@@ -132,26 +130,11 @@ class AutonomousWorkflow:
             raise ValueError(f"Unknown provider type: {self.config.provider_type}")
 
     def _build_graph(self):
-        """Build LangGraph workflow."""
-        workflow = StateGraph(AgentState)
+        """Build LangGraph workflow using ReAct agent for better Ollama support."""
+        from langgraph.prebuilt import create_react_agent
 
-        # Add nodes
-        workflow.add_node("agent", self._agent_node)
-        workflow.add_node("tools", ToolNode(self.tools))
-
-        # Add edges
-        workflow.set_entry_point("agent")
-        workflow.add_conditional_edges(
-            "agent",
-            self._should_continue,
-            {
-                "continue": "tools",
-                "end": END,
-            },
-        )
-        workflow.add_edge("tools", "agent")
-
-        return workflow.compile()
+        # Use ReAct agent which handles reasoning better with local models
+        return create_react_agent(self.llm, self.tools)
 
     def _agent_node(self, state: AgentState) -> dict:
         """Agent node: calls LLM with tools."""
@@ -203,29 +186,30 @@ class AutonomousWorkflow:
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
         print()
 
-        # Create initial prompt
-        prompt_text = f"""Propose {n_proposals} novel hypothesis(es) for comparing \
-patient cohorts on survival.
+        # Create initial prompt - must force tool calling with explicit instruction
+        prompt_text = f"""You are helping generate cancer research hypotheses.
+You MUST use the provided tools to explore the database first.
 
 {previous_context}
 
-**Process**:
-1. Use list_tables_tool to see available data
-2. Use describe_table_tool to understand key tables (e.g., clinical_patient, CNA)
-3. Use query_data_tool to explore interesting features
-4. Propose hypothesis(es) using ONLY tables/columns you've verified exist
+YOUR FIRST ACTION: Call list_tables_tool() to see what tables are available.
+Do this NOW before doing anything else.
 
-**Output format** (JSON):
+After exploring, generate {n_proposals} hypothesis(es) in this JSON format:
 {{
   "proposals": [
     {{
-      "cohort_a_description": "Patients with KRAS amplification",
-      "cohort_b_description": "Patients without KRAS amplification",
+      "cohort_a_description": "...",
+      "cohort_b_description": "...",
       "outcome_description": "Overall survival",
-      "rationale": "KRAS amplifications are common in cancer and may affect prognosis",
+      "rationale": "...",
       "cycl_spec": {{
-        "cohort_a": {{"table": "CNA", "column": "KRAS", "operator": ">", "value": 0}},
-        "cohort_b": {{"table": "CNA", "column": "KRAS", "operator": "==", "value": 0}},
+        "cohort_a": {{
+          "table": "...", "column": "...", "operator": "...", "value": ...
+        }},
+        "cohort_b": {{
+          "table": "...", "column": "...", "operator": "...", "value": ...
+        }},
         "outcome": {{
           "table": "clinical_patient",
           "time_column": "OS_MONTHS",
@@ -236,7 +220,7 @@ patient cohorts on survival.
   ]
 }}
 
-Start by exploring the database to understand what data is available."""
+DO NOT make up table/column names. USE THE TOOLS to find real ones."""
         initial_message = HumanMessage(content=prompt_text)
 
         # Run LangGraph
