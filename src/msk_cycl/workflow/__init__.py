@@ -1,6 +1,7 @@
 """Workflow orchestration for hypothesis generation."""
 
+from msk_cycl.workflow.autonomous import AutonomousWorkflow
 from msk_cycl.workflow.linear import LinearWorkflow
 from msk_cycl.workflow.session import Session, SessionConfig
 
-__all__ = ["SessionConfig", "Session", "LinearWorkflow"]
+__all__ = ["SessionConfig", "Session", "LinearWorkflow", "AutonomousWorkflow"]
