@@ -73,12 +73,14 @@ class HypothesisReviewer:
             f"  N_A = {len(hyp.result.cohort_a_data)}, "
             f"N_B = {len(hyp.result.cohort_b_data)}"
         )
-        if isinstance(hyp.result.statistic, dict):
-            print(f"  p-value = {hyp.result.statistic.get('p_value', 'N/A')}")
-            test_stat = hyp.result.statistic.get("test_statistic", "N/A")
-            print(f"  test_statistic = {test_stat}")
-        else:
-            print(f"  Statistic: {hyp.result.statistic}")
+        if hyp.result.p_value is not None:
+            print(f"  p-value = {hyp.result.p_value}")
+        if hyp.result.hazard_ratio is not None:
+            print(f"  hazard_ratio = {hyp.result.hazard_ratio}")
+            if hyp.result.confidence_interval_lower is not None:
+                ci_lower = hyp.result.confidence_interval_lower
+                ci_upper = hyp.result.confidence_interval_upper
+                print(f"  95% CI = [{ci_lower}, {ci_upper}]")
         print()
         print(f"Summary: {hyp.narrative.summary}")
         print()

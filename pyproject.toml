@@ -27,7 +27,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "mypy",
+    "pandas-stubs",
     "ruff",
+    "types-requests",
+    "types-tqdm",
 ]
 test = [
     "pytest",

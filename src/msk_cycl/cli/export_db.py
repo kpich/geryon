@@ -68,10 +68,13 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
                 total_skipped += 1
                 continue
 
-            # Extract p-value if available
-            p_value = None
-            if isinstance(hyp.result.statistic, dict):
-                p_value = hyp.result.statistic.get("p_value")
+            # Build test statistic string from available fields
+            stat_parts = []
+            if hyp.result.hazard_ratio is not None:
+                stat_parts.append(f"HR={hyp.result.hazard_ratio:.3f}")
+            if hyp.result.p_value is not None:
+                stat_parts.append(f"p={hyp.result.p_value:.4f}")
+            test_statistic_str = ", ".join(stat_parts) if stat_parts else "N/A"
 
             cursor.execute(
                 """
@@ -89,8 +92,8 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
                     hyp.proposal.rationale,
                     len(hyp.result.cohort_a_data),
                     len(hyp.result.cohort_b_data),
-                    str(hyp.result.statistic),
-                    p_value,
+                    test_statistic_str,
+                    hyp.result.p_value,
                     hyp.narrative.summary,
                     hyp.label.value,
                     hyp.label_notes,
