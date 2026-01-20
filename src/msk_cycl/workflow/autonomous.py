@@ -178,24 +178,45 @@ class AutonomousWorkflow:
         if n_proposals is None:
             n_proposals = self.config.num_proposals_per_iteration
 
+        # Generate 3x more proposals to allow for validation filtering
+        n_to_generate = n_proposals * 3
+
         # Load previous hypotheses to avoid duplicates
         previous = self.store.load_session(self.session.session_id)
         previous_context = self._format_previous_hypotheses(previous)
 
-        print(f"Generating {n_proposals} hypothesis(es) with autonomous exploration...")
+        print(
+            f"Generating {n_to_generate} hypothesis(es) "
+            f"(will filter to best {n_proposals})..."
+        )
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
         print()
 
-        # Create initial prompt - must force tool calling with explicit instruction
+        # Create initial prompt - enforce multi-step validation
         prompt_text = f"""You are helping generate cancer research hypotheses.
-You MUST use the provided tools to explore the database first.
+You MUST explore the database using tools before proposing ANY hypotheses.
 
 {previous_context}
 
-YOUR FIRST ACTION: Call list_tables_tool() to see what tables are available.
-Do this NOW before doing anything else.
+REQUIRED EXPLORATION STEPS (DO NOT SKIP ANY):
 
-After exploring, generate {n_proposals} hypothesis(es) in this JSON format:
+Step 1: Call list_tables_tool() to see all available tables
+
+Step 2: For EACH table you want to use in a hypothesis:
+   - Call describe_table_tool(table_name) to see its columns
+   - Note the EXACT column names, data types, and sample values
+   - Do NOT assume column names - verify them first!
+
+Step 3 (Optional): Call query_data_tool(sql) to check value distributions
+
+Step 4: Generate {n_to_generate} hypothesis(es) using ONLY columns you verified
+
+CRITICAL VALIDATION:
+- Your proposals will be checked against the actual database schema
+- If you reference a table or column that doesn't exist, that proposal will be REJECTED
+- Using real, verified column names is MANDATORY
+
+Output format:
 {{
   "proposals": [
     {{
@@ -218,9 +239,7 @@ After exploring, generate {n_proposals} hypothesis(es) in this JSON format:
       }}
     }}
   ]
-}}
-
-DO NOT make up table/column names. USE THE TOOLS to find real ones."""
+}}"""
         initial_message = HumanMessage(content=prompt_text)
 
         # Run LangGraph
@@ -283,14 +302,24 @@ DO NOT make up table/column names. USE THE TOOLS to find real ones."""
                 print("  Continuing to next iteration...")
                 return []
 
-            print(f"Generated {len(proposals)} proposals. Executing...")
+            # Filter to requested number of proposals
+            valid_proposals = proposals[:n_proposals]
+
+            if len(valid_proposals) < n_proposals:
+                print(f"⚠ Only {len(valid_proposals)}/{n_proposals} valid proposals")
+                print(f"  (requested {n_to_generate}, got {len(proposals)} valid)")
+            else:
+                print(
+                    f"Generated {len(proposals)} valid proposals. "
+                    f"Executing top {len(valid_proposals)}..."
+                )
             print()
 
             # Execute and narrate (same as linear workflow)
             labeled_hypotheses = []
             narrator = ResultNarrator(self.provider, logger=self.llm_logger)
 
-            for i, proposal in enumerate(proposals, 1):
+            for i, proposal in enumerate(valid_proposals, 1):
                 a_desc = proposal.cohort_a_description
                 b_desc = proposal.cohort_b_description
                 print(f"  [{i}/{len(proposals)}] Executing: {a_desc} vs {b_desc}")
@@ -405,16 +434,25 @@ DO NOT make up table/column names. USE THE TOOLS to find real ones."""
             )
 
             proposals = []
-            for item in proposals_data:
-                proposals.append(
-                    HypothesisProposal(
-                        cohort_a_description=item["cohort_a_description"],
-                        cohort_b_description=item["cohort_b_description"],
-                        outcome_description=item["outcome_description"],
-                        rationale=item["rationale"],
-                        cycl_spec=CyclHyp(**item["cycl_spec"]),
-                    )
+            for i, item in enumerate(proposals_data, 1):
+                proposal = HypothesisProposal(
+                    cohort_a_description=item["cohort_a_description"],
+                    cohort_b_description=item["cohort_b_description"],
+                    outcome_description=item["outcome_description"],
+                    rationale=item["rationale"],
+                    cycl_spec=CyclHyp(**item["cycl_spec"]),
                 )
+
+                # Validate tables/columns exist before accepting
+                validation_errors = self._validate_cycl_spec(proposal.cycl_spec)
+                if validation_errors:
+                    print(f"  ⚠ REJECTED proposal {i}: {'; '.join(validation_errors)}")
+                    continue
+
+                proposals.append(proposal)
+
+            if not proposals and proposals_data:
+                print("  ⚠ All proposals were rejected due to validation errors")
 
             return proposals
 
@@ -428,6 +466,70 @@ DO NOT make up table/column names. USE THE TOOLS to find real ones."""
                 print("  Response preview (last 500 chars):")
                 print(f"  {content[-500:]}")
             return []
+
+    def _validate_cycl_spec(self, spec: CyclHyp) -> list[str]:
+        """Validate that tables and columns in spec actually exist.
+
+        Parameters
+        ----------
+        spec : CyclHyp
+            Hypothesis specification to validate
+
+        Returns
+        -------
+        list[str]
+            List of validation error messages (empty if valid)
+        """
+        errors = []
+        tables = self.db.list_tables()
+
+        # Check cohort_a
+        cohort_a = spec.query.cohort_a
+        if cohort_a.table not in tables:
+            errors.append(f"Table '{cohort_a.table}' does not exist")
+        else:
+            # Check column exists in table
+            try:
+                table_df = self.db.execute(f"SELECT * FROM {cohort_a.table} LIMIT 0")
+                columns = table_df.columns.tolist()
+                if cohort_a.column not in columns:
+                    errors.append(f"Column '{cohort_a.column}' not in {cohort_a.table}")
+            except Exception as e:
+                errors.append(f"Error checking {cohort_a.table}: {str(e)}")
+
+        # Check cohort_b
+        cohort_b = spec.query.cohort_b
+        if cohort_b.table not in tables:
+            errors.append(f"Table '{cohort_b.table}' does not exist")
+        else:
+            try:
+                table_df = self.db.execute(f"SELECT * FROM {cohort_b.table} LIMIT 0")
+                columns = table_df.columns.tolist()
+                if cohort_b.column not in columns:
+                    errors.append(f"Column '{cohort_b.column}' not in {cohort_b.table}")
+            except Exception as e:
+                errors.append(f"Error checking {cohort_b.table}: {str(e)}")
+
+        # Check outcome table/columns
+        outcome = spec.query.outcome
+        if outcome.table not in tables:
+            errors.append(f"Outcome table '{outcome.table}' does not exist")
+        else:
+            try:
+                table_df = self.db.execute(f"SELECT * FROM {outcome.table} LIMIT 0")
+                columns = table_df.columns.tolist()
+                if outcome.time_column not in columns:
+                    errors.append(
+                        f"Time column '{outcome.time_column}' not in {outcome.table}"
+                    )
+                if outcome.event_column not in columns:
+                    errors.append(
+                        f"Event column '{outcome.event_column}' not in {outcome.table}"
+                    )
+            except Exception as e:
+                errors.append(f"Error checking {outcome.table}: {str(e)}")
+
+        return errors
 
     def _format_previous_hypotheses(self, previous: list[LabeledHypothesis]) -> str:
         """Format previous hypotheses for context."""
