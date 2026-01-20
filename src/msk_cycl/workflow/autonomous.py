@@ -483,32 +483,49 @@ Output format:
         errors = []
         tables = self.db.list_tables()
 
-        # Check cohort_a
-        cohort_a = spec.query.cohort_a
-        if cohort_a.table not in tables:
-            errors.append(f"Table '{cohort_a.table}' does not exist")
-        else:
-            # Check column exists in table
-            try:
-                table_df = self.db.execute(f"SELECT * FROM {cohort_a.table} LIMIT 0")
-                columns = table_df.columns.tolist()
-                if cohort_a.column not in columns:
-                    errors.append(f"Column '{cohort_a.column}' not in {cohort_a.table}")
-            except Exception as e:
-                errors.append(f"Error checking {cohort_a.table}: {str(e)}")
+        # Check cohort_a filters
+        for i, filter_obj in enumerate(spec.query.cohort_a.filters):
+            if filter_obj.table not in tables:
+                errors.append(
+                    f"Cohort A filter {i}: Table '{filter_obj.table}' does not exist"
+                )
+            else:
+                try:
+                    table_df = self.db.execute(
+                        f"SELECT * FROM {filter_obj.table} LIMIT 0"
+                    )
+                    columns = table_df.columns.tolist()
+                    if filter_obj.column not in columns:
+                        errors.append(
+                            f"Cohort A filter {i}: Column '{filter_obj.column}' "
+                            f"not in {filter_obj.table}"
+                        )
+                except Exception as e:
+                    errors.append(
+                        f"Cohort A filter {i}: Error checking {filter_obj.table}: {e}"
+                    )
 
-        # Check cohort_b
-        cohort_b = spec.query.cohort_b
-        if cohort_b.table not in tables:
-            errors.append(f"Table '{cohort_b.table}' does not exist")
-        else:
-            try:
-                table_df = self.db.execute(f"SELECT * FROM {cohort_b.table} LIMIT 0")
-                columns = table_df.columns.tolist()
-                if cohort_b.column not in columns:
-                    errors.append(f"Column '{cohort_b.column}' not in {cohort_b.table}")
-            except Exception as e:
-                errors.append(f"Error checking {cohort_b.table}: {str(e)}")
+        # Check cohort_b filters
+        for i, filter_obj in enumerate(spec.query.cohort_b.filters):
+            if filter_obj.table not in tables:
+                errors.append(
+                    f"Cohort B filter {i}: Table '{filter_obj.table}' does not exist"
+                )
+            else:
+                try:
+                    table_df = self.db.execute(
+                        f"SELECT * FROM {filter_obj.table} LIMIT 0"
+                    )
+                    columns = table_df.columns.tolist()
+                    if filter_obj.column not in columns:
+                        errors.append(
+                            f"Cohort B filter {i}: Column '{filter_obj.column}' "
+                            f"not in {filter_obj.table}"
+                        )
+                except Exception as e:
+                    errors.append(
+                        f"Cohort B filter {i}: Error checking {filter_obj.table}: {e}"
+                    )
 
         # Check outcome table/columns
         outcome = spec.query.outcome
