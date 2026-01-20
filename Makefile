@@ -1,28 +1,32 @@
-.PHONY: install_precommit_hooks
-install_precommit_hooks:
-	pip install pre-commit
-	pre-commit install
-
 .PHONY: dev
 dev:
-	pip install -e '.[dev,test,viewer]'
+	uv sync --all-extras
+	uv run pre-commit install
 
 .PHONY: install
 install:
-	pip install -e .
+	uv sync
 
 .PHONY: test
 test:
-	pytest .
+	uv run pytest .
 
 .PHONY: clean
 clean:
 	find src/ -name "__pycache__" | xargs rm -r
-	rm -r ./build/
+	rm -rf ./build/ .venv/ uv.lock
 
 .PHONY: mypy
 mypy:
-	mypy --check-untyped-defs src/msk_cycl
+	uv run mypy --check-untyped-defs src/msk_cycl
+
+.PHONY: lint
+lint:
+	uv run ruff check src/
+
+.PHONY: format
+format:
+	uv run ruff format src/
 
 .PHONY: etl
 etl:
