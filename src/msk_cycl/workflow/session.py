@@ -15,10 +15,25 @@ class SessionConfig(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # LLM configuration
-    provider_type: Literal["ollama", "openai", "anthropic"] = Field(
+    provider_type: Literal["ollama", "openai", "anthropic", "aws_bedrock"] = Field(
         default="ollama", description="LLM provider type"
     )
     model: str = Field(default="mixtral:8x7b", description="Model identifier")
+    base_url: str | None = Field(
+        default=None,
+        description="Custom API endpoint (e.g., AWS-hosted inference server)",
+    )
+    api_key: str | None = Field(
+        default=None, description="API key for authentication (optional)"
+    )
+
+    # AWS-specific configuration (for aws_bedrock provider)
+    aws_region: str | None = Field(
+        default="us-east-1", description="AWS region for Bedrock"
+    )
+    aws_profile: str | None = Field(
+        default=None, description="AWS credentials profile name"
+    )
 
     # Generation parameters
     num_proposals_per_iteration: int = Field(
