@@ -2,7 +2,7 @@
 
 import json
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import CyclHyp
@@ -138,21 +138,29 @@ as specified in your instructions. Return ONLY valid JSON.
         Returns
         -------
         HypothesisNarrative
-            Parsed narrative
+            Parsed narrative, or fallback if parsing fails
         """
-        content = content.strip()
-        if content.startswith("```"):
-            lines = content.split("\n")
-            start_idx = 0
-            end_idx = len(lines)
-            for i, line in enumerate(lines):
-                if line.strip().startswith("```"):
-                    if start_idx == 0:
-                        start_idx = i + 1
-                    else:
-                        end_idx = i
-                        break
-            content = "\n".join(lines[start_idx:end_idx])
+        try:
+            content = content.strip()
+            if content.startswith("```"):
+                lines = content.split("\n")
+                start_idx = 0
+                end_idx = len(lines)
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("```"):
+                        if start_idx == 0:
+                            start_idx = i + 1
+                        else:
+                            end_idx = i
+                            break
+                content = "\n".join(lines[start_idx:end_idx])
 
-        data = json.loads(content)
-        return HypothesisNarrative(**data)
+            data = json.loads(content)
+            return HypothesisNarrative(**data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            return HypothesisNarrative(
+                summary=f"Failed to parse LLM response: {type(e).__name__}",
+                findings=content[:500] if content else "",
+                limitations=["Narrative parsing failed"],
+                clinical_relevance="Unable to determine due to parsing error",
+            )
