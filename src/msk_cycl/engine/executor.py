@@ -4,6 +4,8 @@ Hypothesis execution engine for running statistical analyses.
 Executes compiled hypotheses against database and returns statistical results.
 """
 
+import pandas as pd  # type: ignore
+
 from msk_cycl.db import Database
 from msk_cycl.engine.registry import get_method_implementation, get_outcome_handler
 from msk_cycl.lang.compiler import compile_select_cohort_ids
@@ -20,7 +22,19 @@ class HypothesisExecutor:
 
     def execute(self, spec: CyclHyp) -> ComparisonResult:
         """Execute hypothesis and return comparison results."""
-        return self._execute_compare_cohorts(spec.query)
+        try:
+            return self._execute_compare_cohorts(spec.query)
+        except Exception as e:
+            return ComparisonResult(
+                cohort_a_ids=[],
+                cohort_b_ids=[],
+                cohort_a_size=0,
+                cohort_b_size=0,
+                cohort_a_data=pd.DataFrame(),
+                cohort_b_data=pd.DataFrame(),
+                success=False,
+                error_message=str(e),
+            )
 
     def _get_cohort_ids(self, cohort: SelectCohort) -> list[str]:
         """INTERNAL: Execute cohort selection and return patient IDs."""
@@ -58,5 +72,8 @@ class HypothesisExecutor:
             cohort_b_size=len(cohort_b_ids),
             cohort_a_data=cohort_a_data,
             cohort_b_data=cohort_b_data,
-            **stats,
+            hazard_ratio=stats.get("hazard_ratio"),
+            confidence_interval_lower=stats.get("confidence_interval_lower"),
+            confidence_interval_upper=stats.get("confidence_interval_upper"),
+            p_value=stats.get("p_value"),
         )

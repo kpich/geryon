@@ -1,5 +1,6 @@
 """JSONL storage for labeled hypotheses."""
 
+import contextlib
 from datetime import datetime
 import json
 from pathlib import Path
@@ -8,6 +9,8 @@ import pandas as pd  # type: ignore
 
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.schema import HypothesisRecord, SessionFileMetadata
+
+SUPPORTED_VERSIONS = {1}
 
 
 class HypothesisStore:
@@ -102,13 +105,17 @@ class HypothesisStore:
         if "data" in data and "result" in data["data"]:
             result = data["data"]["result"]
             if "cohort_a_data" in result:
-                result["cohort_a_data"] = result["cohort_a_data"].to_dict(
-                    orient="records"
-                )
+                df = result["cohort_a_data"]
+                result["cohort_a_data"] = {
+                    "records": df.to_dict(orient="records"),
+                    "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
+                }
             if "cohort_b_data" in result:
-                result["cohort_b_data"] = result["cohort_b_data"].to_dict(
-                    orient="records"
-                )
+                df = result["cohort_b_data"]
+                result["cohort_b_data"] = {
+                    "records": df.to_dict(orient="records"),
+                    "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
+                }
 
         return json.dumps(data, default=str)
 
@@ -125,11 +132,26 @@ class HypothesisStore:
         HypothesisRecord
             Deserialized record
         """
+        if "data" in data and "spec" in data["data"]:
+            spec = data["data"]["spec"]
+            version = spec.get("version")
+            if version not in SUPPORTED_VERSIONS:
+                raise ValueError(f"Unsupported CyclHyp version: {version}")
+
         if "data" in data and "result" in data["data"]:
             result = data["data"]["result"]
-            if "cohort_a_data" in result and isinstance(result["cohort_a_data"], list):
-                result["cohort_a_data"] = pd.DataFrame(result["cohort_a_data"])
-            if "cohort_b_data" in result and isinstance(result["cohort_b_data"], list):
-                result["cohort_b_data"] = pd.DataFrame(result["cohort_b_data"])
+            for key in ("cohort_a_data", "cohort_b_data"):
+                if key in result:
+                    cohort_data = result[key]
+                    if isinstance(cohort_data, list):
+                        result[key] = pd.DataFrame(cohort_data)
+                    elif isinstance(cohort_data, dict) and "records" in cohort_data:
+                        df = pd.DataFrame(cohort_data["records"])
+                        if "dtypes" in cohort_data:
+                            for col, dtype_str in cohort_data["dtypes"].items():
+                                if col in df.columns:
+                                    with contextlib.suppress(ValueError, TypeError):
+                                        df[col] = df[col].astype(dtype_str)
+                        result[key] = df
 
         return HypothesisRecord(**data)

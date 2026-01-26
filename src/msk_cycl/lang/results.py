@@ -23,3 +23,9 @@ class ComparisonResult(BaseModel):
     # Raw data for further analysis
     cohort_a_data: pd.DataFrame = Field(..., description="Cohort A outcome data")
     cohort_b_data: pd.DataFrame = Field(..., description="Cohort B outcome data")
+
+    # Execution status
+    success: bool = Field(default=True, description="Whether execution succeeded")
+    error_message: str | None = Field(
+        default=None, description="Error message if execution failed"
+    )
