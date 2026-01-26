@@ -49,8 +49,12 @@ def run_workflow(
     output_dir: Path | None = None,
     data_dir: Path | None = None,
     data_base: Path | None = None,
-    provider: Literal["ollama", "openai", "anthropic"] = "ollama",
+    provider: Literal["ollama", "openai", "anthropic", "aws_bedrock"] = "ollama",
     model: str = "mixtral:8x7b",
+    base_url: str | None = None,
+    api_key: str | None = None,
+    aws_region: str | None = None,
+    aws_profile: str | None = None,
     num_proposals: int = 5,
     max_iterations: int = 10,
     enable_llm_logging: bool = True,
@@ -67,10 +71,18 @@ def run_workflow(
         ETL output directory (default: auto-detect latest from data_base)
     data_base : Path, optional
         Base directory for ETL outputs (default: ~/data/msk_cycle_data)
-    provider : Literal["ollama", "openai", "anthropic"]
+    provider : Literal["ollama", "openai", "anthropic", "aws_bedrock"]
         LLM provider (default: ollama)
     model : str
         Model name (default: mixtral:8x7b)
+    base_url : str, optional
+        Custom API endpoint (e.g., AWS-hosted inference server)
+    api_key : str, optional
+        API key for authentication
+    aws_region : str, optional
+        AWS region for Bedrock (default: us-east-1)
+    aws_profile : str, optional
+        AWS credentials profile name
     num_proposals : int
         Number of proposals per iteration (default: 5)
     max_iterations : int
@@ -108,6 +120,10 @@ def run_workflow(
         storage_dir=output_dir,
         provider_type=provider,
         model=model,
+        base_url=base_url,
+        api_key=api_key,
+        aws_region=aws_region,
+        aws_profile=aws_profile,
         num_proposals_per_iteration=num_proposals,
         max_iterations=max_iterations,
         enable_llm_logging=enable_llm_logging,
@@ -188,7 +204,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--provider",
-        choices=["ollama", "openai", "anthropic"],
+        choices=["ollama", "openai", "anthropic", "aws_bedrock"],
         default="ollama",
         help="LLM provider (default: ollama)",
     )
@@ -196,6 +212,22 @@ def main() -> None:
         "--model",
         default="mixtral:8x7b",
         help="Model name (default: mixtral:8x7b)",
+    )
+    parser.add_argument(
+        "--base-url",
+        help="Custom API endpoint (e.g., https://your-aws-endpoint.com/v1)",
+    )
+    parser.add_argument(
+        "--api-key",
+        help="API key for authentication (or use env var)",
+    )
+    parser.add_argument(
+        "--aws-region",
+        help="AWS region for Bedrock (default: us-east-1)",
+    )
+    parser.add_argument(
+        "--aws-profile",
+        help="AWS credentials profile name",
     )
     parser.add_argument(
         "--num-proposals",
@@ -232,6 +264,10 @@ def main() -> None:
         workflow_type=args.workflow,
         provider=args.provider,
         model=args.model,
+        base_url=args.base_url,
+        api_key=args.api_key,
+        aws_region=args.aws_region,
+        aws_profile=args.aws_profile,
         num_proposals=args.num_proposals,
         max_iterations=args.max_iterations,
         enable_llm_logging=not args.no_log,

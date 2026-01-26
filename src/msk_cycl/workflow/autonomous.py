@@ -103,29 +103,51 @@ class AutonomousWorkflow:
         if self.config.provider_type == "ollama":
             from langchain_ollama import ChatOllama
 
+            base_url = self.config.base_url or "http://localhost:11434"
+
             # Don't use format="json" - it breaks tool calling!
             # Let the model use native tool calling instead
             return ChatOllama(
                 model=self.config.model,
-                base_url="http://localhost:11434",
+                base_url=base_url,
                 temperature=0.8,
             )
         elif self.config.provider_type == "openai":
             from langchain_openai import ChatOpenAI
 
-            return ChatOpenAI(
-                model=self.config.model,
-                temperature=0.8,
-            )
+            kwargs = {"model": self.config.model, "temperature": 0.8}
+            if self.config.base_url:
+                kwargs["openai_api_base"] = self.config.base_url
+            if self.config.api_key:
+                kwargs["openai_api_key"] = self.config.api_key
+
+            return ChatOpenAI(**kwargs)  # type: ignore[arg-type]
         elif self.config.provider_type == "anthropic":
             from langchain_anthropic import ChatAnthropic
 
-            return ChatAnthropic(
-                model_name=self.config.model,
-                temperature=0.8,
-                timeout=300.0,
-                stop=None,
-            )
+            kwargs = {
+                "model_name": self.config.model,
+                "temperature": 0.8,
+                "timeout": 300.0,
+                "stop": None,
+            }
+            if self.config.api_key:
+                kwargs["anthropic_api_key"] = self.config.api_key
+
+            return ChatAnthropic(**kwargs)  # type: ignore[arg-type]
+        elif self.config.provider_type == "aws_bedrock":
+            from langchain_aws import ChatBedrock
+
+            kwargs = {
+                "model_id": self.config.model,
+                "model_kwargs": {"temperature": 0.8},
+            }
+            if self.config.aws_region:
+                kwargs["region_name"] = self.config.aws_region
+            if self.config.aws_profile:
+                kwargs["credentials_profile_name"] = self.config.aws_profile
+
+            return ChatBedrock(**kwargs)  # type: ignore[arg-type]
         else:
             raise ValueError(f"Unknown provider type: {self.config.provider_type}")
 

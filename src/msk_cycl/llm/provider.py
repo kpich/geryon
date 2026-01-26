@@ -4,8 +4,9 @@ from typing import Any, Literal
 
 from msk_cycl.llm.providers.base import LLMProvider
 from msk_cycl.llm.providers.ollama import OllamaProvider
+from msk_cycl.llm.providers.openai import OpenAIProvider
 
-ProviderType = Literal["ollama", "openai", "anthropic"]
+ProviderType = Literal["ollama", "openai", "anthropic", "aws_bedrock"]
 
 
 def create_provider(
@@ -41,8 +42,13 @@ def create_provider(
     if provider_type == "ollama":
         return OllamaProvider(**kwargs)
     elif provider_type == "openai":
-        raise NotImplementedError("OpenAI provider not yet implemented")
+        return OpenAIProvider(**kwargs)
     elif provider_type == "anthropic":
         raise NotImplementedError("Anthropic provider not yet implemented")
+    elif provider_type == "aws_bedrock":
+        # AWS Bedrock is handled separately in autonomous workflow via LangChain
+        raise NotImplementedError(
+            "AWS Bedrock provider should be used via autonomous workflow"
+        )
     else:
         raise ValueError(f"Unknown provider type: {provider_type}")
