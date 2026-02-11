@@ -25,34 +25,28 @@ def describe_table(db: Database, table_name: str) -> str:
         Markdown-formatted table schema with columns, types, and samples
     """
     try:
-        summarize_df = db.execute(f'SUMMARIZE "{table_name}"')
-        row_count = int(summarize_df["count"].max())
+        describe_df = db.execute(f'DESCRIBE "{table_name}"')
+        count_df = db.execute(f'SELECT COUNT(*) as cnt FROM "{table_name}"')
+        row_count = int(count_df["cnt"].iloc[0])
+        sample_df = db.execute(f'SELECT * FROM "{table_name}" LIMIT 5')
 
         lines = [f"## Table: {table_name} ({row_count:,} rows)", ""]
-        lines.append("| Column | Type | Min | Max | Approx Distinct |")
-        lines.append("|--------|------|-----|-----|-----------------|")
+        lines.append("| Column | Type | Sample Values |")
+        lines.append("|--------|------|---------------|")
 
-        for idx, (_, row) in enumerate(summarize_df.iterrows()):
+        for idx, (_, row) in enumerate(describe_df.iterrows()):
             if idx >= 20:
-                remaining = len(summarize_df) - 20
-                lines.append(f"| ... | ... | ... | ... | {remaining} more columns |")
+                remaining = len(describe_df) - 20
+                lines.append(f"| ... | ... | {remaining} more columns |")
                 break
 
             col_name = row["column_name"]
             col_type = row["column_type"]
-            min_val = str(row.get("min", "")) if row.get("min") is not None else ""
-            max_val = str(row.get("max", "")) if row.get("max") is not None else ""
-            approx_unique = row.get("approx_unique", "")
 
-            if len(min_val) > 40:
-                min_val = min_val[:37] + "..."
-            if len(max_val) > 40:
-                max_val = max_val[:37] + "..."
+            col_samples = sample_df[col_name].dropna().unique()[:3]
+            sample_str = ", ".join(str(v)[:40] for v in col_samples)
 
-            lines.append(
-                f"| {col_name} | {col_type} | {min_val} | {max_val}"
-                f" | {approx_unique} |"
-            )
+            lines.append(f"| {col_name} | {col_type} | {sample_str} |")
 
         lines.append("")
         return "\n".join(lines)

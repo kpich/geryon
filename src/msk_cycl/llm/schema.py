@@ -60,45 +60,29 @@ def discover_schema(
         table_iter = tqdm(table_names, desc="Discovering schema", unit="table")
 
     for table_name in table_iter:
-        summary_df = db.execute(f'SUMMARIZE "{table_name}"')
-        row_count = int(summary_df["count"].max())
+        describe_df = db.execute(f'DESCRIBE "{table_name}"')
+        count_df = db.execute(f'SELECT COUNT(*) as cnt FROM "{table_name}"')
+        row_count = int(count_df["cnt"].iloc[0])
+        sample_df = db.execute(f'SELECT * FROM "{table_name}" LIMIT {sample_limit}')
 
         columns = []
-        for _, row in summary_df.iterrows():
+        for _, row in describe_df.iterrows():
             col_name = row["column_name"]
             col_type = row["column_type"]
 
-            sample_values: list[str | int | float] = []
-            min_val = row.get("min")
-            max_val = row.get("max")
-            if min_val is not None and str(min_val) != "":
-                sample_values.append(min_val)
-            if (
-                max_val is not None
-                and str(max_val) != ""
-                and str(max_val) != str(min_val)
-            ):
-                sample_values.append(max_val)
-
-            approx_unique = row.get("approx_unique")
-            distinct_count = int(approx_unique) if approx_unique is not None else None
+            col_samples = sample_df[col_name].dropna().unique()
+            sample_values: list[str | int | float] = list(col_samples[:sample_limit])
 
             columns.append(
                 ColumnInfo(
                     name=col_name,
                     type=col_type,
                     sample_values=sample_values,
-                    distinct_count=distinct_count,
+                    distinct_count=None,
                 )
             )
 
-        tables.append(
-            TableInfo(
-                name=table_name,
-                columns=columns,
-                row_count=row_count,
-            )
-        )
+        tables.append(TableInfo(name=table_name, columns=columns, row_count=row_count))
 
     return DatabaseSchema(tables=tables)
 
