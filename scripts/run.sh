@@ -52,4 +52,4 @@ if [[ "$PROVIDER" == "ollama" ]]; then
 fi
 
 # Run the workflow module directly with all arguments
-exec python -m msk_cycl.workflow.runner "$@"
+exec uv run python -m msk_cycl.workflow.runner "$@"

@@ -85,3 +85,7 @@ python -m msk_cycl.cli.export_db \
 # Interactive data viewer
 uv run harlequin data/msk_solid_heme/
 ```
+
+### AWS etc
+
+[ipynb about configuring aws bedrock etc](https://github.com/clinical-data-mining/llm_examples/blob/main/notebooks/04.Setting_Up_ClaudeCode_with_AWS_Bedrock.ipynb)
