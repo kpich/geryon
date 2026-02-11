@@ -47,10 +47,11 @@ class AutonomousWorkflow:
 
         self.db = Database(config.parquet_dir)
         self.executor = HypothesisExecutor(self.db)
-        self.provider = create_provider(
-            config.provider_type,
-            model=config.model,
-        )
+        provider_kwargs: dict = {"model": config.model}
+        if config.provider_type == "aws_bedrock":
+            provider_kwargs["region"] = config.aws_region
+            provider_kwargs["profile"] = config.aws_profile
+        self.provider = create_provider(config.provider_type, **provider_kwargs)
 
         self.store = HypothesisStore(config.storage_dir)
 
@@ -76,7 +77,10 @@ class AutonomousWorkflow:
         @tool
         def list_tables_tool() -> str:
             """List all available tables in the database."""
-            return list_tables(self.db)
+            print("[TOOL] list_tables_tool called")
+            result = list_tables(self.db)
+            print(f"[TOOL] list_tables_tool done, {len(result)} chars")
+            return result
 
         @tool
         def describe_table_tool(table_name: str) -> str:
@@ -85,7 +89,10 @@ class AutonomousWorkflow:
             Use this to understand what data is available in a table before
             querying it.
             """
-            return describe_table(self.db, table_name)
+            print(f"[TOOL] describe_table_tool({table_name}) called")
+            result = describe_table(self.db, table_name)
+            print(f"[TOOL] describe_table_tool done, {len(result)} chars")
+            return result
 
         @tool
         def query_data_tool(sql: str) -> str:
@@ -94,7 +101,10 @@ class AutonomousWorkflow:
             Use this to examine actual data values, check distributions,
             or validate that certain values exist before proposing a hypothesis.
             """
-            return query_data(self.db, sql)
+            print(f"[TOOL] query_data_tool called: {sql[:100]}...")
+            result = query_data(self.db, sql)
+            print(f"[TOOL] query_data_tool done, {len(result)} chars")
+            return result
 
         return [list_tables_tool, describe_table_tool, query_data_tool]
 
@@ -136,16 +146,26 @@ class AutonomousWorkflow:
 
             return ChatAnthropic(**kwargs)  # type: ignore[arg-type]
         elif self.config.provider_type == "aws_bedrock":
+            from botocore.config import Config as BotoConfig
             from langchain_aws import ChatBedrock
 
+            boto_config = BotoConfig(
+                read_timeout=300,
+                connect_timeout=30,
+                retries={"max_attempts": 2},
+            )
             kwargs = {
                 "model_id": self.config.model,
                 "model_kwargs": {"temperature": 0.8},
+                "config": boto_config,
             }
             if self.config.aws_region:
                 kwargs["region_name"] = self.config.aws_region
             if self.config.aws_profile:
                 kwargs["credentials_profile_name"] = self.config.aws_profile
+            # When using inference profile ARN, provider must be specified
+            if "arn:" in self.config.model or "anthropic" in self.config.model.lower():
+                kwargs["provider"] = "anthropic"
 
             return ChatBedrock(**kwargs)  # type: ignore[arg-type]
         else:
