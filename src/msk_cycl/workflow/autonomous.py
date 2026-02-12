@@ -268,26 +268,44 @@ Output format:
 {{
   "proposals": [
     {{
-      "cohort_a_description": "...",
-      "cohort_b_description": "...",
+      "cohort_a_description": "Patients with KRAS mutation",
+      "cohort_b_description": "Patients without KRAS mutation",
       "outcome_description": "Overall survival",
       "rationale": "...",
       "cycl_spec": {{
-        "cohort_a": {{
-          "table": "...", "column": "...", "operator": "...", "value": ...
-        }},
-        "cohort_b": {{
-          "table": "...", "column": "...", "operator": "...", "value": ...
-        }},
-        "outcome": {{
-          "table": "clinical_patient",
-          "time_column": "OS_MONTHS",
-          "event_column": "OS_STATUS"
+        "version": 1,
+        "query": {{
+          "operation": "compare_cohorts",
+          "cohort_a": {{
+            "operation": "select_cohort",
+            "filters": [
+              {{"table": "gene_matrix", "column": "KRAS", "operator": "==", "value": 1}}
+            ]
+          }},
+          "cohort_b": {{
+            "operation": "select_cohort",
+            "filters": [
+              {{"table": "gene_matrix", "column": "KRAS", "operator": "==", "value": 0}}
+            ]
+          }},
+          "outcome": {{
+            "outcome_type": "overall_survival",
+            "time_column": "OS_MONTHS",
+            "event_column": "OS_STATUS",
+            "table": "clinical_patient"
+          }},
+          "method": "hazard_ratio_cox"
         }}
       }}
     }}
   ]
-}}"""
+}}
+
+IMPORTANT:
+- operator must be one of: ==, !=, >, <, >=, <=, in
+- method must be "hazard_ratio_cox"
+- outcome_type must be "overall_survival"
+- cohort_a and cohort_b must have "filters" as an ARRAY of filter objects"""
         initial_message = HumanMessage(content=prompt_text)
 
         # Run LangGraph
