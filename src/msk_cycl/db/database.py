@@ -5,6 +5,7 @@ Provides in-memory database with auto-registered parquet files.
 """
 
 from pathlib import Path
+import threading
 
 import duckdb
 import pandas as pd  # type: ignore
@@ -41,6 +42,7 @@ class Database:
             raise ValueError(f"Not a directory: {self.parquet_dir}")
 
         self.conn = duckdb.connect(":memory:")
+        self._lock = threading.Lock()
 
         self._register_tables()
 
@@ -74,8 +76,9 @@ class Database:
         pd.DataFrame
             Query results
         """
-        result = self.conn.execute(sql)
-        return result.df()
+        with self._lock:
+            result = self.conn.execute(sql)
+            return result.df()
 
     def list_tables(self) -> list[str]:
         """List all registered tables."""
