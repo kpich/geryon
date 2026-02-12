@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from msk_cycl.labeling.models import LabeledHypothesis
-from msk_cycl.workflow import LinearWorkflow, SessionConfig
+from msk_cycl.workflow import SessionConfig
 
 
 def get_latest_etl_output(base_dir: Path) -> Path:
@@ -58,7 +58,6 @@ def run_workflow(
     num_proposals: int = 5,
     max_iterations: int = 10,
     enable_llm_logging: bool = True,
-    workflow_type: Literal["autonomous", "linear"] = "autonomous",
 ) -> list[LabeledHypothesis]:
     """Run hypothesis generation workflow.
 
@@ -89,8 +88,6 @@ def run_workflow(
         Maximum iterations (default: 10)
     enable_llm_logging : bool
         Enable LLM conversation logging (default: True)
-    workflow_type : Literal["autonomous", "linear"]
-        Workflow type (default: autonomous)
 
     Returns
     -------
@@ -129,15 +126,12 @@ def run_workflow(
         enable_llm_logging=enable_llm_logging,
     )
 
-    print(f"Initializing {workflow_type} workflow...")
+    print("Initializing autonomous workflow...")
     print()
 
-    if workflow_type == "autonomous":
-        from msk_cycl.workflow.autonomous import AutonomousWorkflow
+    from msk_cycl.workflow.autonomous import AutonomousWorkflow
 
-        workflow: AutonomousWorkflow | LinearWorkflow = AutonomousWorkflow(config)
-    else:
-        workflow = LinearWorkflow(config)
+    workflow = AutonomousWorkflow(config)
 
     print()
 
@@ -147,7 +141,7 @@ def run_workflow(
     hypotheses = workflow.run_full_session()
 
     print()
-    print("✓ Session complete!")
+    print("Session complete!")
     print(f"  Generated {len(hypotheses)} hypotheses")
     print(f"  Stored in: {output_dir}")
 
@@ -195,12 +189,6 @@ def main() -> None:
         type=Path,
         default=Path.home() / "data" / "msk_cycle_data",
         help="Base directory for ETL outputs (default: ~/data/msk_cycle_data)",
-    )
-    parser.add_argument(
-        "--workflow",
-        choices=["autonomous", "linear"],
-        default="autonomous",
-        help="Workflow type (default: autonomous)",
     )
     parser.add_argument(
         "--provider",
@@ -261,7 +249,6 @@ def main() -> None:
         output_dir=args.output_dir,
         data_dir=args.data_dir,
         data_base=args.data_base,
-        workflow_type=args.workflow,
         provider=args.provider,
         model=args.model,
         base_url=args.base_url,
