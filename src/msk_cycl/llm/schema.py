@@ -1,9 +1,7 @@
 """Database schema discovery for LLM context."""
 
-from collections.abc import Iterable, Iterator
-from typing import Any
+from collections.abc import Iterable
 
-from pandas import Series
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
@@ -62,68 +60,29 @@ def discover_schema(
         table_iter = tqdm(table_names, desc="Discovering schema", unit="table")
 
     for table_name in table_iter:
-        describe_sql = f'DESCRIBE "{table_name}"'
-        describe_df = db.execute(describe_sql)
+        describe_df = db.execute(f'DESCRIBE "{table_name}"')
+        count_df = db.execute(f'SELECT COUNT(*) as cnt FROM "{table_name}"')
+        row_count = int(count_df["cnt"].iloc[0])
+        sample_df = db.execute(f'SELECT * FROM "{table_name}" LIMIT {sample_limit}')
 
         columns = []
-
-        column_iter: Iterator[tuple[Any, Series[Any]]] = describe_df.iterrows()
-        if show_progress:
-            column_iter = tqdm(  # type: ignore[assignment]
-                describe_df.iterrows(),
-                desc=f"  {table_name}",
-                total=len(describe_df),
-                unit="col",
-                leave=False,
-            )
-
-        for _, row in column_iter:
+        for _, row in describe_df.iterrows():
             col_name = row["column_name"]
             col_type = row["column_type"]
 
-            sample_values: list[str | int | float] = []
-            distinct_count = None
-
-            if "VARCHAR" in col_type or "TEXT" in col_type:
-                # Quote identifiers to handle special characters
-                sample_sql = (
-                    f'SELECT DISTINCT "{col_name}" FROM "{table_name}" '
-                    f'WHERE "{col_name}" IS NOT NULL LIMIT {sample_limit}'
-                )
-                try:
-                    sample_df = db.execute(sample_sql)
-                    sample_values = sample_df[col_name].tolist()
-
-                    count_sql = (
-                        f'SELECT COUNT(DISTINCT "{col_name}") as cnt '
-                        f'FROM "{table_name}"'
-                    )
-                    count_df = db.execute(count_sql)
-                    distinct_count = int(count_df["cnt"].iloc[0])
-                except Exception:
-                    pass
+            col_samples = sample_df[col_name].dropna().unique()
+            sample_values: list[str | int | float] = list(col_samples[:sample_limit])
 
             columns.append(
                 ColumnInfo(
                     name=col_name,
                     type=col_type,
                     sample_values=sample_values,
-                    distinct_count=distinct_count,
+                    distinct_count=None,
                 )
             )
 
-        # Get row count
-        count_sql = f'SELECT COUNT(*) as cnt FROM "{table_name}"'
-        count_df = db.execute(count_sql)
-        row_count = int(count_df["cnt"].iloc[0])
-
-        tables.append(
-            TableInfo(
-                name=table_name,
-                columns=columns,
-                row_count=row_count,
-            )
-        )
+        tables.append(TableInfo(name=table_name, columns=columns, row_count=row_count))
 
     return DatabaseSchema(tables=tables)
 

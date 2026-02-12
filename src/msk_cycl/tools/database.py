@@ -25,68 +25,28 @@ def describe_table(db: Database, table_name: str) -> str:
         Markdown-formatted table schema with columns, types, and samples
     """
     try:
-        # Get column information
-        describe_sql = f'DESCRIBE "{table_name}"'
-        describe_df = db.execute(describe_sql)
-
-        # Get row count
-        count_sql = f'SELECT COUNT(*) as cnt FROM "{table_name}"'
-        count_df = db.execute(count_sql)
+        describe_df = db.execute(f'DESCRIBE "{table_name}"')
+        count_df = db.execute(f'SELECT COUNT(*) as cnt FROM "{table_name}"')
         row_count = int(count_df["cnt"].iloc[0])
+        sample_df = db.execute(f'SELECT * FROM "{table_name}" LIMIT 5')
 
         lines = [f"## Table: {table_name} ({row_count:,} rows)", ""]
-        lines.append("| Column | Type | Sample Values | Distinct |")
-        lines.append("|--------|------|---------------|----------|")
+        lines.append("| Column | Type | Sample Values |")
+        lines.append("|--------|------|---------------|")
 
-        # Limit to 20 columns to avoid overwhelming output
         for idx, (_, row) in enumerate(describe_df.iterrows()):
             if idx >= 20:
                 remaining = len(describe_df) - 20
-                lines.append(f"| ... | ... | ... | {remaining} more columns |")
+                lines.append(f"| ... | ... | {remaining} more columns |")
                 break
 
             col_name = row["column_name"]
             col_type = row["column_type"]
 
-            # Get sample values (up to 3)
-            sample_values = []
-            distinct_count = ""
+            col_samples = sample_df[col_name].dropna().unique()[:3]
+            sample_str = ", ".join(str(v)[:40] for v in col_samples)
 
-            try:
-                if "VARCHAR" in col_type or "TEXT" in col_type:
-                    sample_sql = (
-                        f'SELECT DISTINCT "{col_name}" FROM "{table_name}" '
-                        f'WHERE "{col_name}" IS NOT NULL LIMIT 3'
-                    )
-                    sample_df = db.execute(sample_sql)
-                    sample_values = sample_df[col_name].tolist()
-
-                    count_sql = (
-                        f'SELECT COUNT(DISTINCT "{col_name}") as cnt '
-                        f'FROM "{table_name}"'
-                    )
-                    count_df = db.execute(count_sql)
-                    distinct_count = str(int(count_df["cnt"].iloc[0]))
-                elif (
-                    "DOUBLE" in col_type
-                    or "INTEGER" in col_type
-                    or "BIGINT" in col_type
-                ):
-                    sample_sql = (
-                        f'SELECT DISTINCT "{col_name}" FROM "{table_name}" '
-                        f'WHERE "{col_name}" IS NOT NULL LIMIT 3'
-                    )
-                    sample_df = db.execute(sample_sql)
-                    sample_values = sample_df[col_name].tolist()
-
-            except Exception:
-                # Skip sample values if query fails
-                pass
-
-            sample_str = ", ".join(str(v) for v in sample_values)
-            lines.append(
-                f"| {col_name} | {col_type} | {sample_str} | {distinct_count} |"
-            )
+            lines.append(f"| {col_name} | {col_type} | {sample_str} |")
 
         lines.append("")
         return "\n".join(lines)
