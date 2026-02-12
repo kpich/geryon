@@ -121,11 +121,16 @@ class AutonomousWorkflow:
                 model=self.config.model,
                 base_url=base_url,
                 temperature=0.8,
+                num_predict=16384,
             )
         elif self.config.provider_type == "openai":
             from langchain_openai import ChatOpenAI
 
-            kwargs = {"model": self.config.model, "temperature": 0.8}
+            kwargs = {
+                "model": self.config.model,
+                "temperature": 0.8,
+                "max_tokens": 16384,
+            }
             if self.config.base_url:
                 kwargs["openai_api_base"] = self.config.base_url
             if self.config.api_key:
@@ -138,6 +143,7 @@ class AutonomousWorkflow:
             kwargs = {
                 "model_name": self.config.model,
                 "temperature": 0.8,
+                "max_tokens": 16384,
                 "timeout": 300.0,
                 "stop": None,
             }
@@ -156,7 +162,7 @@ class AutonomousWorkflow:
             )
             kwargs = {
                 "model_id": self.config.model,
-                "model_kwargs": {"temperature": 0.8},
+                "model_kwargs": {"temperature": 0.8, "max_tokens": 16384},
                 "config": boto_config,
             }
             if self.config.aws_region:
@@ -288,44 +294,62 @@ Output format:
         try:
             result = self.graph.invoke({"messages": [initial_message]})
 
-            # Log the full conversation without truncation
+            # Log the full conversation in human-readable format
             if self.llm_logger:
-                # Log each message in the conversation
-                for i, msg in enumerate(result["messages"]):
+                log_lines = []
+                for msg in result["messages"]:
                     msg_type = getattr(msg, "type", "unknown")
-
-                    # Check if this is a tool call message
                     has_tool_calls = hasattr(msg, "tool_calls") and msg.tool_calls
 
-                    content_dict = {
-                        "message_index": i,
-                        "type": msg_type,
-                        "content": str(msg.content),  # No truncation
-                    }
+                    if msg_type == "human":
+                        log_lines.append(f"[Human]\n{msg.content}")
+                    elif msg_type == "ai":
+                        if msg.content:
+                            log_lines.append(f"[AI]\n{msg.content}")
+                        if has_tool_calls:
+                            calls = []
+                            for tc in msg.tool_calls:
+                                args_str = ", ".join(
+                                    f"{k}={v!r}" for k, v in tc.get("args", {}).items()
+                                )
+                                calls.append(f"  \u2192 {tc.get('name')}({args_str})")
+                            if not msg.content:
+                                log_lines.append("[AI]\n" + "\n".join(calls))
+                            else:
+                                log_lines.append("\n".join(calls))
+                    elif msg_type == "tool":
+                        tool_name = getattr(msg, "name", "unknown")
+                        log_lines.append(f"[Tool: {tool_name}]\n{msg.content}")
+                    else:
+                        log_lines.append(f"[{msg_type}]\n{msg.content}")
 
-                    if has_tool_calls:
-                        content_dict["tool_calls"] = [
-                            {
-                                "name": tc.get("name"),
-                                "args": tc.get("args", {}),
-                                "id": tc.get("id"),
-                            }
-                            for tc in msg.tool_calls
-                        ]
+                    log_lines.append("---")
 
-                    self.llm_logger.log_interaction(
-                        interaction_type=f"autonomous_msg_{i}_{msg_type}",
-                        messages=[{"role": msg_type, "content": str(content_dict)}],
-                        response={
-                            "content": f"Message {i} of {len(result['messages'])}",
-                            "model": f"{self.config.provider_type}/{self.config.model}",
-                        },
-                        usage=None,
-                        metadata={"total_messages": len(result["messages"])},
-                    )
+                full_log = "\n".join(log_lines)
+                self.llm_logger.log_interaction(
+                    interaction_type="autonomous_conversation",
+                    messages=[{"role": "system", "content": full_log}],
+                    response={
+                        "content": f"{len(result['messages'])} messages total",
+                        "model": f"{self.config.provider_type}/{self.config.model}",
+                    },
+                    usage=None,
+                    metadata={"total_messages": len(result["messages"])},
+                )
 
             # Extract proposals from final message
             final_message = result["messages"][-1]
+
+            # Check for truncation
+            response_meta = getattr(final_message, "response_metadata", {}) or {}
+            stop_reason = response_meta.get(
+                "stop_reason", response_meta.get("finish_reason", "")
+            )
+            if stop_reason in ("max_tokens", "length"):
+                print(
+                    "\u26a0 LLM response was TRUNCATED (hit max_tokens limit). "
+                    "Proposals may be incomplete."
+                )
 
             # Log the conversation for debugging
             print(f"LLM completed after {len(result['messages'])} messages")
