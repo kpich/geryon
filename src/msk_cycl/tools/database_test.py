@@ -33,7 +33,15 @@ def test_describe_table_basic():
     # Mock COUNT query
     count_df = pd.DataFrame({"cnt": [100]})
 
-    mock_db.execute.side_effect = [describe_df, count_df]
+    sample_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002"],
+            "CANCER_TYPE": ["Breast", "Lung"],
+            "OS_MONTHS": [12.5, 8.3],
+        }
+    )
+
+    mock_db.execute.side_effect = [describe_df, count_df, sample_df]
 
     result = describe_table(mock_db, "clinical_patient")
 
@@ -57,19 +65,14 @@ def test_describe_table_shows_sample_values():
     )
     # Mock COUNT query
     count_df = pd.DataFrame({"cnt": [50]})
-    # Mock sample values query
-    sample_df = pd.DataFrame({"PATIENT_ID": ["P001", "P002", "P003"]})
-    # Mock distinct count query
-    distinct_df = pd.DataFrame({"cnt": [50]})
+    sample_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003"],
+            "CANCER_TYPE": ["Breast", "Lung", "Colon"],
+        }
+    )
 
-    mock_db.execute.side_effect = [
-        describe_df,
-        count_df,
-        sample_df,
-        distinct_df,
-        sample_df,
-        distinct_df,
-    ]
+    mock_db.execute.side_effect = [describe_df, count_df, sample_df]
 
     result = describe_table(mock_db, "clinical_patient")
 
@@ -87,7 +90,9 @@ def test_describe_table_limits_to_20_columns():
     describe_df = pd.DataFrame({"column_name": columns, "column_type": types})
     count_df = pd.DataFrame({"cnt": [100]})
 
-    mock_db.execute.side_effect = [describe_df, count_df]
+    sample_df = pd.DataFrame({f"COL_{i}": ["val"] for i in range(30)})
+
+    mock_db.execute.side_effect = [describe_df, count_df, sample_df]
 
     result = describe_table(mock_db, "wide_table")
 
