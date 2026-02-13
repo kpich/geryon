@@ -9,7 +9,11 @@ install:
 
 .PHONY: test
 test:
-	uv run pytest .
+	uv run pytest src/
+
+.PHONY: int-test
+int-test:
+	uv run pytest tests/
 
 .PHONY: clean
 clean:
