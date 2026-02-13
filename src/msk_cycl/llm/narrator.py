@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 
 from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import CyclHyp
-from msk_cycl.llm.conversation_logger import ConversationLogger
+from msk_cycl.llm.conversation_logger import SessionTracer
 from msk_cycl.llm.prompts import NARRATOR_SYSTEM_PROMPT
 from msk_cycl.llm.providers.base import ChatMessage, LLMProvider
 
@@ -23,16 +23,7 @@ class HypothesisNarrative(BaseModel):
 class ResultNarrator:
     """Generate human-readable narratives from ComparisonResult."""
 
-    def __init__(self, provider: LLMProvider, logger: ConversationLogger | None = None):
-        """Initialize narrator.
-
-        Parameters
-        ----------
-        provider : LLMProvider
-            LLM provider for narrative generation
-        logger : ConversationLogger, optional
-            Logger for LLM conversations
-        """
+    def __init__(self, provider: LLMProvider, logger: SessionTracer | None = None):
         self.provider = provider
         self.logger = logger
 
@@ -41,23 +32,9 @@ class ResultNarrator:
         spec: CyclHyp,
         result: ComparisonResult,
         proposal_rationale: str,
+        idx: int = 0,
     ) -> HypothesisNarrative:
-        """Generate narrative from execution results.
-
-        Parameters
-        ----------
-        spec : CyclHyp
-            Original hypothesis specification
-        result : ComparisonResult
-            Execution results with statistics
-        proposal_rationale : str
-            Original rationale from proposal
-
-        Returns
-        -------
-        HypothesisNarrative
-            Generated narrative
-        """
+        """Generate narrative from execution results."""
         system_prompt = NARRATOR_SYSTEM_PROMPT
         user_prompt = self._build_user_prompt(spec, result, proposal_rationale)
 
@@ -67,19 +44,14 @@ class ResultNarrator:
         ]
 
         response = self.provider.generate(messages, temperature=0.3)
+        narrative = self._parse_narrative(response.content)
 
         if self.logger:
-            self.logger.log_interaction(
-                interaction_type="result_narration",
-                messages=[
-                    {"role": msg.role, "content": msg.content} for msg in messages
-                ],
-                response={"content": response.content, "model": response.model},
-                usage=response.usage,
-                metadata={"temperature": 0.3},
+            usage_total = (response.usage or {}).get("total_tokens")
+            self.logger.log_narration(
+                idx=idx, summary=narrative.summary, tokens=usage_total
             )
 
-        narrative = self._parse_narrative(response.content)
         return narrative
 
     def _build_user_prompt(

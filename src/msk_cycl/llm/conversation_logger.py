@@ -1,147 +1,94 @@
-"""LLM conversation logging module."""
+"""Compact session tracing — one JSONL event per significant action."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 from pathlib import Path
-from typing import Any
+import re
 
-# TODO: Add file locking if we ever parallelize LLM calls
-# TODO: Can add logging at OllamaProvider.generate() level for raw HTTP request/response
-# if needed
+from msk_cycl.lang.results import ComparisonResult
+from msk_cycl.llm.generator import HypothesisProposal
 
 
-class ConversationLogger:
-    """Logger for LLM chat interactions."""
+class SessionTracer:
+    """Writes a compact {session_id}_trace.jsonl event log."""
 
-    def __init__(self, storage_dir: Path, session_id: str):
-        """Initialize logger.
-
-        Parameters
-        ----------
-        storage_dir : Path
-            Directory to store log files
-        session_id : str
-            Session identifier (used in filenames)
-        """
+    def __init__(self, storage_dir: Path, session_id: str, model: str):
         self.storage_dir = Path(storage_dir)
-        self.session_id = session_id
-        self.interaction_count = 0
-
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.trace_path = self.storage_dir / f"{session_id}_trace.jsonl"
 
-        self.txt_path = self.storage_dir / f"{session_id}_llm_chat.txt"
-        self.json_path = self.storage_dir / f"{session_id}_llm_chat.json"
-
-        self._init_txt_log()
-        self._init_json_log()
-
-    def _init_txt_log(self) -> None:
-        """Initialize human-readable log file."""
-        with open(self.txt_path, "w") as f:
-            f.write(f"# LLM Chat Log - Session {self.session_id}\n")
-            f.write(f"Created: {datetime.utcnow().isoformat()}Z\n\n")
-
-    def _init_json_log(self) -> None:
-        """Initialize JSON log file."""
-        with open(self.json_path, "w") as f:
-            metadata = {
-                "type": "metadata",
-                "session_id": self.session_id,
-                "created_at": datetime.utcnow().isoformat() + "Z",
-            }
-            f.write(json.dumps(metadata) + "\n")
-
-    def log_interaction(
-        self,
-        interaction_type: str,
-        messages: list[dict[str, str]],
-        response: dict[str, Any],
-        usage: dict[str, int] | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        """Log an LLM interaction.
-
-        Parameters
-        ----------
-        interaction_type : str
-            Type of interaction (e.g., "hypothesis_generation", "result_narration")
-        messages : list[dict[str, str]]
-            Messages sent to LLM (role + content)
-        response : dict[str, Any]
-            Response from LLM (content + model)
-        usage : dict[str, int], optional
-            Token usage stats
-        metadata : dict[str, Any], optional
-            Additional metadata (temperature, etc.)
-        """
-        self.interaction_count += 1
-        timestamp = datetime.utcnow().isoformat() + "Z"
-
-        self._append_txt_log(
-            interaction_type, timestamp, messages, response, usage, metadata
+        self._write(
+            event="session_start",
+            session_id=session_id,
+            model=model,
         )
 
-        self._append_json_log(
-            interaction_type, timestamp, messages, response, usage, metadata
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def log_tool_call(self, tool_name: str, args: dict, result: str) -> None:
+        extra = self._extract_tool_metadata(tool_name, args, result)
+        self._write(event="tool_call", tool=tool_name, args=args, **extra)
+
+    def log_proposal(self, idx: int, proposal: HypothesisProposal) -> None:
+        filters_a = [f.model_dump() for f in proposal.cycl_spec.query.cohort_a.filters]
+        filters_b = [f.model_dump() for f in proposal.cycl_spec.query.cohort_b.filters]
+        self._write(
+            event="proposal",
+            idx=idx,
+            cohort_a=proposal.cohort_a_description,
+            cohort_b=proposal.cohort_b_description,
+            filters_a=filters_a,
+            filters_b=filters_b,
         )
 
-    def _append_txt_log(
-        self,
-        interaction_type: str,
-        timestamp: str,
-        messages: list[dict[str, str]],
-        response: dict[str, Any],
-        usage: dict[str, int] | None,
-        metadata: dict[str, Any] | None,
-    ) -> None:
-        """Append interaction to human-readable log."""
-        with open(self.txt_path, "a") as f:
-            f.write("---\n\n")
-            f.write(f"## Interaction {self.interaction_count}: {interaction_type}\n")
-            f.write(f"Timestamp: {timestamp}\n\n")
+    def log_execution(self, idx: int, result: ComparisonResult, time_s: float) -> None:
+        self._write(
+            event="execution",
+            idx=idx,
+            success=result.success,
+            error=result.error_message,
+            cohort_a_size=result.cohort_a_size,
+            cohort_b_size=result.cohort_b_size,
+            time_s=round(time_s, 3),
+        )
 
-            for msg in messages:
-                role = msg["role"].title()
-                content = msg["content"]
-                f.write(f"### {role} Message\n")
-                f.write(f"{content}\n\n")
+    def log_narration(self, idx: int, summary: str, tokens: int | None) -> None:
+        self._write(event="narration", idx=idx, summary=summary, tokens=tokens)
 
-            f.write("### Response\n")
-            if "model" in response:
-                f.write(f"Model: {response['model']}\n")
-            if metadata:
-                for key, value in metadata.items():
-                    f.write(f"{key.replace('_', ' ').title()}: {value}\n")
-            f.write("\n")
-            f.write(f"{response['content']}\n\n")
+    def log_session_end(self, total: int, successful: int, failed: int) -> None:
+        self._write(
+            event="session_end",
+            total_proposals=total,
+            successful=successful,
+            failed=failed,
+        )
 
-            if usage:
-                f.write(
-                    f"**Usage:** {usage.get('prompt_tokens', 0)} prompt tokens, "
-                    f"{usage.get('completion_tokens', 0)} completion tokens "
-                    f"({usage.get('total_tokens', 0)} total)\n\n"
-                )
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
 
-    def _append_json_log(
-        self,
-        interaction_type: str,
-        timestamp: str,
-        messages: list[dict[str, str]],
-        response: dict[str, Any],
-        usage: dict[str, int] | None,
-        metadata: dict[str, Any] | None,
-    ) -> None:
-        """Append interaction to JSON log."""
-        record = {
-            "type": "interaction",
-            "interaction_number": self.interaction_count,
-            "interaction_type": interaction_type,
-            "timestamp": timestamp,
-            "messages": messages,
-            "response": response,
-            "usage": usage,
-            "metadata": metadata or {},
-        }
+    def _write(self, **fields: object) -> None:
+        if "ts" not in fields:
+            fields["ts"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(self.trace_path, "a") as f:
+            f.write(json.dumps(fields, default=str) + "\n")
 
-        with open(self.json_path, "a") as f:
-            f.write(json.dumps(record) + "\n")
+    @staticmethod
+    def _extract_tool_metadata(tool_name: str, args: dict, result: str) -> dict:
+        """Pull compact numbers out of the raw tool result string."""
+        meta: dict = {}
+        if tool_name == "list_tables_tool":
+            meta["tables"] = len(result.strip().splitlines())
+        elif tool_name == "describe_table_tool":
+            m = re.search(r"(\d+)\s+rows", result)
+            if m:
+                meta["rows"] = int(m.group(1))
+            m = re.search(r"(\d+)\s+columns", result)
+            if m:
+                meta["columns"] = int(m.group(1))
+        elif tool_name == "query_data_tool":
+            meta["sql"] = args.get("sql", "")
+            meta["result_rows"] = len(result.strip().splitlines()) - 1  # minus header
+        return meta

@@ -14,7 +14,7 @@ from msk_cycl.engine import HypothesisExecutor
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.storage import HypothesisStore
 from msk_cycl.lang.spec import CyclHyp
-from msk_cycl.llm.conversation_logger import ConversationLogger
+from msk_cycl.llm.conversation_logger import SessionTracer
 from msk_cycl.llm.generator import HypothesisProposal
 from msk_cycl.llm.narrator import ResultNarrator
 from msk_cycl.llm.provider import create_provider
@@ -57,9 +57,10 @@ class AutonomousWorkflow:
 
         self.llm_logger = None
         if config.enable_llm_logging:
-            self.llm_logger = ConversationLogger(
+            self.llm_logger = SessionTracer(
                 storage_dir=config.storage_dir,
                 session_id=config.session_id,
+                model=f"{config.provider_type}/{config.model}",
             )
 
         # Create LangChain-compatible tools
@@ -312,48 +313,18 @@ IMPORTANT:
         try:
             result = self.graph.invoke({"messages": [initial_message]})
 
-            # Log the full conversation in human-readable format
+            # Emit compact tool-call events from the conversation
             if self.llm_logger:
-                log_lines = []
                 for msg in result["messages"]:
-                    msg_type = getattr(msg, "type", "unknown")
-                    has_tool_calls = hasattr(msg, "tool_calls") and msg.tool_calls
-
-                    if msg_type == "human":
-                        log_lines.append(f"[Human]\n{msg.content}")
-                    elif msg_type == "ai":
-                        if msg.content:
-                            log_lines.append(f"[AI]\n{msg.content}")
-                        if has_tool_calls:
-                            calls = []
-                            for tc in msg.tool_calls:
-                                args_str = ", ".join(
-                                    f"{k}={v!r}" for k, v in tc.get("args", {}).items()
-                                )
-                                calls.append(f"  \u2192 {tc.get('name')}({args_str})")
-                            if not msg.content:
-                                log_lines.append("[AI]\n" + "\n".join(calls))
-                            else:
-                                log_lines.append("\n".join(calls))
-                    elif msg_type == "tool":
+                    if getattr(msg, "type", None) == "tool":
                         tool_name = getattr(msg, "name", "unknown")
-                        log_lines.append(f"[Tool: {tool_name}]\n{msg.content}")
-                    else:
-                        log_lines.append(f"[{msg_type}]\n{msg.content}")
-
-                    log_lines.append("---")
-
-                full_log = "\n".join(log_lines)
-                self.llm_logger.log_interaction(
-                    interaction_type="autonomous_conversation",
-                    messages=[{"role": "system", "content": full_log}],
-                    response={
-                        "content": f"{len(result['messages'])} messages total",
-                        "model": f"{self.config.provider_type}/{self.config.model}",
-                    },
-                    usage=None,
-                    metadata={"total_messages": len(result["messages"])},
-                )
+                        tool_args = self._find_tool_args(
+                            result["messages"],
+                            getattr(msg, "tool_call_id", None),
+                        )
+                        self.llm_logger.log_tool_call(
+                            tool_name, tool_args, msg.content or ""
+                        )
 
             # Extract proposals from final message
             final_message = result["messages"][-1]
@@ -408,10 +379,18 @@ IMPORTANT:
                 b_desc = proposal.cohort_b_description
                 print(f"  [{i}/{len(proposals)}] Executing: {a_desc} vs {b_desc}")
 
+                if self.llm_logger:
+                    self.llm_logger.log_proposal(idx=i, proposal=proposal)
+
                 try:
                     start_time = datetime.utcnow()
                     result = self.executor.execute(proposal.cycl_spec)
                     execution_time = (datetime.utcnow() - start_time).total_seconds()
+
+                    if self.llm_logger:
+                        self.llm_logger.log_execution(
+                            idx=i, result=result, time_s=execution_time
+                        )
 
                     print(f"    Executed in {execution_time:.1f}s. Narrating...")
 
@@ -419,6 +398,7 @@ IMPORTANT:
                         spec=proposal.cycl_spec,
                         result=result,
                         proposal_rationale=proposal.rationale,
+                        idx=i,
                     )
 
                     labeled = LabeledHypothesis(
@@ -484,6 +464,13 @@ IMPORTANT:
             all_hypotheses.extend(hypotheses)
             print(f"✓ Iteration {i+1} complete: {len(hypotheses)} hypotheses")
             print()
+
+        if self.llm_logger:
+            successful = sum(1 for h in all_hypotheses if h.result.success)
+            failed = len(all_hypotheses) - successful
+            self.llm_logger.log_session_end(
+                total=len(all_hypotheses), successful=successful, failed=failed
+            )
 
         print(f"Session complete. Generated {len(all_hypotheses)} hypotheses total.")
         return all_hypotheses
@@ -648,3 +635,14 @@ IMPORTANT:
             lines.append(f"... and {len(previous) - 10} more")
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _find_tool_args(messages: list, tool_call_id: str | None) -> dict:
+        """Find the args dict for a tool call by its id."""
+        if not tool_call_id:
+            return {}
+        for msg in messages:
+            for tc in getattr(msg, "tool_calls", None) or []:
+                if tc.get("id") == tool_call_id:
+                    return tc.get("args", {})
+        return {}
