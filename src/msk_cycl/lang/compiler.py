@@ -85,3 +85,31 @@ def compile_select_cohort_ids(query: SelectCohort) -> str:
     # Quote identifiers to handle special characters
     sql = f'SELECT "PATIENT_ID" FROM "{table}" WHERE {where_sql}'
     return sql
+
+
+def compile_select_cohort_ids_via_join(
+    query: SelectCohort,
+    sample_key_column: str,
+    join_table: str,
+    join_column: str,
+) -> str:
+    """Compile SelectCohort to SQL that resolves PATIENT_ID through a JOIN.
+
+    Used for tables (e.g. mutations_extended) that don't have PATIENT_ID
+    directly but can be joined to a table that does (e.g. clinical_sample).
+    """
+    if len(query.filters) == 0:
+        raise ValueError("SelectCohort requires at least one filter")
+
+    table = query.filters[0].table
+    where_clauses = [compile_cohort_filter(f) for f in query.filters]
+    where_sql = " AND ".join(where_clauses)
+
+    sql = (
+        f'SELECT DISTINCT "{join_table}"."PATIENT_ID"'
+        f' FROM "{table}"'
+        f' JOIN "{join_table}"'
+        f' ON "{table}"."{sample_key_column}" = "{join_table}"."{join_column}"'
+        f" WHERE {where_sql}"
+    )
+    return sql
