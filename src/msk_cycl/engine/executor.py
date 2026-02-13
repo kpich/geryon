@@ -8,9 +8,19 @@ import pandas as pd  # type: ignore
 
 from msk_cycl.db import Database
 from msk_cycl.engine.registry import get_method_implementation, get_outcome_handler
-from msk_cycl.lang.compiler import compile_select_cohort_ids
+from msk_cycl.lang.compiler import (
+    compile_select_cohort_ids,
+    compile_select_cohort_ids_via_join,
+)
 from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import CompareCohorts, CyclHyp, SelectCohort
+
+# Tables that need a JOIN to resolve PATIENT_ID.
+# Maps table -> (sample_key_column, join_table, join_column)
+_PATIENT_ID_JOIN: dict[str, tuple[str, str, str]] = {
+    "mutations_extended": ("Tumor_Sample_Barcode", "clinical_sample", "SAMPLE_ID"),
+    "CNA": ("PATIENT_ID", "clinical_sample", "SAMPLE_ID"),
+}
 
 
 class HypothesisExecutor:
@@ -38,7 +48,17 @@ class HypothesisExecutor:
 
     def _get_cohort_ids(self, cohort: SelectCohort) -> list[str]:
         """INTERNAL: Execute cohort selection and return patient IDs."""
-        sql = compile_select_cohort_ids(cohort)
+        table = cohort.filters[0].table
+        join_info = _PATIENT_ID_JOIN.get(table)
+
+        if join_info is not None:
+            sample_key, join_table, join_column = join_info
+            sql = compile_select_cohort_ids_via_join(
+                cohort, sample_key, join_table, join_column
+            )
+        else:
+            sql = compile_select_cohort_ids(cohort)
+
         df = self.db.execute(sql)
         return df["PATIENT_ID"].tolist()
 

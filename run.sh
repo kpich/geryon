@@ -13,8 +13,8 @@
     --aws-profile saml \
     --aws-region us-east-2 \
     --max-iterations 1 \
-    --num-proposals 2 \
-    -v
+    --num-proposals 2
+#    -v
 
 #    --model us.anthropic.claude-sonnet-4-5-20250929-v1:0 \
 

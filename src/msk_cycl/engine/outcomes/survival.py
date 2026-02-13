@@ -36,4 +36,14 @@ class OverallSurvivalHandler:
             FROM "{outcome.table}"
             WHERE "PATIENT_ID" IN ({ids_str})
         """
-        return db.execute(sql)
+        df = db.execute(sql)
+
+        # cBioPortal encodes OS_STATUS as "1:DECEASED"/"0:LIVING"
+        # Extract leading digit so both formats parse to numeric
+        df["event"] = df["event"].astype(str).str.extract(r"^(\d+)").squeeze()
+
+        df["time"] = pd.to_numeric(df["time"], errors="coerce")
+        df["event"] = pd.to_numeric(df["event"], errors="coerce")
+        df = df.dropna(subset=["time", "event"])
+
+        return df

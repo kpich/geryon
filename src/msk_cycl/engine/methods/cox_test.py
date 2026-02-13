@@ -40,3 +40,25 @@ def test_calculate_cox_hazard_ratio_with_known_data():
     assert result["hazard_ratio"] > 0
     assert result["p_value"] >= 0
     assert result["p_value"] <= 1
+
+
+def test_cox_rejects_cbioportal_status_strings():
+    """Cox regression fails on cBioPortal '1:DECEASED'/'0:LIVING' strings."""
+    cohort_a = pd.DataFrame(
+        {
+            "PATIENT_ID": ["A1", "A2"],
+            "time": [12.0, 15.0],
+            "event": ["1:DECEASED", "0:LIVING"],
+        }
+    )
+    cohort_b = pd.DataFrame(
+        {
+            "PATIENT_ID": ["B1", "B2"],
+            "time": [6.0, 8.0],
+            "event": ["1:DECEASED", "1:DECEASED"],
+        }
+    )
+
+    method = CoxHazardRatioMethod()
+    with pytest.raises(TypeError, match="Wrong dtype"):
+        method.calculate(cohort_a, cohort_b)

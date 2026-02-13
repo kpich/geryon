@@ -6,6 +6,7 @@ from msk_cycl.lang.compiler import (
     compile_cohort_filter,
     compile_select_cohort,
     compile_select_cohort_ids,
+    compile_select_cohort_ids_via_join,
 )
 from msk_cycl.lang.spec import CohortFilter, SelectCohort
 
@@ -155,3 +156,58 @@ def test_compile_select_cohort_ids_returns_only_patient_id():
         'SELECT "PATIENT_ID" FROM "clinical_patient" '
         "WHERE \"CANCER_TYPE\" = 'Lung Adenocarcinoma'"
     )
+
+
+def test_compile_select_cohort_ids_via_join_generates_join_sql():
+    query = SelectCohort(
+        filters=[
+            CohortFilter(
+                table="mutations_extended",
+                column="Hugo_Symbol",
+                operator="==",
+                value="TP53",
+            )
+        ]
+    )
+    sql = compile_select_cohort_ids_via_join(
+        query,
+        sample_key_column="Tumor_Sample_Barcode",
+        join_table="clinical_sample",
+        join_column="SAMPLE_ID",
+    )
+    assert 'SELECT DISTINCT "clinical_sample"."PATIENT_ID"' in sql
+    assert 'FROM "mutations_extended"' in sql
+    assert 'JOIN "clinical_sample"' in sql
+    assert (
+        'ON "mutations_extended"."Tumor_Sample_Barcode"'
+        ' = "clinical_sample"."SAMPLE_ID"'
+    ) in sql
+    assert "\"Hugo_Symbol\" = 'TP53'" in sql
+
+
+def test_compile_select_cohort_ids_via_join_with_multiple_filters():
+    query = SelectCohort(
+        filters=[
+            CohortFilter(
+                table="mutations_extended",
+                column="Hugo_Symbol",
+                operator="==",
+                value="TP53",
+            ),
+            CohortFilter(
+                table="mutations_extended",
+                column="Variant_Classification",
+                operator="==",
+                value="Missense_Mutation",
+            ),
+        ]
+    )
+    sql = compile_select_cohort_ids_via_join(
+        query,
+        sample_key_column="Tumor_Sample_Barcode",
+        join_table="clinical_sample",
+        join_column="SAMPLE_ID",
+    )
+    assert "\"Hugo_Symbol\" = 'TP53'" in sql
+    assert "\"Variant_Classification\" = 'Missense_Mutation'" in sql
+    assert " AND " in sql
