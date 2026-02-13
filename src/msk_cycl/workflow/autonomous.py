@@ -313,6 +313,9 @@ IMPORTANT:
         try:
             result = self.graph.invoke({"messages": [initial_message]})
 
+            if self.llm_logger:
+                self.llm_logger.log_raw_messages(result["messages"])
+
             # Emit compact tool-call events from the conversation
             if self.llm_logger:
                 for msg in result["messages"]:

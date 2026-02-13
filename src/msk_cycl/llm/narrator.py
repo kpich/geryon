@@ -49,7 +49,11 @@ class ResultNarrator:
         if self.logger:
             usage_total = (response.usage or {}).get("total_tokens")
             self.logger.log_narration(
-                idx=idx, summary=narrative.summary, tokens=usage_total
+                idx=idx,
+                summary=narrative.summary,
+                tokens=usage_total,
+                narrative=narrative.model_dump(),
+                raw_response=response.content,
             )
 
         return narrative

@@ -1,5 +1,7 @@
 """Compact session tracing — one JSONL event per significant action."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 import json
 from pathlib import Path
@@ -16,6 +18,7 @@ class SessionTracer:
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.trace_path = self.storage_dir / f"{session_id}_trace.jsonl"
+        self.detail_path = self.storage_dir / f"{session_id}_detail.jsonl"
 
         self._write(
             event="session_start",
@@ -54,8 +57,22 @@ class SessionTracer:
             time_s=round(time_s, 3),
         )
 
-    def log_narration(self, idx: int, summary: str, tokens: int | None) -> None:
+    def log_narration(
+        self,
+        idx: int,
+        summary: str,
+        tokens: int | None,
+        narrative: dict | None = None,
+        raw_response: str | None = None,
+    ) -> None:
         self._write(event="narration", idx=idx, summary=summary, tokens=tokens)
+        if narrative or raw_response:
+            self._write_detail(
+                event="narration",
+                idx=idx,
+                narrative=narrative,
+                raw_response=raw_response,
+            )
 
     def log_session_end(self, total: int, successful: int, failed: int) -> None:
         self._write(
@@ -65,6 +82,36 @@ class SessionTracer:
             failed=failed,
         )
 
+    def log_raw_messages(self, messages: list) -> None:
+        """Dump full LangGraph conversation to the detail file."""
+        for msg in messages:
+            msg_type = getattr(msg, "type", type(msg).__name__)
+            role = getattr(msg, "role", msg_type)
+            content = getattr(msg, "content", "")
+            tool_calls = getattr(msg, "tool_calls", None) or []
+            record: dict = {
+                "event": "message",
+                "role": role,
+                "type": msg_type,
+                "content": content,
+            }
+            if tool_calls:
+                record["tool_calls"] = [
+                    {
+                        "id": tc.get("id"),
+                        "name": tc.get("name"),
+                        "args": tc.get("args"),
+                    }
+                    for tc in tool_calls
+                ]
+            tool_call_id = getattr(msg, "tool_call_id", None)
+            if tool_call_id:
+                record["tool_call_id"] = tool_call_id
+            name = getattr(msg, "name", None)
+            if name:
+                record["name"] = name
+            self._write_detail(**record)
+
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
@@ -73,6 +120,12 @@ class SessionTracer:
         if "ts" not in fields:
             fields["ts"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         with open(self.trace_path, "a") as f:
+            f.write(json.dumps(fields, default=str) + "\n")
+
+    def _write_detail(self, **fields: object) -> None:
+        if "ts" not in fields:
+            fields["ts"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(self.detail_path, "a") as f:
             f.write(json.dumps(fields, default=str) + "\n")
 
     @staticmethod
