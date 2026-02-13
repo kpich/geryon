@@ -39,3 +39,12 @@ METHOD_IMPLEMENTATIONS = {ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMetho
 ## Code Style
 
 **No vacuous comments** - Don't add comments that just restate what the code does. Only comment if adding non-obvious context (why, not what)
+
+## Safety — Never Invoke LLM Workflows
+
+NEVER run commands that trigger external LLM API calls (Bedrock, OpenAI, Anthropic, Ollama, etc.). This includes:
+- `run.sh`, `scripts/run.sh`, or any wrapper that launches a session
+- `uv run python -m msk_cycl` or any direct invocation of the workflow
+- Any script or command that calls the LLM providers in `msk_cycl/llm/`
+
+These calls are billable and should only be triggered by the human operator. Stick to code edits, tests, and read-only exploration.
