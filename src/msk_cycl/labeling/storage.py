@@ -1,11 +1,8 @@
 """JSONL storage for labeled hypotheses."""
 
-import contextlib
 from datetime import datetime
 import json
 from pathlib import Path
-
-import pandas as pd  # type: ignore
 
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.schema import HypothesisRecord, SessionFileMetadata
@@ -88,70 +85,22 @@ class HypothesisStore:
         return hypotheses
 
     def _serialize_record(self, record: HypothesisRecord) -> str:
-        """Serialize record with custom DataFrame handling.
-
-        Parameters
-        ----------
-        record : HypothesisRecord
-            Record to serialize
-
-        Returns
-        -------
-        str
-            JSON string
-        """
+        """Serialize record, dropping bulk fields that are recomputable from spec."""
         data = record.model_dump()
 
         if "data" in data and "result" in data["data"]:
             result = data["data"]["result"]
-            if "cohort_a_data" in result:
-                df = result["cohort_a_data"]
-                result["cohort_a_data"] = {
-                    "records": df.to_dict(orient="records"),
-                    "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-                }
-            if "cohort_b_data" in result:
-                df = result["cohort_b_data"]
-                result["cohort_b_data"] = {
-                    "records": df.to_dict(orient="records"),
-                    "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-                }
+            result.pop("cohort_a_data", None)
+            result.pop("cohort_b_data", None)
 
         return json.dumps(data, default=str)
 
     def _deserialize_record(self, data: dict) -> HypothesisRecord:
-        """Deserialize record with custom DataFrame handling.
-
-        Parameters
-        ----------
-        data : dict
-            JSON data
-
-        Returns
-        -------
-        HypothesisRecord
-            Deserialized record
-        """
+        """Deserialize record, validating spec version."""
         if "data" in data and "spec" in data["data"]:
             spec = data["data"]["spec"]
             version = spec.get("version")
             if version not in SUPPORTED_VERSIONS:
                 raise ValueError(f"Unsupported CyclHyp version: {version}")
-
-        if "data" in data and "result" in data["data"]:
-            result = data["data"]["result"]
-            for key in ("cohort_a_data", "cohort_b_data"):
-                if key in result:
-                    cohort_data = result[key]
-                    if isinstance(cohort_data, list):
-                        result[key] = pd.DataFrame(cohort_data)
-                    elif isinstance(cohort_data, dict) and "records" in cohort_data:
-                        df = pd.DataFrame(cohort_data["records"])
-                        if "dtypes" in cohort_data:
-                            for col, dtype_str in cohort_data["dtypes"].items():
-                                if col in df.columns:
-                                    with contextlib.suppress(ValueError, TypeError):
-                                        df[col] = df[col].astype(dtype_str)
-                        result[key] = df
 
         return HypothesisRecord(**data)

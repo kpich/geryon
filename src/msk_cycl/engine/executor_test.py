@@ -67,8 +67,6 @@ def test_executor_executes_compare_cohorts_query(tmp_path: Path):
         result = executor.execute(spec)
 
         assert isinstance(result, ComparisonResult)
-        assert result.cohort_a_ids == ["P001", "P003"]
-        assert result.cohort_b_ids == ["P002", "P004"]
         assert result.cohort_a_size == 2
         assert result.cohort_b_size == 2
         assert result.hazard_ratio is not None

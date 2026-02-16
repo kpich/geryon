@@ -1,6 +1,7 @@
 """Cox proportional hazards method implementation."""
 
 from lifelines import CoxPHFitter  # type: ignore
+import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 
 
@@ -42,9 +43,11 @@ class CoxHazardRatioMethod:
         ci = cph.confidence_intervals_.loc["cohort"]
         p_value = cph.summary.loc["cohort", "p"]
 
+        # confidence_intervals_ returns log-scale (coefficient); exponentiate to match
+        # HR
         return {
             "hazard_ratio": float(hr),
-            "confidence_interval_lower": float(ci.iloc[0]),
-            "confidence_interval_upper": float(ci.iloc[1]),
+            "confidence_interval_lower": float(np.exp(ci.iloc[0])),
+            "confidence_interval_upper": float(np.exp(ci.iloc[1])),
             "p_value": float(p_value),
         }

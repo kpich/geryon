@@ -9,8 +9,6 @@ class ComparisonResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    cohort_a_ids: list[str] = Field(..., description="Patient IDs in cohort A")
-    cohort_b_ids: list[str] = Field(..., description="Patient IDs in cohort B")
     cohort_a_size: int = Field(..., description="Number of patients in cohort A")
     cohort_b_size: int = Field(..., description="Number of patients in cohort B")
 
@@ -20,9 +18,9 @@ class ComparisonResult(BaseModel):
     confidence_interval_upper: float | None = None
     p_value: float | None = None
 
-    # Raw data for further analysis
-    cohort_a_data: pd.DataFrame = Field(..., description="Cohort A outcome data")
-    cohort_b_data: pd.DataFrame = Field(..., description="Cohort B outcome data")
+    # Raw data for statistical calculation (not serialized to JSONL)
+    cohort_a_data: pd.DataFrame | None = Field(default=None)
+    cohort_b_data: pd.DataFrame | None = Field(default=None)
 
     # Execution status
     success: bool = Field(default=True, description="Whether execution succeeded")
