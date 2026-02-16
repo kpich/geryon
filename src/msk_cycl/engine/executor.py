@@ -36,8 +36,6 @@ class HypothesisExecutor:
             return self._execute_compare_cohorts(spec.query)
         except Exception as e:
             return ComparisonResult(
-                cohort_a_ids=[],
-                cohort_b_ids=[],
                 cohort_a_size=0,
                 cohort_b_size=0,
                 cohort_a_data=pd.DataFrame(),
@@ -86,8 +84,6 @@ class HypothesisExecutor:
         stats = method_impl.calculate(cohort_a_data, cohort_b_data)
 
         return ComparisonResult(
-            cohort_a_ids=cohort_a_ids,
-            cohort_b_ids=cohort_b_ids,
             cohort_a_size=len(cohort_a_ids),
             cohort_b_size=len(cohort_b_ids),
             cohort_a_data=cohort_a_data,

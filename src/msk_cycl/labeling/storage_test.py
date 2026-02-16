@@ -67,8 +67,6 @@ def _make_hypothesis(
         ),
         spec=spec,
         result=ComparisonResult(
-            cohort_a_ids=["P001"],
-            cohort_b_ids=["P002"],
             cohort_a_size=1,
             cohort_b_size=1,
             cohort_a_data=cohort_a_data,
@@ -85,8 +83,8 @@ def _make_hypothesis(
     )
 
 
-def test_storage_round_trip_preserves_dtypes(tmp_path: Path):
-    """Save and load preserves DataFrame dtypes."""
+def test_storage_round_trip_excludes_bulk_data(tmp_path: Path):
+    """Save and load drops cohort DataFrames (they are recomputable from spec)."""
     df_a = pd.DataFrame(
         {
             "patient_id": ["P001", "P002"],
@@ -102,10 +100,7 @@ def test_storage_round_trip_preserves_dtypes(tmp_path: Path):
         }
     )
 
-    hypothesis = _make_hypothesis(
-        cohort_a_data=df_a,
-        cohort_b_data=df_b,
-    )
+    hypothesis = _make_hypothesis(cohort_a_data=df_a, cohort_b_data=df_b)
 
     store = HypothesisStore(tmp_path)
     store.save(hypothesis)
@@ -113,44 +108,28 @@ def test_storage_round_trip_preserves_dtypes(tmp_path: Path):
     loaded = store.load_session("test-session")
     assert len(loaded) == 1
 
-    loaded_df_a = loaded[0].result.cohort_a_data
-    loaded_df_b = loaded[0].result.cohort_b_data
-
-    assert loaded_df_a["patient_id"].dtype == df_a["patient_id"].dtype
-    assert loaded_df_a["age"].dtype == df_a["age"].dtype
-    assert loaded_df_a["survival_months"].dtype == df_a["survival_months"].dtype
-
-    pd.testing.assert_frame_equal(loaded_df_a, df_a)
-    pd.testing.assert_frame_equal(loaded_df_b, df_b)
+    assert loaded[0].result.cohort_a_data is None
+    assert loaded[0].result.cohort_b_data is None
+    assert loaded[0].result.cohort_a_size == 1
+    assert loaded[0].result.cohort_b_size == 1
 
 
-def test_storage_loads_old_list_format(tmp_path: Path):
-    """Loading old format (list) still works for backwards compatibility."""
-    store = HypothesisStore(tmp_path)
-
+def test_storage_jsonl_does_not_contain_bulk_fields(tmp_path: Path):
+    """Serialized JSONL should not contain cohort_a_data or cohort_b_data."""
     hypothesis = _make_hypothesis()
+
+    store = HypothesisStore(tmp_path)
     store.save(hypothesis)
 
     session_file = tmp_path / "test-session.jsonl"
     lines = session_file.read_text().splitlines()
 
-    modified_lines = []
     for line in lines:
         data = json.loads(line)
         if data.get("record_type") == "hypothesis":
             result = data["data"]["result"]
-            if "cohort_a_data" in result and isinstance(result["cohort_a_data"], dict):
-                result["cohort_a_data"] = result["cohort_a_data"]["records"]
-            if "cohort_b_data" in result and isinstance(result["cohort_b_data"], dict):
-                result["cohort_b_data"] = result["cohort_b_data"]["records"]
-        modified_lines.append(json.dumps(data, default=str))
-
-    session_file.write_text("\n".join(modified_lines) + "\n")
-
-    loaded = store.load_session("test-session")
-    assert len(loaded) == 1
-    assert isinstance(loaded[0].result.cohort_a_data, pd.DataFrame)
-    assert isinstance(loaded[0].result.cohort_b_data, pd.DataFrame)
+            assert "cohort_a_data" not in result
+            assert "cohort_b_data" not in result
 
 
 def test_storage_version_check_accepts_version_1(tmp_path: Path):
