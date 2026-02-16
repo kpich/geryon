@@ -15,10 +15,13 @@ class SessionConfig(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # LLM configuration
-    provider_type: Literal["ollama", "openai", "anthropic", "aws_bedrock"] = Field(
-        default="ollama", description="LLM provider type"
+    provider_type: Literal["openai", "anthropic", "aws_bedrock"] = Field(
+        default="aws_bedrock", description="LLM provider type"
     )
-    model: str = Field(default="mixtral:8x7b", description="Model identifier")
+    model: str = Field(
+        default="us.anthropic.claude-opus-4-5-20251101-v1:0",
+        description="Model identifier",
+    )
     base_url: str | None = Field(
         default=None,
         description="Custom API endpoint (e.g., AWS-hosted inference server)",

@@ -4,10 +4,9 @@ from typing import Any, Literal
 
 from msk_cycl.llm.providers.base import LLMProvider
 from msk_cycl.llm.providers.bedrock import BedrockProvider
-from msk_cycl.llm.providers.ollama import OllamaProvider
 from msk_cycl.llm.providers.openai import OpenAIProvider
 
-ProviderType = Literal["ollama", "openai", "anthropic", "aws_bedrock"]
+ProviderType = Literal["openai", "anthropic", "aws_bedrock"]
 
 
 def create_provider(
@@ -19,7 +18,7 @@ def create_provider(
     Parameters
     ----------
     provider_type : ProviderType
-        Type of provider ("ollama", "openai", "anthropic")
+        Type of provider ("openai", "anthropic", "aws_bedrock")
     **kwargs
         Provider-specific configuration
 
@@ -37,12 +36,10 @@ def create_provider(
 
     Examples
     --------
-    >>> provider = create_provider("ollama", model="mixtral:8x7b")
-    >>> provider = create_provider("ollama", model="llama3:8b", base_url="http://localhost:11434")
+    >>> provider = create_provider(
+        "aws_bedrock", model="us.anthropic.claude-opus-4-5-20251101-v1:0")
     """
-    if provider_type == "ollama":
-        return OllamaProvider(**kwargs)
-    elif provider_type == "openai":
+    if provider_type == "openai":
         return OpenAIProvider(**kwargs)
     elif provider_type == "anthropic":
         raise NotImplementedError("Anthropic provider not yet implemented")

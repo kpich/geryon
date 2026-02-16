@@ -49,8 +49,8 @@ def run_workflow(
     output_dir: Path | None = None,
     data_dir: Path | None = None,
     data_base: Path | None = None,
-    provider: Literal["ollama", "openai", "anthropic", "aws_bedrock"] = "ollama",
-    model: str = "mixtral:8x7b",
+    provider: Literal["openai", "anthropic", "aws_bedrock"] = "aws_bedrock",
+    model: str = "us.anthropic.claude-opus-4-5-20251101-v1:0",
     base_url: str | None = None,
     api_key: str | None = None,
     aws_region: str | None = None,
@@ -70,10 +70,10 @@ def run_workflow(
         ETL output directory (default: auto-detect latest from data_base)
     data_base : Path, optional
         Base directory for ETL outputs (default: ~/data/msk_cycle_data)
-    provider : Literal["ollama", "openai", "anthropic", "aws_bedrock"]
-        LLM provider (default: ollama)
+    provider : Literal["openai", "anthropic", "aws_bedrock"]
+        LLM provider (default: aws_bedrock)
     model : str
-        Model name (default: mixtral:8x7b)
+        Model name (default: us.anthropic.claude-opus-4-5-20251101-v1:0)
     base_url : str, optional
         Custom API endpoint (e.g., AWS-hosted inference server)
     api_key : str, optional
@@ -192,14 +192,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--provider",
-        choices=["ollama", "openai", "anthropic", "aws_bedrock"],
-        default="ollama",
-        help="LLM provider (default: ollama)",
+        choices=["openai", "anthropic", "aws_bedrock"],
+        default="aws_bedrock",
+        help="LLM provider (default: aws_bedrock)",
     )
     parser.add_argument(
         "--model",
-        default="mixtral:8x7b",
-        help="Model name (default: mixtral:8x7b)",
+        default="us.anthropic.claude-opus-4-5-20251101-v1:0",
+        help="Model name (default: us.anthropic.claude-opus-4-5-20251101-v1:0)",
     )
     parser.add_argument(
         "--base-url",

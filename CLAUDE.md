@@ -32,7 +32,7 @@ METHOD_IMPLEMENTATIONS = {ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMetho
 
 - One outcome: `OverallSurvival` (Cox regression on OS_MONTHS/OS_STATUS)
 - One method: `HAZARD_RATIO_COX` (cohort A vs B)
-- LLM providers: Ollama (default), OpenAI, Anthropic
+- LLM providers: AWS Bedrock (default), OpenAI, Anthropic
 - Hypothesis storage: JSONL files (one per session)
 - Very early stage - schema, prompts, error handling all subject to change
 

@@ -111,20 +111,7 @@ class AutonomousWorkflow:
 
     def _create_llm(self):
         """Create LangChain model from provider config."""
-        if self.config.provider_type == "ollama":
-            from langchain_ollama import ChatOllama
-
-            base_url = self.config.base_url or "http://localhost:11434"
-
-            # Don't use format="json" - it breaks tool calling!
-            # Let the model use native tool calling instead
-            return ChatOllama(
-                model=self.config.model,
-                base_url=base_url,
-                temperature=0.8,
-                num_predict=16384,
-            )
-        elif self.config.provider_type == "openai":
+        if self.config.provider_type == "openai":
             from langchain_openai import ChatOpenAI
 
             kwargs = {
@@ -179,7 +166,7 @@ class AutonomousWorkflow:
             raise ValueError(f"Unknown provider type: {self.config.provider_type}")
 
     def _build_graph(self):
-        """Build LangGraph workflow using ReAct agent for better Ollama support."""
+        """Build LangGraph workflow using ReAct agent."""
         from langgraph.prebuilt import create_react_agent
 
         # Use ReAct agent which handles reasoning better with local models
