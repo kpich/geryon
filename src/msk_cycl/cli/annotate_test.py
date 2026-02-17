@@ -91,7 +91,7 @@ def _seed_session(
     session_id: str,
     hypotheses: list[LabeledHypothesis],
 ):
-    store = HypothesisStore(output_dir)
+    store = HypothesisStore(output_dir / session_id)
     for hyp in hypotheses:
         store.save(hyp)
 

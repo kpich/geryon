@@ -21,20 +21,18 @@ class HypothesisReviewer:
         """
         self.store = HypothesisStore(storage_dir)
 
-    def review_session(self, session_id: str, reviewer_name: str):
-        """Review all hypotheses in a session.
+    def review_session(self, reviewer_name: str):
+        """Review all hypotheses in the store's directory.
 
         Parameters
         ----------
-        session_id : str
-            Session ID to review
         reviewer_name : str
             Name/ID of the reviewer
         """
-        hypotheses = self.store.load_session(session_id)
+        hypotheses = self.store.load()
         pending = [h for h in hypotheses if h.rating.is_pending]
 
-        print(f"Found {len(pending)} pending hypotheses in session {session_id}")
+        print(f"Found {len(pending)} pending hypotheses")
         print()
 
         for i, hyp in enumerate(pending, 1):
@@ -149,8 +147,8 @@ def main():
 
     args = parser.parse_args()
 
-    reviewer = HypothesisReviewer(Path(args.storage_dir))
-    reviewer.review_session(args.session, args.reviewer)
+    reviewer = HypothesisReviewer(Path(args.storage_dir) / args.session)
+    reviewer.review_session(args.reviewer)
 
 
 if __name__ == "__main__":

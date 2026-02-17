@@ -19,7 +19,7 @@ def main():
         return
 
     # Find all session JSONL files
-    session_files = list(storage_path.rglob("*.jsonl"))
+    session_files = list(storage_path.rglob("hypotheses.jsonl"))
 
     if not session_files:
         print(f"No session files found in {storage_path}")

@@ -105,7 +105,7 @@ def test_storage_round_trip_excludes_bulk_data(tmp_path: Path):
     store = HypothesisStore(tmp_path)
     store.save(hypothesis)
 
-    loaded = store.load_session("test-session")
+    loaded = store.load()
     assert len(loaded) == 1
 
     assert loaded[0].result.cohort_a_data is None
@@ -121,7 +121,7 @@ def test_storage_jsonl_does_not_contain_bulk_fields(tmp_path: Path):
     store = HypothesisStore(tmp_path)
     store.save(hypothesis)
 
-    session_file = tmp_path / "test-session.jsonl"
+    session_file = tmp_path / "hypotheses.jsonl"
     lines = session_file.read_text().splitlines()
 
     for line in lines:
@@ -142,7 +142,7 @@ def test_storage_version_check_accepts_version_1(tmp_path: Path):
     store = HypothesisStore(tmp_path)
     store.save(hypothesis)
 
-    loaded = store.load_session("test-session")
+    loaded = store.load()
     assert len(loaded) == 1
 
 
@@ -153,7 +153,7 @@ def test_storage_version_check_rejects_unsupported_version(tmp_path: Path):
     hypothesis = _make_hypothesis()
     store.save(hypothesis)
 
-    session_file = tmp_path / "test-session.jsonl"
+    session_file = tmp_path / "hypotheses.jsonl"
     lines = session_file.read_text().splitlines()
 
     modified_lines = []
@@ -166,7 +166,7 @@ def test_storage_version_check_rejects_unsupported_version(tmp_path: Path):
     session_file.write_text("\n".join(modified_lines) + "\n")
 
     with pytest.raises(ValueError) as exc_info:
-        store.load_session("test-session")
+        store.load()
 
     assert "Unsupported CyclHyp version: 99" in str(exc_info.value)
 
@@ -174,5 +174,24 @@ def test_storage_version_check_rejects_unsupported_version(tmp_path: Path):
 def test_storage_empty_session_returns_empty_list(tmp_path: Path):
     """Loading non-existent session returns empty list."""
     store = HypothesisStore(tmp_path)
-    loaded = store.load_session("nonexistent")
+    loaded = store.load()
     assert loaded == []
+
+
+def test_config_serialization(tmp_path: Path):
+    """to_config_dict() excludes api_key, serializes Path/datetime as strings."""
+    from msk_cycl.workflow.session import SessionConfig
+
+    config = SessionConfig(
+        parquet_dir=tmp_path / "data",
+        storage_dir=tmp_path / "output",
+        api_key="secret-key",
+    )
+    d = config.to_config_dict()
+
+    assert "api_key" not in d
+    assert "session_id" in d
+    assert "parquet_dir" in d
+    assert "created_at" in d
+    assert isinstance(d["parquet_dir"], str)
+    assert isinstance(d["created_at"], str)

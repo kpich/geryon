@@ -21,11 +21,10 @@ def _load_unlabeled(output_dir: Path, labeled_store: LabeledStore) -> list[dict]
     labeled_ids = labeled_store.labeled_ids()
 
     seen: dict[str, dict] = {}
-    for jsonl_file in sorted(output_dir.rglob("*.jsonl")):
-        session_id = jsonl_file.stem.replace("_hypotheses", "")
+    for jsonl_file in sorted(output_dir.rglob("hypotheses.jsonl")):
         store = HypothesisStore(jsonl_file.parent)
         try:
-            hypotheses = store.load_session(session_id)
+            hypotheses = store.load()
         except Exception:
             continue
 
@@ -67,11 +66,10 @@ def _count_all(output_dir: Path, labeled_store: LabeledStore) -> dict:
     labeled_ids = labeled_store.labeled_ids()
 
     all_ids: set[str] = set()
-    for jsonl_file in sorted(output_dir.rglob("*.jsonl")):
-        session_id = jsonl_file.stem.replace("_hypotheses", "")
+    for jsonl_file in sorted(output_dir.rglob("hypotheses.jsonl")):
         store = HypothesisStore(jsonl_file.parent)
         try:
-            hypotheses = store.load_session(session_id)
+            hypotheses = store.load()
         except Exception:
             continue
         for hyp in hypotheses:
@@ -404,11 +402,10 @@ def _make_handler(output_dir: Path, labeled_store: LabeledStore):
             self._json_response({"ok": True})
 
         def _find_hypothesis(self, hypothesis_id: str):
-            for jsonl_file in output_dir.rglob("*.jsonl"):
-                session_id = jsonl_file.stem.replace("_hypotheses", "")
+            for jsonl_file in output_dir.rglob("hypotheses.jsonl"):
                 store = HypothesisStore(jsonl_file.parent)
                 try:
-                    for hyp in store.load_session(session_id):
+                    for hyp in store.load():
                         if hyp.hypothesis_id == hypothesis_id:
                             return hyp
                 except Exception:
