@@ -75,14 +75,6 @@ uv run python -m msk_cycl.cli.annotate \
 ```
 
 Opens a local page at `http://localhost:8765` that auto-discovers all session JSONLs under `cycl_run_outputs/`, shows unlabeled hypotheses newest-first with cohort descriptions, stats, and narrative, and lets you label via radio buttons. Labels are saved as individual JSON files in `labeled_hypotheses/`.
-
-```bash
-# Export labeled hypotheses to SQLite
-python -m msk_cycl.cli.export_db \
-  --storage-dir cycl_run_outputs/ \
-  --output hypotheses.db
-```
-
 ### Viewing data
 
 ```bash
