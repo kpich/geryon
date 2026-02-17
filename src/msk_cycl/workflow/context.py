@@ -1,0 +1,65 @@
+"""Format prior hypotheses for injection into the LLM prompt."""
+
+from msk_cycl.labeling.labels import HypothesisLabel
+from msk_cycl.labeling.models import LabeledHypothesis
+
+MAX_RATED = 50
+MAX_SESSION = 20
+
+
+def format_previous_hypotheses(
+    labeled: list[LabeledHypothesis],
+    session_previous: list[LabeledHypothesis],
+) -> str:
+    """Format labeled and same-session hypotheses for LLM context.
+
+    Parameters
+    ----------
+    labeled : list[LabeledHypothesis]
+        Previously rated hypotheses from the labeled store
+    session_previous : list[LabeledHypothesis]
+        Hypotheses generated earlier in this session (may overlap with labeled)
+    """
+    labeled_ids = {h.hypothesis_id for h in labeled}
+
+    rated = [h for h in labeled if h.label != HypothesisLabel.PENDING]
+
+    unrated_session = [
+        h for h in session_previous if h.hypothesis_id not in labeled_ids
+    ]
+
+    if not rated and not unrated_session:
+        return "**No previous hypotheses yet.**"
+
+    lines: list[str] = []
+    idx = 1
+
+    if rated:
+        lines.append("**PREVIOUSLY RATED HYPOTHESES (learn from this feedback):**")
+        for hyp in rated[:MAX_RATED]:
+            desc = (
+                f"{hyp.proposal.cohort_a_description} vs "
+                f"{hyp.proposal.cohort_b_description}"
+            )
+            tag = f"[{hyp.label.value.upper()}]"
+            entry = f"{idx}. {tag} {desc}"
+            if hyp.label_notes:
+                entry += f" — {hyp.label_notes}"
+            lines.append(entry)
+            idx += 1
+        if len(rated) > MAX_RATED:
+            lines.append(f"... and {len(rated) - MAX_RATED} more rated hypotheses")
+
+    if unrated_session:
+        lines.append("**PREVIOUSLY TESTED THIS SESSION (avoid duplicates):**")
+        for hyp in unrated_session[:MAX_SESSION]:
+            desc = (
+                f"{hyp.proposal.cohort_a_description} vs "
+                f"{hyp.proposal.cohort_b_description}"
+            )
+            lines.append(f"{idx}. {desc}")
+            idx += 1
+        if len(unrated_session) > MAX_SESSION:
+            lines.append(f"... and {len(unrated_session) - MAX_SESSION} more")
+
+    return "\n".join(lines)
