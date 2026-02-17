@@ -50,6 +50,7 @@ def _load_unlabeled(output_dir: Path, labeled_store: LabeledStore) -> list[dict]
                 "confidence_interval_lower": hyp.result.confidence_interval_lower,
                 "confidence_interval_upper": hyp.result.confidence_interval_upper,
                 "p_value": hyp.result.p_value,
+                "spec": hyp.spec.model_dump(),
                 "summary": hyp.narrative.summary,
                 "findings": hyp.narrative.findings,
                 "limitations": hyp.narrative.limitations,
@@ -137,6 +138,9 @@ HTML_PAGE = (
          max-width: 800px; font-size: 14px; }
   .msg.ok { background: #dcfce7; color: #166534; }
   .msg.err { background: #fee2e2; color: #991b1b; }
+  pre.spec { background: #f8f8f8; border: 1px solid #e0e0e0;
+             border-radius: 6px; padding: 12px; font-size: 13px;
+             overflow-x: auto; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -203,6 +207,12 @@ async function loadHypotheses() {
           <td>${fmtVal(h.p_value, 4)}</td>
         </tr>
       </table>
+      <div class="field">
+        <div class="field-label">Spec</div>
+        <pre class="spec">${esc(
+          JSON.stringify(h.spec, null, 2)
+        )}</pre>
+      </div>
       <div class="field">
         <div class="field-label">Summary</div>
         <div class="field-value">${esc(h.summary)}</div>
