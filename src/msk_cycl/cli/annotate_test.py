@@ -13,7 +13,7 @@ from msk_cycl.cli.annotate import (
     _make_handler,
 )
 from msk_cycl.labeling.labeled_store import LabeledStore
-from msk_cycl.labeling.labels import HypothesisLabel
+from msk_cycl.labeling.labels import HypothesisRating
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.storage import HypothesisStore
 from msk_cycl.lang.methods import ComparisonMethod
@@ -96,7 +96,7 @@ def _seed_session(
         store.save(hyp)
 
 
-# ── pure-function tests (fast, real file I/O via tmp_path) ──
+# -- pure-function tests (fast, real file I/O via tmp_path) --
 
 
 @pytest.fixture
@@ -124,7 +124,7 @@ def test_load_unlabeled_returns_all_pending(setup):
 def test_load_unlabeled_excludes_labeled(setup):
     output_dir, labeled_store, _ = setup
     hyp = _make_hypothesis("h-1", "sess-1")
-    hyp.label = HypothesisLabel.CORRECT
+    hyp.rating = HypothesisRating(novelty=2, trustworthiness=3)
     labeled_store.save(hyp)
 
     items = _load_unlabeled(output_dir, labeled_store)
@@ -138,14 +138,14 @@ def test_count_all(setup):
     assert counts == {"total": 2, "labeled": 0, "pending": 2}
 
     hyp = _make_hypothesis("h-1", "sess-1")
-    hyp.label = HypothesisLabel.CORRECT
+    hyp.rating = HypothesisRating(novelty=1)
     labeled_store.save(hyp)
 
     counts = _count_all(output_dir, labeled_store)
     assert counts == {"total": 2, "labeled": 1, "pending": 1}
 
 
-# ── handler tests (no real server, mocked data layer) ──
+# -- handler tests (no real server, mocked data layer) --
 
 
 def _fake_unlabeled(*_args):
@@ -240,7 +240,8 @@ def test_api_label_saves_hypothesis():
     try:
         body = {
             "hypothesis_id": "h-1",
-            "label": "correct",
+            "novelty": 2,
+            "trustworthiness": 3,
             "notes": "good",
         }
         status, _ = _invoke_handler(handler_cls, "POST", "/api/label", body=body)
@@ -248,8 +249,9 @@ def test_api_label_saves_hypothesis():
 
         mock_store.save.assert_called_once()
         saved = mock_store.save.call_args[0][0]
-        assert saved.label == HypothesisLabel.CORRECT
-        assert saved.label_notes == "good"
+        assert saved.rating.novelty == 2
+        assert saved.rating.trustworthiness == 3
+        assert saved.notes == "good"
         assert saved.labeled_by == "annotator"
     finally:
         handler_cls._find_hypothesis = orig_find

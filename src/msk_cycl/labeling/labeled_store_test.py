@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd  # type: ignore
 
 from msk_cycl.labeling.labeled_store import LabeledStore
-from msk_cycl.labeling.labels import HypothesisLabel
+from msk_cycl.labeling.labels import HypothesisRating
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.lang.methods import ComparisonMethod
 from msk_cycl.lang.outcomes import OverallSurvival
@@ -66,8 +66,8 @@ def _make_hypothesis(
             clinical_relevance="Relevant",
         ),
         llm_model="test-model",
-        label=HypothesisLabel.CORRECT,
-        label_notes="Good one",
+        rating=HypothesisRating(novelty=2, trustworthiness=3),
+        notes="Good one",
         labeled_by="tester",
     )
 
@@ -80,8 +80,9 @@ def test_save_load_round_trip(tmp_path: Path):
     loaded = store.load_all()
     assert len(loaded) == 1
     assert loaded[0].hypothesis_id == "test-id"
-    assert loaded[0].label == HypothesisLabel.CORRECT
-    assert loaded[0].label_notes == "Good one"
+    assert loaded[0].rating.novelty == 2
+    assert loaded[0].rating.trustworthiness == 3
+    assert loaded[0].notes == "Good one"
     assert loaded[0].result.cohort_a_size == 50
     assert loaded[0].result.cohort_b_size == 40
 

@@ -1,34 +1,64 @@
-"""Human feedback labels for hypothesis quality."""
+"""Multi-dimensional rating model for hypothesis quality."""
 
-from enum import Enum
+from pydantic import BaseModel, field_validator
+
+RATING_DIMENSIONS: dict[str, dict] = {
+    "novelty": {
+        "label": "Novelty",
+        "levels": {
+            1: "Known/obvious finding — good sanity check but not new knowledge",
+            2: "Somewhat expected — plausible based on existing literature",
+            3: "Surprising or non-obvious — potential new insight",
+        },
+    },
+    "uncontrolled": {
+        "label": "Uncontrolled",
+        "levels": {
+            1: "Clean comparison — cohorts are well-separated on the "
+            "variable of interest",
+            2: "Partially confounded — likely some mixing but main "
+            "signal probably real",
+            3: "Heavily confounded — effect is probably a mixture "
+            "of uncontrolled populations",
+        },
+    },
+    "trustworthiness": {
+        "label": "Trustworthiness",
+        "levels": {
+            1: "Likely spurious — wouldn't trust this result even directionally",
+            2: "Uncertain — could be real but not convincing",
+            3: "Credible — result is likely real and meaningful",
+        },
+    },
+}
 
 
-class HypothesisLabel(str, Enum):
-    """Human feedback labels for hypothesis quality.
+class HypothesisRating(BaseModel):
+    """Multi-axis rating for a hypothesis.
 
-    Labels guide learning from hypothesis results and avoid repeating mistakes.
+    Each dimension is independently optional (None = not yet rated).
     """
 
-    CORRECT = "correct"
-    """Valid, interesting finding worth following up."""
+    novelty: int | None = None
+    uncontrolled: int | None = None
+    trustworthiness: int | None = None
+    is_duplicate: bool | None = None
 
-    RED_HERRING = "red_herring"
-    """Spurious correlation, not causally meaningful."""
+    @field_validator("novelty", "uncontrolled", "trustworthiness")
+    @classmethod
+    def _check_range(cls, v: int | None) -> int | None:
+        if v is not None and v not in (1, 2, 3):
+            raise ValueError("Rating must be 1, 2, or 3")
+        return v
 
-    CONFOUNDED = "confounded"
-    """Missing key confounders that invalidate comparison."""
-
-    DATA_ISSUE = "data_issue"
-    """Data quality problem (missingness, errors, bias)."""
-
-    DUPLICATE = "duplicate"
-    """Already tested or trivial variant of previous hypothesis."""
-
-    NOT_NOVEL = "not_novel"
-    """Known or obvious result, not informative."""
-
-    WRONG_SPEC = "wrong_spec"
-    """Spec filters don't capture the intended cohort semantics."""
-
-    PENDING = "pending"
-    """Not yet labeled by human reviewer."""
+    @property
+    def is_pending(self) -> bool:
+        return all(
+            v is None
+            for v in (
+                self.novelty,
+                self.uncontrolled,
+                self.trustworthiness,
+                self.is_duplicate,
+            )
+        )

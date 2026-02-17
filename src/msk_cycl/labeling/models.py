@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from msk_cycl.labeling.labels import HypothesisLabel
+from msk_cycl.labeling.labels import HypothesisRating
 from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import CyclHyp
 from msk_cycl.llm.generator import HypothesisProposal
@@ -46,10 +46,8 @@ class LabeledHypothesis(BaseModel):
     llm_model: str = Field(..., description="Model used for generation/narration")
 
     # Labeling phase (human review)
-    label: HypothesisLabel = Field(
-        default=HypothesisLabel.PENDING, description="Human feedback label"
-    )
-    label_notes: str | None = Field(
+    rating: HypothesisRating = Field(default_factory=HypothesisRating)
+    notes: str | None = Field(
         default=None, description="Additional notes from reviewer"
     )
     labeled_at: datetime | None = Field(

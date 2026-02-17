@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from msk_cycl.labeling.labels import HypothesisLabel
+from msk_cycl.labeling.labels import HypothesisRating
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.storage import HypothesisStore
 
@@ -32,7 +32,7 @@ class HypothesisReviewer:
             Name/ID of the reviewer
         """
         hypotheses = self.store.load_session(session_id)
-        pending = [h for h in hypotheses if h.label == HypothesisLabel.PENDING]
+        pending = [h for h in hypotheses if h.rating.is_pending]
 
         print(f"Found {len(pending)} pending hypotheses in session {session_id}")
         print()
@@ -84,48 +84,58 @@ class HypothesisReviewer:
         print(f"Summary: {hyp.narrative.summary}")
         print()
 
-        # Show label options
-        print("Labels:")
-        for label in HypothesisLabel:
-            if label != HypothesisLabel.PENDING:
-                print(f"  {label.value}: {label.name}")
-        print()
+        novelty = self._prompt_dimension("Novelty (1-3, blank to skip): ")
+        uncontrolled = self._prompt_dimension("Uncontrolled (1-3, blank to skip): ")
+        trustworthiness = self._prompt_dimension(
+            "Trustworthiness (1-3, blank to skip): "
+        )
+        is_duplicate = self._prompt_bool("Duplicate? (y/n, blank to skip): ")
 
-        # Get user input
-        while True:
-            label_input = (
-                input(
-                    "Label [correct/red_herring/confounded/data_issue/"
-                    "duplicate/not_novel/skip]: "
-                )
-                .strip()
-                .lower()
-            )
+        rating = HypothesisRating(
+            novelty=novelty,
+            uncontrolled=uncontrolled,
+            trustworthiness=trustworthiness,
+            is_duplicate=is_duplicate,
+        )
 
-            if label_input == "skip":
-                print("Skipped")
-                print()
-                return
-
-            try:
-                label = HypothesisLabel(label_input)
-                break
-            except ValueError:
-                print(f"Invalid label: {label_input}. Try again.")
+        if rating.is_pending:
+            print("Skipped (no dimensions rated)")
+            print()
+            return
 
         notes = input("Notes (optional): ").strip()
 
-        # Update hypothesis
-        hyp.label = label
-        hyp.label_notes = notes if notes else None
+        hyp.rating = rating
+        hyp.notes = notes if notes else None
         hyp.labeled_at = datetime.now(UTC)
         hyp.labeled_by = reviewer
 
-        # Save updated hypothesis
         self.store.save(hyp)
 
-        print("✓ Saved")
+        print("Saved")
         print()
+
+    @staticmethod
+    def _prompt_dimension(prompt: str) -> int | None:
+        while True:
+            val = input(prompt).strip()
+            if not val:
+                return None
+            if val in ("1", "2", "3"):
+                return int(val)
+            print("Enter 1, 2, or 3 (or blank to skip).")
+
+    @staticmethod
+    def _prompt_bool(prompt: str) -> bool | None:
+        while True:
+            val = input(prompt).strip().lower()
+            if not val:
+                return None
+            if val in ("y", "yes"):
+                return True
+            if val in ("n", "no"):
+                return False
+            print("Enter y/n (or blank to skip).")
 
 
 def main():
