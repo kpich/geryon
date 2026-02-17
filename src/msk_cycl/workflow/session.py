@@ -47,6 +47,10 @@ class SessionConfig(BaseModel):
     # Paths
     parquet_dir: Path = Field(..., description="Directory with parquet files")
     storage_dir: Path = Field(..., description="Directory for JSONL output")
+    labeled_dir: Path = Field(
+        default=Path("labeled_hypotheses"),
+        description="Directory with labeled hypothesis JSON files",
+    )
 
     # Logging
     enable_llm_logging: bool = Field(

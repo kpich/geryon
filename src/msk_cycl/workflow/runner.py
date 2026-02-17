@@ -58,6 +58,7 @@ def run_workflow(
     num_proposals: int = 5,
     max_iterations: int = 10,
     enable_llm_logging: bool = True,
+    labeled_dir: Path = Path("labeled_hypotheses"),
 ) -> list[LabeledHypothesis]:
     """Run hypothesis generation workflow.
 
@@ -88,6 +89,9 @@ def run_workflow(
         Maximum iterations (default: 10)
     enable_llm_logging : bool
         Enable LLM conversation logging (default: True)
+    labeled_dir : Path
+        Directory with labeled hypothesis JSON files
+        (default: labeled_hypotheses/)
 
     Returns
     -------
@@ -124,6 +128,7 @@ def run_workflow(
         num_proposals_per_iteration=num_proposals,
         max_iterations=max_iterations,
         enable_llm_logging=enable_llm_logging,
+        labeled_dir=labeled_dir,
     )
 
     print("Initializing autonomous workflow...")
@@ -230,6 +235,13 @@ def main() -> None:
         help="Maximum iterations (default: 10)",
     )
     parser.add_argument(
+        "--labeled-dir",
+        type=Path,
+        default=Path("labeled_hypotheses"),
+        help="Directory with labeled hypothesis JSON files "
+        "(default: labeled_hypotheses/)",
+    )
+    parser.add_argument(
         "--no-log",
         action="store_true",
         help="Disable LLM conversation logging (default: logging enabled)",
@@ -258,6 +270,7 @@ def main() -> None:
         num_proposals=args.num_proposals,
         max_iterations=args.max_iterations,
         enable_llm_logging=not args.no_log,
+        labeled_dir=args.labeled_dir,
     )
 
 

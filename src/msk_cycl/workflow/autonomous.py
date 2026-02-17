@@ -11,6 +11,7 @@ from langchain_core.tools import tool
 
 from msk_cycl.db import Database
 from msk_cycl.engine import HypothesisExecutor
+from msk_cycl.labeling.labeled_store import LabeledStore
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.storage import HypothesisStore
 from msk_cycl.lang.spec import CyclHyp
@@ -54,6 +55,7 @@ class AutonomousWorkflow:
         self.provider = create_provider(config.provider_type, **provider_kwargs)
 
         self.store = HypothesisStore(config.storage_dir)
+        self.labeled_store = LabeledStore(config.labeled_dir)
 
         self.llm_logger = None
         if config.enable_llm_logging:
@@ -217,9 +219,10 @@ class AutonomousWorkflow:
         # Generate 3x more proposals to allow for validation filtering
         n_to_generate = n_proposals * 3
 
-        # Load previous hypotheses to avoid duplicates
-        previous = self.store.load_session(self.session.session_id)
-        previous_context = self._format_previous_hypotheses(previous)
+        # Load labeled hypotheses (from prior annotation) and same-session hypotheses
+        labeled = self.labeled_store.load_all()
+        session_previous = self.store.load_session(self.session.session_id)
+        previous_context = self._format_previous_hypotheses(labeled, session_previous)
 
         print(
             f"Generating {n_to_generate} hypothesis(es) "
@@ -391,7 +394,7 @@ IMPORTANT:
                         idx=i,
                     )
 
-                    labeled = LabeledHypothesis(
+                    labeled_hyp = LabeledHypothesis(
                         hypothesis_id=str(uuid.uuid4()),
                         session_id=self.session.session_id,
                         proposal=proposal,
@@ -402,8 +405,8 @@ IMPORTANT:
                         llm_model=f"{self.config.provider_type}/{self.config.model}",
                     )
 
-                    self.store.save(labeled)
-                    labeled_hypotheses.append(labeled)
+                    self.store.save(labeled_hyp)
+                    labeled_hypotheses.append(labeled_hyp)
 
                     print(f"    Saved. Summary: {narrative.summary}")
 
@@ -609,22 +612,15 @@ IMPORTANT:
 
         return errors
 
-    def _format_previous_hypotheses(self, previous: list[LabeledHypothesis]) -> str:
-        """Format previous hypotheses for context."""
-        if not previous:
-            return "**No previous hypotheses yet.**"
+    def _format_previous_hypotheses(
+        self,
+        labeled: list[LabeledHypothesis],
+        session_previous: list[LabeledHypothesis],
+    ) -> str:
+        """Format labeled and same-session hypotheses for LLM context."""
+        from msk_cycl.workflow.context import format_previous_hypotheses
 
-        lines = ["**Previously tested hypotheses (avoid duplicates)**:"]
-        for i, hyp in enumerate(previous[:10], 1):
-            a_desc = hyp.proposal.cohort_a_description
-            b_desc = hyp.proposal.cohort_b_description
-            desc = f"{a_desc} vs {b_desc}"
-            lines.append(f"{i}. {desc}")
-
-        if len(previous) > 10:
-            lines.append(f"... and {len(previous) - 10} more")
-
-        return "\n".join(lines)
+        return format_previous_hypotheses(labeled, session_previous)
 
     @staticmethod
     def _find_tool_args(messages: list, tool_call_id: str | None) -> dict:
