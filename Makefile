@@ -40,6 +40,10 @@ etl:
 etl-clean:
 	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*
 
+.PHONY: annotate
+annotate:
+	uv run python -m msk_cycl.cli.annotate
+
 .PHONY: workflow
 workflow:
 	./scripts/run.sh
