@@ -193,6 +193,26 @@ def test_truncation_session():
     assert "Gene20" not in result
 
 
+def test_session_hypothesis_with_critic_rating_shows_tag():
+    """Session hypothesis with critic rating shows tag and [critic] source."""
+    session = [
+        _make_hyp(
+            "s1",
+            a_desc="EGFR mut",
+            b_desc="WT",
+            rating=HypothesisRating(novelty=3, trustworthiness=2),
+            notes="interesting",
+        ),
+    ]
+    session[0].labeled_by = "llm_critic"
+    result = format_previous_hypotheses([], session)
+
+    assert "EGFR mut vs WT" in result
+    assert "[novelty=3, trust=2]" in result
+    assert "[critic]" in result
+    assert "interesting" in result
+
+
 def test_numbering_is_continuous():
     labeled = [
         _make_hyp(

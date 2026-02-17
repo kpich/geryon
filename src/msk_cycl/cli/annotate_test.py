@@ -132,6 +132,44 @@ def test_load_unlabeled_excludes_labeled(setup):
     assert items[0]["hypothesis_id"] == "h-2"
 
 
+def test_load_unlabeled_includes_critic_rated(setup):
+    """Critic-rated hypotheses still appear for human review."""
+    output_dir, labeled_store, _ = setup
+    hyp = _make_hypothesis("h-1", "sess-1")
+    hyp.rating = HypothesisRating(novelty=2, trustworthiness=2)
+    hyp.labeled_by = "llm_critic"
+    # Re-seed with critic-rated hypothesis
+    store = HypothesisStore(output_dir / "sess-1")
+    store.save_all([hyp, _make_hypothesis("h-2", "sess-1")])
+
+    items = _load_unlabeled(output_dir, labeled_store)
+    ids = {h["hypothesis_id"] for h in items}
+    assert "h-1" in ids
+
+
+def test_load_unlabeled_has_critic_prefill_fields(setup):
+    """Critic-rated hypothesis data dict has critic_rating and critic_notes."""
+    output_dir, labeled_store, _ = setup
+    hyp = _make_hypothesis("h-1", "sess-1")
+    hyp.rating = HypothesisRating(novelty=3, uncontrolled=1, trustworthiness=2)
+    hyp.labeled_by = "llm_critic"
+    hyp.notes = "looks confounded"
+    store = HypothesisStore(output_dir / "sess-1")
+    store.save_all([hyp])
+
+    items = _load_unlabeled(output_dir, labeled_store)
+    assert len(items) == 1
+    item = items[0]
+    assert item["critic_rating"] == {
+        "novelty": 3,
+        "uncontrolled": 1,
+        "trustworthiness": 2,
+        "is_duplicate": None,
+    }
+    assert item["critic_notes"] == "looks confounded"
+    assert item["labeled_by"] == "llm_critic"
+
+
 def test_count_all(setup):
     output_dir, labeled_store, _ = setup
     counts = _count_all(output_dir, labeled_store)

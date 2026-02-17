@@ -178,6 +178,41 @@ def test_storage_empty_session_returns_empty_list(tmp_path: Path):
     assert loaded == []
 
 
+def test_save_all_rewrites_with_updated_ratings(tmp_path: Path):
+    """save_all rewrites file with updated hypothesis data."""
+    from msk_cycl.labeling.labels import HypothesisRating
+
+    store = HypothesisStore(tmp_path)
+    h1 = _make_hypothesis("h1", "sess")
+    h2 = _make_hypothesis("h2", "sess")
+    store.save(h1)
+    store.save(h2)
+
+    loaded = store.load()
+    assert len(loaded) == 2
+    assert loaded[0].rating.is_pending
+
+    loaded[0].rating = HypothesisRating(novelty=3, trustworthiness=2)
+    loaded[0].labeled_by = "llm_critic"
+    store.save_all(loaded)
+
+    reloaded = store.load()
+    assert len(reloaded) == 2
+    assert reloaded[0].rating.novelty == 3
+    assert reloaded[0].rating.trustworthiness == 2
+    assert reloaded[0].labeled_by == "llm_critic"
+    assert reloaded[1].rating.is_pending
+
+
+def test_save_all_empty_noop(tmp_path: Path):
+    """save_all with empty list doesn't create or corrupt file."""
+    store = HypothesisStore(tmp_path)
+    store.save_all([])
+
+    session_file = tmp_path / "hypotheses.jsonl"
+    assert not session_file.exists()
+
+
 def test_config_serialization(tmp_path: Path):
     """to_config_dict() excludes api_key, serializes Path/datetime as strings."""
     from msk_cycl.workflow.session import SessionConfig

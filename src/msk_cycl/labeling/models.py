@@ -44,6 +44,9 @@ class LabeledHypothesis(BaseModel):
         ..., description="LLM-generated interpretation"
     )
     llm_model: str = Field(..., description="Model used for generation/narration")
+    iteration: int | None = Field(
+        default=None, description="Iteration number within the session (1-indexed)"
+    )
 
     # Labeling phase (human review)
     rating: HypothesisRating = Field(default_factory=HypothesisRating)

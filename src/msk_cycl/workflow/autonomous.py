@@ -200,13 +200,17 @@ class AutonomousWorkflow:
         print("  → LLM finished (no more tool calls)")
         return "end"
 
-    def run_iteration(self, n_proposals: int | None = None) -> list[LabeledHypothesis]:
+    def run_iteration(
+        self, n_proposals: int | None = None, iteration: int | None = None
+    ) -> list[LabeledHypothesis]:
         """Run one iteration: generate hypotheses via tool exploration.
 
         Parameters
         ----------
         n_proposals : int, optional
             Number of proposals to generate (default from config)
+        iteration : int, optional
+            Iteration number (1-indexed) for tracking
 
         Returns
         -------
@@ -236,6 +240,21 @@ class AutonomousWorkflow:
 You MUST explore the database using tools before proposing ANY hypotheses.
 
 {previous_context}
+
+SCIENTIFIC DISCOVERY GOALS:
+
+Your primary goal is to discover NEW, unpublished relationships in this cancer
+genomics data. While confirming known findings is useful as sanity checks
+(especially when expected results DON'T replicate — that is itself a discovery),
+prioritize:
+
+- Unexpected gene-outcome associations not well-established in literature
+- Interactions between clinical features and molecular markers
+- Subgroup effects that might not be obvious to an oncologist
+- Comparisons that test non-obvious biological hypotheses
+
+If a well-known association fails to replicate, flag it — that is valuable.
+But spend most proposals on genuinely exploratory comparisons.
 
 REQUIRED EXPLORATION STEPS (DO NOT SKIP ANY):
 
@@ -403,6 +422,7 @@ IMPORTANT:
                         execution_time_seconds=execution_time,
                         narrative=narrative,
                         llm_model=f"{self.config.provider_type}/{self.config.model}",
+                        iteration=iteration,
                     )
 
                     self.store.save(labeled_hyp)
@@ -446,13 +466,26 @@ IMPORTANT:
         for i in range(self.config.max_iterations):
             print(f"=== Iteration {i+1}/{self.config.max_iterations} ===")
 
-            hypotheses = self.run_iteration()
+            hypotheses = self.run_iteration(iteration=i + 1)
 
             # Check if we got any hypotheses this iteration
             if not hypotheses:
                 print(f"⚠ No hypotheses generated in iteration {i+1}, continuing...")
                 print()
                 continue
+
+            if self.config.critic_cycles > 0:
+                from msk_cycl.llm.critic import HypothesisCritic
+
+                critic = HypothesisCritic(self.provider, logger=self.llm_logger)
+                for cycle in range(self.config.critic_cycles):
+                    print(f"  Critic cycle {cycle + 1}/{self.config.critic_cycles}...")
+                    hypotheses = critic.rate(hypotheses)
+
+                all_session = self.store.load()
+                hyp_by_id = {h.hypothesis_id: h for h in hypotheses}
+                updated = [hyp_by_id.get(h.hypothesis_id, h) for h in all_session]
+                self.store.save_all(updated)
 
             all_hypotheses.extend(hypotheses)
             print(f"✓ Iteration {i+1} complete: {len(hypotheses)} hypotheses")

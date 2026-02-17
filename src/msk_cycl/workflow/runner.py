@@ -58,6 +58,7 @@ def run_workflow(
     aws_profile: str | None = None,
     num_proposals: int | None = None,
     max_iterations: int | None = None,
+    critic_cycles: int | None = None,
     enable_llm_logging: bool | None = None,
     labeled_dir: Path | None = None,
 ) -> list[LabeledHypothesis]:
@@ -127,6 +128,7 @@ def run_workflow(
         "aws_profile": aws_profile,
         "num_proposals_per_iteration": num_proposals,
         "max_iterations": max_iterations,
+        "critic_cycles": critic_cycles,
         "enable_llm_logging": enable_llm_logging,
         "labeled_dir": labeled_dir,
     }
@@ -246,6 +248,12 @@ def main() -> None:
         help="Maximum iterations (default: 10)",
     )
     parser.add_argument(
+        "--critic-cycles",
+        type=int,
+        default=None,
+        help="Number of LLM critic cycles per iteration (default: 0 = disabled)",
+    )
+    parser.add_argument(
         "--labeled-dir",
         type=Path,
         default=None,
@@ -280,6 +288,7 @@ def main() -> None:
         aws_profile=args.aws_profile,
         num_proposals=args.num_proposals,
         max_iterations=args.max_iterations,
+        critic_cycles=args.critic_cycles,
         enable_llm_logging=False if args.no_log else None,
         labeled_dir=args.labeled_dir,
     )

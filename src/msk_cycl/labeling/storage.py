@@ -54,6 +54,36 @@ class HypothesisStore:
         with open(session_file, "a") as f:
             f.write(json_line)
 
+    def save_all(self, hypotheses: list[LabeledHypothesis]) -> None:
+        """Rewrite session file with updated hypotheses (atomic via temp+rename)."""
+        if not hypotheses:
+            return
+
+        session_file = self.storage_dir / HYPOTHESES_FILENAME
+        tmp_file = session_file.with_suffix(".jsonl.tmp")
+
+        metadata_line = None
+        if session_file.exists():
+            with open(session_file) as f:
+                first = json.loads(f.readline())
+                if first.get("record_type") == "metadata":
+                    metadata_line = json.dumps(first, default=str)
+
+        if metadata_line is None:
+            meta = SessionFileMetadata(
+                session_id=hypotheses[0].session_id,
+                created_at=datetime.now(UTC),
+            )
+            metadata_line = meta.model_dump_json()
+
+        with open(tmp_file, "w") as f:
+            f.write(metadata_line + "\n")
+            for hyp in hypotheses:
+                record = HypothesisRecord(data=hyp)
+                f.write(self._serialize_record(record) + "\n")
+
+        tmp_file.rename(session_file)
+
     def load(self) -> list[LabeledHypothesis]:
         """Load all hypotheses from this store's directory.
 
