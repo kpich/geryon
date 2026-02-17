@@ -70,7 +70,14 @@ def format_previous_hypotheses(
                 f"{hyp.proposal.cohort_a_description} vs "
                 f"{hyp.proposal.cohort_b_description}"
             )
-            lines.append(f"{idx}. {desc}")
+            entry = f"{idx}. {desc}"
+            if not hyp.rating.is_pending:
+                tag = _format_rating_tag(hyp)
+                source = "critic" if hyp.labeled_by == "llm_critic" else "auto"
+                entry += f" {tag} [{source}]"
+                if hyp.notes:
+                    entry += f" — {hyp.notes}"
+            lines.append(entry)
             idx += 1
         if len(unrated_session) > MAX_SESSION:
             lines.append(f"... and {len(unrated_session) - MAX_SESSION} more")

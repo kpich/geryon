@@ -74,6 +74,19 @@ class SessionTracer:
                 raw_response=raw_response,
             )
 
+    def log_critic(
+        self,
+        count: int,
+        tokens: int | None,
+        ratings: list[dict] | None = None,
+        raw_response: str | None = None,
+    ) -> None:
+        self._write(event="critic", count=count, tokens=tokens)
+        if ratings or raw_response:
+            self._write_detail(
+                event="critic", ratings=ratings, raw_response=raw_response
+            )
+
     def log_session_end(self, total: int, successful: int, failed: int) -> None:
         self._write(
             event="session_end",

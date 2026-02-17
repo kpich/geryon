@@ -32,7 +32,7 @@ def _load_unlabeled(output_dir: Path, labeled_store: LabeledStore) -> list[dict]
             hid = hyp.hypothesis_id
             if hid in labeled_ids or hid in seen:
                 continue
-            if not hyp.rating.is_pending:
+            if not hyp.rating.is_pending and hyp.labeled_by != "llm_critic":
                 continue
 
             seen[hid] = {
@@ -54,6 +54,19 @@ def _load_unlabeled(output_dir: Path, labeled_store: LabeledStore) -> list[dict]
                 "findings": hyp.narrative.findings,
                 "limitations": hyp.narrative.limitations,
                 "clinical_relevance": hyp.narrative.clinical_relevance,
+                "iteration": hyp.iteration,
+                "labeled_by": hyp.labeled_by,
+                "critic_rating": (
+                    {
+                        "novelty": hyp.rating.novelty,
+                        "uncontrolled": hyp.rating.uncontrolled,
+                        "trustworthiness": hyp.rating.trustworthiness,
+                        "is_duplicate": hyp.rating.is_duplicate,
+                    }
+                    if hyp.labeled_by == "llm_critic"
+                    else None
+                ),
+                "critic_notes": (hyp.notes if hyp.labeled_by == "llm_critic" else None),
             }
 
     items = list(seen.values())
@@ -80,6 +93,7 @@ def _count_all(output_dir: Path, labeled_store: LabeledStore) -> dict:
     return {"total": total, "labeled": labeled, "pending": total - labeled}
 
 
+# ruff: noqa: E501
 HTML_PAGE = (
     """<!DOCTYPE html>
 <html lang="en">
@@ -187,6 +201,10 @@ async function loadHypotheses() {
     const fmtVal = (v, digits) => v != null ? Number(v).toFixed(digits) : "N/A";
 
     const hid_short = h.hypothesis_id.substring(0, 8);
+    const iterTag = h.iteration ? ` | iter ${h.iteration}` : "";
+    const criticBadge = h.labeled_by === "llm_critic"
+      ? ' <span style="background:#f59e0b;color:#fff;font-size:10px;font-variant:small-caps;padding:2px 6px;border-radius:3px;margin-left:6px">LLM CRITIC</span>'
+      : "";
 
     let dimHTML = "";
     for (const [key, dim] of Object.entries(DIMENSIONS)) {
@@ -206,7 +224,7 @@ async function loadHypotheses() {
     }
 
     card.innerHTML = `
-      <h2>#${idx + 1} &mdash; ${hid_short}... &mdash; ${h.created_at}</h2>
+      <h2>#${idx + 1} &mdash; ${hid_short}...${iterTag} &mdash; ${h.created_at}${criticBadge}</h2>
       <div class="field">
         <div class="field-label">Cohort A</div>
         <div class="field-value">${esc(h.cohort_a_description)}</div>
@@ -255,6 +273,28 @@ async function loadHypotheses() {
         onclick="submitRating('${h.hypothesis_id}')">Submit</button>
     `;
     container.appendChild(card);
+
+    // Pre-fill critic ratings
+    if (h.critic_rating) {
+      if (!selections[h.hypothesis_id]) selections[h.hypothesis_id] = {};
+      for (const [dim, val] of Object.entries(h.critic_rating)) {
+        if (dim === "is_duplicate") {
+          if (val) {
+            const dupEl = document.getElementById("dup-" + h.hypothesis_id);
+            if (dupEl) dupEl.checked = true;
+          }
+        } else if (val != null) {
+          selections[h.hypothesis_id][dim] = val;
+          const btn = card.querySelector(
+                `button[data-dim="${dim}"][data-val="${val}"]`);
+          if (btn) btn.classList.add("selected");
+        }
+      }
+    }
+    if (h.critic_notes) {
+      const notesEl = document.getElementById("notes-" + h.hypothesis_id);
+      if (notesEl) notesEl.value = h.critic_notes;
+    }
   });
 }
 

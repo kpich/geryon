@@ -12,8 +12,9 @@
     --model us.anthropic.claude-opus-4-5-20251101-v1:0 \
     --aws-profile saml \
     --aws-region us-east-2 \
-    --max-iterations 1 \
-    --num-proposals 2
+    --max-iterations 2 \
+    --num-proposals 5 \
+    --critic-cycles 1
 #    -v
 
 #    --model us.anthropic.claude-sonnet-4-5-20250929-v1:0 \

@@ -43,6 +43,10 @@ class SessionConfig(BaseModel):
         default=5, description="Hypotheses per iteration"
     )
     max_iterations: int = Field(default=10, description="Maximum iterations to run")
+    critic_cycles: int = Field(
+        default=0,
+        description="Number of LLM critic cycles per iteration (0 = disabled)",
+    )
 
     # Paths
     parquet_dir: Path = Field(..., description="Directory with parquet files")
