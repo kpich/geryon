@@ -1,6 +1,6 @@
 """JSONL storage for labeled hypotheses."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 
@@ -41,7 +41,7 @@ class HypothesisStore:
         if not session_file.exists():
             metadata = SessionFileMetadata(
                 session_id=hypothesis.session_id,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
             )
             with open(session_file, "w") as f:
                 f.write(metadata.model_dump_json() + "\n")

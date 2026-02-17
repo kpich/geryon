@@ -10,7 +10,7 @@ class CoxHazardRatioMethod:
 
     def calculate(
         self, cohort_a_data: pd.DataFrame, cohort_b_data: pd.DataFrame
-    ) -> dict[str, float]:
+    ) -> dict[str, float | None]:
         """Calculate hazard ratio using Cox proportional hazards model.
 
         Parameters
@@ -45,9 +45,13 @@ class CoxHazardRatioMethod:
 
         # confidence_intervals_ returns log-scale (coefficient); exponentiate to match
         # HR
+        with np.errstate(over="ignore"):
+            ci_lower = float(np.exp(ci.iloc[0]))
+            ci_upper = float(np.exp(ci.iloc[1]))
+
         return {
             "hazard_ratio": float(hr),
-            "confidence_interval_lower": float(np.exp(ci.iloc[0])),
-            "confidence_interval_upper": float(np.exp(ci.iloc[1])),
+            "confidence_interval_lower": ci_lower if np.isfinite(ci_lower) else None,
+            "confidence_interval_upper": ci_upper if np.isfinite(ci_upper) else None,
             "p_value": float(p_value),
         }

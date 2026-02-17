@@ -11,7 +11,7 @@ File structure:
 Each line is a complete JSON object. Format evolution via optional fields.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -33,6 +33,6 @@ class HypothesisRecord(BaseModel):
     record_type: Literal["hypothesis"] = "hypothesis"
     data: LabeledHypothesis = Field(..., description="The labeled hypothesis")
     written_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="When this record was written",
     )

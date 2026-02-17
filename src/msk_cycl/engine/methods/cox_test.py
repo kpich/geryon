@@ -37,9 +37,9 @@ def test_calculate_cox_hazard_ratio_with_known_data():
     assert "p_value" in result
 
     # Cohort A should have lower hazard (better survival)
-    assert result["hazard_ratio"] > 0
-    assert result["p_value"] >= 0
-    assert result["p_value"] <= 1
+    assert result["hazard_ratio"] is not None and result["hazard_ratio"] > 0
+    assert result["p_value"] is not None
+    assert 0 <= result["p_value"] <= 1
 
 
 def test_cox_rejects_cbioportal_status_strings():

@@ -1,6 +1,6 @@
 """Autonomous workflow using LangGraph for tool-based exploration."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 import re
 from typing import Annotated, Literal, TypedDict
@@ -373,9 +373,9 @@ IMPORTANT:
                     self.llm_logger.log_proposal(idx=i, proposal=proposal)
 
                 try:
-                    start_time = datetime.utcnow()
+                    start_time = datetime.now(UTC)
                     result = self.executor.execute(proposal.cycl_spec)
-                    execution_time = (datetime.utcnow() - start_time).total_seconds()
+                    execution_time = (datetime.now(UTC) - start_time).total_seconds()
 
                     if self.llm_logger:
                         self.llm_logger.log_execution(
