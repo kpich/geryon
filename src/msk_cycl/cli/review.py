@@ -70,8 +70,7 @@ class HypothesisReviewer:
         print()
         print("Results:")
         print(
-            f"  N_A = {len(hyp.result.cohort_a_data)}, "
-            f"N_B = {len(hyp.result.cohort_b_data)}"
+            f"  N_A = {hyp.result.cohort_a_size}, " f"N_B = {hyp.result.cohort_b_size}"
         )
         if hyp.result.p_value is not None:
             print(f"  p-value = {hyp.result.p_value}")
