@@ -17,13 +17,10 @@ class BedrockProvider:
         self.model = model
         self.region = region or "us-east-1"
 
-        session_kwargs = {}
-        if profile:
-            session_kwargs["profile_name"] = profile
-        if region:
-            session_kwargs["region_name"] = region
-
-        session = boto3.Session(**session_kwargs)
+        session = boto3.Session(
+            profile_name=profile,
+            region_name=region,
+        )
         self.client = session.client("bedrock-runtime", region_name=self.region)
 
     def generate(

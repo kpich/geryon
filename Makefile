@@ -22,15 +22,15 @@ clean:
 
 .PHONY: mypy
 mypy:
-	uv run mypy --check-untyped-defs src/msk_cycl
+	uv run --extra dev mypy --check-untyped-defs src/msk_cycl
 
 .PHONY: lint
 lint:
-	uv run ruff check src/
+	uv run --extra dev ruff check src/
 
 .PHONY: format
 format:
-	uv run ruff format src/
+	uv run --extra dev ruff format src/
 
 .PHONY: etl
 etl:
@@ -39,6 +39,10 @@ etl:
 .PHONY: etl-clean
 etl-clean:
 	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*
+
+.PHONY: data
+data:
+	uv run --extra viewer python scripts/view_data.py
 
 .PHONY: annotate
 annotate:

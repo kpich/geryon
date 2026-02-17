@@ -91,6 +91,7 @@ _LABEL_DISPLAY = {
     "data_issue": "Data Issue",
     "duplicate": "Duplicate",
     "not_novel": "Not Novel",
+    "wrong_spec": "Wrong Spec",
 }
 
 HTML_PAGE = (
