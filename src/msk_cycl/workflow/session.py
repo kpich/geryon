@@ -1,6 +1,6 @@
 """Session management for hypothesis generation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 import uuid
@@ -12,7 +12,7 @@ class SessionConfig(BaseModel):
     """Configuration for a hypothesis generation session."""
 
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # LLM configuration
     provider_type: Literal["openai", "anthropic", "aws_bedrock"] = Field(

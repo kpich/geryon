@@ -1,6 +1,6 @@
 """Data models for labeled hypotheses."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,7 +26,7 @@ class LabeledHypothesis(BaseModel):
     hypothesis_id: str = Field(..., description="Unique identifier (UUID)")
     session_id: str = Field(..., description="Session/batch identifier")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Timestamp of creation"
+        default_factory=lambda: datetime.now(UTC), description="Timestamp of creation"
     )
 
     # Proposal phase (LLM generates hypothesis)

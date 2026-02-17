@@ -48,6 +48,13 @@ where = ["src"]
 [tool.setuptools.package-data]
 mbird_data = ["py.typed"]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:lifelines",
+    "ignore::UserWarning:lifelines",
+]
+
 [tool.ruff]
 line-length = 88
 
