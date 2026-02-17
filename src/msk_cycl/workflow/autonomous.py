@@ -220,18 +220,12 @@ class AutonomousWorkflow:
         if n_proposals is None:
             n_proposals = self.config.num_proposals_per_iteration
 
-        # Generate 3x more proposals to allow for validation filtering
-        n_to_generate = n_proposals * 3
-
         # Load labeled hypotheses (from prior annotation) and same-session hypotheses
         labeled = self.labeled_store.load_all()
         session_previous = self.store.load()
         previous_context = self._format_previous_hypotheses(labeled, session_previous)
 
-        print(
-            f"Generating {n_to_generate} hypothesis(es) "
-            f"(will filter to best {n_proposals})..."
-        )
+        print(f"Generating {n_proposals} hypothesis(es)...")
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
         print()
 
@@ -265,14 +259,22 @@ Step 2: For EACH table you want to use in a hypothesis:
    - Note the EXACT column names, data types, and sample values
    - Do NOT assume column names - verify them first!
 
-Step 3 (Optional): Call query_data_tool(sql) to check value distributions
+Step 3 (REQUIRED): For EACH filter value you plan to use in a hypothesis:
+   - Call query_data_tool(sql) to verify the value actually exists
+   - Example: SELECT DISTINCT "CANCER_TYPE" FROM clinical_patient LIMIT 20
+   - Do NOT guess how values are encoded — check first!
+   - Common pitfalls: abbreviated vs full names (e.g. "NSCLC" vs
+     "Non-Small Cell Lung Cancer"), numeric coding (0/1 vs strings)
 
-Step 4: Generate {n_to_generate} hypothesis(es) using ONLY columns you verified
+Step 4: Generate {n_proposals} hypothesis(es) using ONLY columns AND values
+   you verified in Steps 2-3
 
 CRITICAL VALIDATION:
 - Your proposals will be checked against the actual database schema
 - If you reference a table or column that doesn't exist, that proposal will be REJECTED
-- Using real, verified column names is MANDATORY
+- If you use a filter value that doesn't exist in the data, the cohort
+  will be EMPTY and the hypothesis will fail
+- Using real, verified column names AND values is MANDATORY
 
 Output format:
 {{
@@ -369,24 +371,14 @@ IMPORTANT:
                 print("  Continuing to next iteration...")
                 return []
 
-            # Filter to requested number of proposals
-            valid_proposals = proposals[:n_proposals]
-
-            if len(valid_proposals) < n_proposals:
-                print(f"⚠ Only {len(valid_proposals)}/{n_proposals} valid proposals")
-                print(f"  (requested {n_to_generate}, got {len(proposals)} valid)")
-            else:
-                print(
-                    f"Generated {len(proposals)} valid proposals. "
-                    f"Executing top {len(valid_proposals)}..."
-                )
+            print(f"Generated {len(proposals)} valid proposals. Executing all...")
             print()
 
-            # Execute and narrate (same as linear workflow)
+            # Execute and narrate
             labeled_hypotheses = []
             narrator = ResultNarrator(self.provider, logger=self.llm_logger)
 
-            for i, proposal in enumerate(valid_proposals, 1):
+            for i, proposal in enumerate(proposals, 1):
                 a_desc = proposal.cohort_a_description
                 b_desc = proposal.cohort_b_description
                 print(f"  [{i}/{len(proposals)}] Executing: {a_desc} vs {b_desc}")
