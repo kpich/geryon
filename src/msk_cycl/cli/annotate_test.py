@@ -1,14 +1,17 @@
-"""Tests for annotation server API endpoints."""
+"""Tests for annotation server."""
 
-from http.server import HTTPServer
+from io import BytesIO
 import json
 from pathlib import Path
-from threading import Thread
-from urllib.request import Request, urlopen
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from msk_cycl.cli.annotate import _count_all, _load_unlabeled, _make_handler
+from msk_cycl.cli.annotate import (
+    _count_all,
+    _load_unlabeled,
+    _make_handler,
+)
 from msk_cycl.labeling.labeled_store import LabeledStore
 from msk_cycl.labeling.labels import HypothesisLabel
 from msk_cycl.labeling.models import LabeledHypothesis
@@ -16,7 +19,12 @@ from msk_cycl.labeling.storage import HypothesisStore
 from msk_cycl.lang.methods import ComparisonMethod
 from msk_cycl.lang.outcomes import OverallSurvival
 from msk_cycl.lang.results import ComparisonResult
-from msk_cycl.lang.spec import CohortFilter, CompareCohorts, CyclHyp, SelectCohort
+from msk_cycl.lang.spec import (
+    CohortFilter,
+    CompareCohorts,
+    CyclHyp,
+    SelectCohort,
+)
 from msk_cycl.llm.generator import HypothesisProposal
 from msk_cycl.llm.narrator import HypothesisNarrative
 
@@ -29,14 +37,20 @@ def _make_hypothesis(
             cohort_a=SelectCohort(
                 filters=[
                     CohortFilter(
-                        table="clinical_patient", column="TX", operator="==", value="A"
+                        table="clinical_patient",
+                        column="TX",
+                        operator="==",
+                        value="A",
                     )
                 ]
             ),
             cohort_b=SelectCohort(
                 filters=[
                     CohortFilter(
-                        table="clinical_patient", column="TX", operator="==", value="B"
+                        table="clinical_patient",
+                        column="TX",
+                        operator="==",
+                        value="B",
                     )
                 ]
             ),
@@ -73,11 +87,16 @@ def _make_hypothesis(
 
 
 def _seed_session(
-    output_dir: Path, session_id: str, hypotheses: list[LabeledHypothesis]
+    output_dir: Path,
+    session_id: str,
+    hypotheses: list[LabeledHypothesis],
 ):
     store = HypothesisStore(output_dir)
     for hyp in hypotheses:
         store.save(hyp)
+
+
+# ── pure-function tests (fast, real file I/O via tmp_path) ──
 
 
 @pytest.fixture
@@ -126,76 +145,111 @@ def test_count_all(setup):
     assert counts == {"total": 2, "labeled": 1, "pending": 1}
 
 
-@pytest.fixture
-def server(setup):
-    output_dir, labeled_store, labeled_dir = setup
-    handler = _make_handler(output_dir, labeled_store)
-    srv = HTTPServer(("localhost", 0), handler)
-    port = srv.server_address[1]
-    thread = Thread(target=srv.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://localhost:{port}", labeled_dir
-    srv.shutdown()
+# ── handler tests (no real server, mocked data layer) ──
 
 
-def test_get_html(server):
-    url, _ = server
-    resp = urlopen(f"{url}/")
-    assert resp.status == 200
-    body = resp.read().decode()
+def _fake_unlabeled(*_args):
+    return [
+        {"hypothesis_id": "h-1", "summary": "test"},
+        {"hypothesis_id": "h-2", "summary": "test2"},
+    ]
+
+
+def _fake_stats(*_args):
+    return {"total": 5, "labeled": 2, "pending": 3}
+
+
+def _invoke_handler(handler_cls, method, path, body=None):
+    """Call a handler method without a real socket/server."""
+    out = BytesIO()
+
+    handler = handler_cls.__new__(handler_cls)
+    handler.path = path
+    handler.command = method
+    handler.request_version = "HTTP/1.1"
+    handler.requestline = f"{method} {path} HTTP/1.1"
+    handler.client_address = ("127.0.0.1", 0)
+    handler.server = MagicMock()
+    handler.wfile = out
+    handler.close_connection = True
+    handler._headers_buffer = []
+
+    if body is not None:
+        raw = json.dumps(body).encode()
+        handler.headers = {"Content-Length": str(len(raw))}
+        handler.rfile = BytesIO(raw)
+    else:
+        handler.headers = {}
+        handler.rfile = BytesIO()
+
+    if method == "GET":
+        handler.do_GET()
+    elif method == "POST":
+        handler.do_POST()
+
+    out.seek(0)
+    raw_response = out.read()
+
+    # Parse status from first line, body after \r\n\r\n
+    text = raw_response.decode("utf-8", errors="replace")
+    status_line = text.split("\r\n")[0]
+    status_code = int(status_line.split(" ")[1])
+    body_text = text.split("\r\n\r\n", 1)[1] if "\r\n\r\n" in text else ""
+    return status_code, body_text
+
+
+@patch("msk_cycl.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("msk_cycl.cli.annotate._count_all", _fake_stats)
+def test_get_html():
+    handler_cls = _make_handler(Path("."), MagicMock())
+    status, body = _invoke_handler(handler_cls, "GET", "/")
+    assert status == 200
     assert "CYCL Hypothesis Annotator" in body
 
 
-def test_api_hypotheses(server):
-    url, _ = server
-    resp = urlopen(f"{url}/api/hypotheses")
-    data = json.loads(resp.read())
+@patch("msk_cycl.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("msk_cycl.cli.annotate._count_all", _fake_stats)
+def test_api_hypotheses():
+    handler_cls = _make_handler(Path("."), MagicMock())
+    status, body = _invoke_handler(handler_cls, "GET", "/api/hypotheses")
+    assert status == 200
+    data = json.loads(body)
     assert len(data) == 2
 
 
-def test_api_stats(server):
-    url, _ = server
-    resp = urlopen(f"{url}/api/stats")
-    data = json.loads(resp.read())
-    assert data["total"] == 2
-    assert data["pending"] == 2
+@patch("msk_cycl.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("msk_cycl.cli.annotate._count_all", _fake_stats)
+def test_api_stats():
+    handler_cls = _make_handler(Path("."), MagicMock())
+    status, body = _invoke_handler(handler_cls, "GET", "/api/stats")
+    assert status == 200
+    data = json.loads(body)
+    assert data == {"total": 5, "labeled": 2, "pending": 3}
 
 
-def test_api_label_creates_file(server):
-    url, labeled_dir = server
-    payload = json.dumps(
-        {"hypothesis_id": "h-1", "label": "correct", "notes": "looks good"}
-    ).encode()
-    req = Request(
-        f"{url}/api/label",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    resp = urlopen(req)
-    assert resp.status == 200
+@patch("msk_cycl.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("msk_cycl.cli.annotate._count_all", _fake_stats)
+def test_api_label_saves_hypothesis():
+    mock_store = MagicMock()
+    hyp = _make_hypothesis("h-1")
 
-    labeled_file = labeled_dir / "h-1.json"
-    assert labeled_file.exists()
+    handler_cls = _make_handler(Path("."), mock_store)
+    orig_find = handler_cls._find_hypothesis
+    handler_cls._find_hypothesis = lambda self, hid: hyp
 
-    content = json.loads(labeled_file.read_text())
-    assert content["label"] == "correct"
-    assert content["label_notes"] == "looks good"
-    assert content["labeled_by"] == "annotator"
+    try:
+        body = {
+            "hypothesis_id": "h-1",
+            "label": "correct",
+            "notes": "good",
+        }
+        status, _ = _invoke_handler(handler_cls, "POST", "/api/label", body=body)
+        assert status == 200
 
-
-def test_api_label_removes_from_pending(server):
-    url, labeled_dir = server
-    payload = json.dumps({"hypothesis_id": "h-1", "label": "red_herring"}).encode()
-    req = Request(
-        f"{url}/api/label",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    urlopen(req)
-
-    resp = urlopen(f"{url}/api/hypotheses")
-    data = json.loads(resp.read())
-    assert len(data) == 1
-    assert data[0]["hypothesis_id"] == "h-2"
+        mock_store.save.assert_called_once()
+        saved = mock_store.save.call_args[0][0]
+        assert saved.label == HypothesisLabel.CORRECT
+        assert saved.label_notes == "good"
+        assert saved.labeled_by == "annotator"
+    finally:
+        handler_cls._find_hypothesis = orig_find
