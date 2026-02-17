@@ -2,7 +2,7 @@
 
 import pandas as pd  # type: ignore
 
-from msk_cycl.labeling.labels import HypothesisLabel
+from msk_cycl.labeling.labels import HypothesisRating
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.lang.methods import ComparisonMethod
 from msk_cycl.lang.outcomes import OverallSurvival
@@ -18,8 +18,8 @@ def _make_hyp(
     session_id: str = "s1",
     a_desc: str = "Group A",
     b_desc: str = "Group B",
-    label: HypothesisLabel = HypothesisLabel.PENDING,
-    label_notes: str | None = None,
+    rating: HypothesisRating | None = None,
+    notes: str | None = None,
 ) -> LabeledHypothesis:
     spec = CyclHyp(
         query=CompareCohorts(
@@ -72,8 +72,8 @@ def _make_hyp(
             clinical_relevance="Rel",
         ),
         llm_model="test-model",
-        label=label,
-        label_notes=label_notes,
+        rating=rating or HypothesisRating(),
+        notes=notes,
     )
 
 
@@ -84,20 +84,25 @@ def test_empty_inputs():
 
 def test_rated_only():
     labeled = [
-        _make_hyp("h1", a_desc="KRAS mut", b_desc="WT", label=HypothesisLabel.CORRECT),
+        _make_hyp(
+            "h1",
+            a_desc="KRAS mut",
+            b_desc="WT",
+            rating=HypothesisRating(novelty=3, trustworthiness=3),
+        ),
         _make_hyp(
             "h2",
             a_desc="Lung",
             b_desc="Non-lung",
-            label=HypothesisLabel.WRONG_SPEC,
-            label_notes="used wrong column",
+            rating=HypothesisRating(uncontrolled=3, is_duplicate=True),
+            notes="used wrong column",
         ),
     ]
     result = format_previous_hypotheses(labeled, [])
 
     assert "PREVIOUSLY RATED" in result
-    assert "[CORRECT] KRAS mut vs WT" in result
-    assert "[WRONG_SPEC] Lung vs Non-lung — used wrong column" in result
+    assert "KRAS mut vs WT [novelty=3, trust=3]" in result
+    assert "Lung vs Non-lung [uncontrolled=3, dup] — used wrong column" in result
     assert "PREVIOUSLY TESTED THIS SESSION" not in result
 
 
@@ -112,7 +117,12 @@ def test_session_only():
 
 def test_both_sections():
     labeled = [
-        _make_hyp("h1", a_desc="KRAS mut", b_desc="WT", label=HypothesisLabel.CORRECT),
+        _make_hyp(
+            "h1",
+            a_desc="KRAS mut",
+            b_desc="WT",
+            rating=HypothesisRating(novelty=1),
+        ),
     ]
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
     result = format_previous_hypotheses(labeled, session)
@@ -128,7 +138,12 @@ def test_both_sections():
 def test_deduplication():
     """Session hypothesis already in labeled set is excluded from session section."""
     labeled = [
-        _make_hyp("h1", a_desc="KRAS mut", b_desc="WT", label=HypothesisLabel.CORRECT),
+        _make_hyp(
+            "h1",
+            a_desc="KRAS mut",
+            b_desc="WT",
+            rating=HypothesisRating(novelty=2),
+        ),
     ]
     session = [
         _make_hyp("h1", a_desc="KRAS mut", b_desc="WT"),
@@ -141,9 +156,9 @@ def test_deduplication():
 
 
 def test_pending_labeled_excluded_from_rated_section():
-    """Labeled hypotheses with PENDING status are not shown in the rated section."""
+    """Labeled hypotheses with pending rating are not shown in the rated section."""
     labeled = [
-        _make_hyp("h1", a_desc="KRAS mut", b_desc="WT", label=HypothesisLabel.PENDING),
+        _make_hyp("h1", a_desc="KRAS mut", b_desc="WT"),
     ]
     result = format_previous_hypotheses(labeled, [])
 
@@ -153,7 +168,10 @@ def test_pending_labeled_excluded_from_rated_section():
 def test_truncation_rated():
     labeled = [
         _make_hyp(
-            f"h{i}", a_desc=f"Gene{i} mut", b_desc="WT", label=HypothesisLabel.CORRECT
+            f"h{i}",
+            a_desc=f"Gene{i} mut",
+            b_desc="WT",
+            rating=HypothesisRating(novelty=1),
         )
         for i in range(60)
     ]
@@ -177,14 +195,22 @@ def test_truncation_session():
 
 def test_numbering_is_continuous():
     labeled = [
-        _make_hyp("h1", a_desc="KRAS mut", b_desc="WT", label=HypothesisLabel.CORRECT),
         _make_hyp(
-            "h2", a_desc="BRAF mut", b_desc="WT", label=HypothesisLabel.CONFOUNDED
+            "h1",
+            a_desc="KRAS mut",
+            b_desc="WT",
+            rating=HypothesisRating(novelty=2, trustworthiness=3),
+        ),
+        _make_hyp(
+            "h2",
+            a_desc="BRAF mut",
+            b_desc="WT",
+            rating=HypothesisRating(uncontrolled=2),
         ),
     ]
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
     result = format_previous_hypotheses(labeled, session)
 
-    assert "1. [CORRECT]" in result
-    assert "2. [CONFOUNDED]" in result
+    assert "1. KRAS mut vs WT [novelty=2, trust=3]" in result
+    assert "2. BRAF mut vs WT [uncontrolled=2]" in result
     assert "3. TP53 mut vs WT" in result

@@ -1,7 +1,7 @@
 """Browser-based annotation server for labeling hypotheses.
 
 Local HTTP server using Python stdlib. Serves a single HTML page that
-lets reviewers label hypotheses via radio buttons instead of typing
+lets reviewers rate hypotheses on multiple dimensions instead of typing
 label strings at a terminal prompt.
 """
 
@@ -12,7 +12,7 @@ from pathlib import Path
 import webbrowser
 
 from msk_cycl.labeling.labeled_store import LabeledStore
-from msk_cycl.labeling.labels import HypothesisLabel
+from msk_cycl.labeling.labels import RATING_DIMENSIONS, HypothesisRating
 from msk_cycl.labeling.storage import HypothesisStore
 
 
@@ -33,7 +33,7 @@ def _load_unlabeled(output_dir: Path, labeled_store: LabeledStore) -> list[dict]
             hid = hyp.hypothesis_id
             if hid in labeled_ids or hid in seen:
                 continue
-            if hyp.label != HypothesisLabel.PENDING:
+            if not hyp.rating.is_pending:
                 continue
 
             seen[hid] = {
@@ -82,18 +82,6 @@ def _count_all(output_dir: Path, labeled_store: LabeledStore) -> dict:
     return {"total": total, "labeled": labeled, "pending": total - labeled}
 
 
-_LABELS = [label for label in HypothesisLabel if label != HypothesisLabel.PENDING]
-
-_LABEL_DISPLAY = {
-    "correct": "Correct",
-    "red_herring": "Red Herring",
-    "confounded": "Confounded",
-    "data_issue": "Data Issue",
-    "duplicate": "Duplicate",
-    "not_novel": "Not Novel",
-    "wrong_spec": "Wrong Spec",
-}
-
 HTML_PAGE = (
     """<!DOCTYPE html>
 <html lang="en">
@@ -120,14 +108,20 @@ HTML_PAGE = (
   table.stats th, table.stats td { padding: 6px 12px; text-align: left;
                                     border-bottom: 1px solid #eee; font-size: 14px; }
   table.stats th { color: #666; font-weight: 600; }
-  .labels { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
-  .labels label { display: flex; align-items: center; gap: 6px; padding: 8px 14px;
-                  border: 2px solid #ddd; border-radius: 6px; cursor: pointer;
-                  font-size: 14px; transition: all .15s; }
-  .labels label:hover { border-color: #999; }
-  .labels input[type=radio] { accent-color: #2563eb; }
-  .labels input[type=radio]:checked + span { font-weight: 600; }
-  .labels label:has(input:checked) { border-color: #2563eb; background: #eff6ff; }
+  .dim-row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .dim-label { min-width: 130px; font-weight: 600; font-size: 14px; }
+  .dim-end { font-size: 12px; color: #888; min-width: 90px; }
+  .dim-end.right { text-align: right; }
+  .dim-buttons { display: flex; gap: 4px; }
+  .dim-buttons button { width: 36px; height: 36px; border: 2px solid #ddd;
+                         border-radius: 6px; background: #fff; cursor: pointer;
+                         font-size: 15px; font-weight: 600; transition: all .15s; }
+  .dim-buttons button:hover { border-color: #999; }
+  .dim-buttons button.selected { border-color: #2563eb; background: #eff6ff;
+                                   color: #2563eb; }
+  .dup-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+  .dup-row label { font-size: 14px; cursor: pointer; display: flex;
+                   align-items: center; gap: 6px; }
   textarea { width: 100%; height: 60px; border: 1px solid #ddd; border-radius: 6px;
              padding: 8px; font-family: inherit; font-size: 14px; resize: vertical; }
   button.submit { display: block; margin: 16px auto 0; padding: 10px 32px;
@@ -151,11 +145,23 @@ HTML_PAGE = (
 <div id="cards"></div>
 
 <script>
-const LABELS = """
+const DIMENSIONS = """
     + json.dumps(
-        [{"value": lb.value, "display": _LABEL_DISPLAY[lb.value]} for lb in _LABELS]
+        {
+            k: {
+                "label": v["label"],
+                "levels": {str(lk): lv for lk, lv in v["levels"].items()},
+            }
+            for k, v in RATING_DIMENSIONS.items()
+        }
     )
     + """;
+
+const DIM_ENDPOINTS = {
+  novelty: ["Unsurprising", "Intriguing"],
+  uncontrolled: ["Clean", "Heavily mixed"],
+  trustworthiness: ["Suspect", "Credible"],
+};
 
 async function loadStats() {
   const r = await fetch("/api/stats");
@@ -183,6 +189,24 @@ async function loadHypotheses() {
     const fmtVal = (v, digits) => v != null ? Number(v).toFixed(digits) : "N/A";
 
     const hid_short = h.hypothesis_id.substring(0, 8);
+
+    let dimHTML = "";
+    for (const [key, dim] of Object.entries(DIMENSIONS)) {
+      const ends = DIM_ENDPOINTS[key] || ["", ""];
+      dimHTML += `<div class="dim-row">
+        <span class="dim-label">${dim.label}</span>
+        <span class="dim-end">${ends[0]}</span>
+        <span class="dim-buttons">
+          ${[1,2,3].map(n =>
+            `<button type="button" data-dim="${key}" data-val="${n}"
+                     title="${dim.levels[n]}"
+                     onclick="selectDim(this,'${h.hypothesis_id}','${key}',${n})">${n}</button>`
+          ).join("")}
+        </span>
+        <span class="dim-end right">${ends[1]}</span>
+      </div>`;
+    }
+
     card.innerHTML = `
       <h2>#${idx + 1} &mdash; ${hid_short}... &mdash; ${h.created_at}</h2>
       <div class="field">
@@ -219,23 +243,31 @@ async function loadHypotheses() {
         <div class="field-value">${esc(h.summary)}</div>
       </div>
       <div class="field">
-        <div class="field-label">Label</div>
-        <div class="labels">
-          ${LABELS.map(lb =>
-            '<label><input type="radio" name="label-'
-            + h.hypothesis_id + '" value="' + lb.value
-            + '"><span>' + lb.display
-            + '</span></label>').join("")}
+        <div class="field-label">Ratings</div>
+        ${dimHTML}
+        <div class="dup-row">
+          <label><input type="checkbox" id="dup-${h.hypothesis_id}"> Duplicate</label>
         </div>
       </div>
       <div class="field">
         <div class="field-label">Notes (optional)</div>
         <textarea id="notes-${h.hypothesis_id}"></textarea>
       </div>
-      <button class="submit" onclick="submitLabel('${h.hypothesis_id}')">Submit</button>
+      <button class="submit"
+        onclick="submitRating('${h.hypothesis_id}')">Submit</button>
     `;
     container.appendChild(card);
   });
+}
+
+const selections = {};
+
+function selectDim(btn, hid, dim, val) {
+  if (!selections[hid]) selections[hid] = {};
+  selections[hid][dim] = val;
+  const row = btn.parentElement;
+  row.querySelectorAll("button").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
 }
 
 function esc(s) {
@@ -245,9 +277,13 @@ function esc(s) {
   return d.innerHTML;
 }
 
-async function submitLabel(hid) {
-  const sel = document.querySelector('input[name="label-' + hid + '"]:checked');
-  if (!sel) { showMsg("Select a label first.", true); return; }
+async function submitRating(hid) {
+  const sel = selections[hid] || {};
+  const dupEl = document.getElementById("dup-" + hid);
+  const isDup = dupEl ? dupEl.checked : false;
+
+  const hasAnyDim = sel.novelty || sel.uncontrolled || sel.trustworthiness || isDup;
+  if (!hasAnyDim) { showMsg("Rate at least one dimension.", true); return; }
 
   const notes = document.getElementById("notes-" + hid).value.trim();
   const btn = document.querySelector("#card-" + hid + " button.submit");
@@ -257,12 +293,19 @@ async function submitLabel(hid) {
   const r = await fetch("/api/label", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({hypothesis_id: hid, label: sel.value, notes: notes || null}),
+    body: JSON.stringify({
+      hypothesis_id: hid,
+      novelty: sel.novelty || null,
+      uncontrolled: sel.uncontrolled || null,
+      trustworthiness: sel.trustworthiness || null,
+      is_duplicate: isDup || null,
+      notes: notes || null,
+    }),
   });
 
   if (r.ok) {
     document.getElementById("card-" + hid).remove();
-    showMsg("Labeled " + hid.substring(0, 8) + "...", false);
+    showMsg("Rated " + hid.substring(0, 8) + "...", false);
     loadStats();
     if (!document.querySelector(".card")) {
       document.getElementById("cards").innerHTML =
@@ -332,17 +375,19 @@ def _make_handler(output_dir: Path, labeled_store: LabeledStore):
             body = json.loads(self.rfile.read(length))
 
             hid = body.get("hypothesis_id")
-            label_val = body.get("label")
-            notes = body.get("notes")
-
-            if not hid or not label_val:
-                self.send_error(400, "Missing hypothesis_id or label")
+            if not hid:
+                self.send_error(400, "Missing hypothesis_id")
                 return
 
-            try:
-                label = HypothesisLabel(label_val)
-            except ValueError:
-                self.send_error(400, f"Invalid label: {label_val}")
+            rating = HypothesisRating(
+                novelty=body.get("novelty"),
+                uncontrolled=body.get("uncontrolled"),
+                trustworthiness=body.get("trustworthiness"),
+                is_duplicate=body.get("is_duplicate"),
+            )
+
+            if rating.is_pending:
+                self.send_error(400, "At least one dimension must be rated")
                 return
 
             hyp = self._find_hypothesis(hid)
@@ -350,8 +395,8 @@ def _make_handler(output_dir: Path, labeled_store: LabeledStore):
                 self.send_error(404, f"Hypothesis {hid} not found")
                 return
 
-            hyp.label = label
-            hyp.label_notes = notes
+            hyp.rating = rating
+            hyp.notes = body.get("notes")
             hyp.labeled_at = datetime.now(UTC)
             hyp.labeled_by = "annotator"
 

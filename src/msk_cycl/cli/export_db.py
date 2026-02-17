@@ -19,7 +19,6 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Create table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS hypotheses (
             hypothesis_id TEXT PRIMARY KEY,
@@ -34,26 +33,25 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
             test_statistic TEXT,
             p_value REAL,
             summary TEXT,
-            label TEXT,
-            label_notes TEXT,
+            novelty INTEGER,
+            uncontrolled INTEGER,
+            trustworthiness INTEGER,
+            is_duplicate INTEGER,
+            notes TEXT,
             labeled_at TEXT,
             labeled_by TEXT,
             llm_model TEXT
         )
     """)
 
-    # Load all sessions
     store = HypothesisStore(storage_dir)
 
-    # Find all JSONL files
     session_files = list(storage_dir.rglob("*.jsonl"))
 
     total_exported = 0
     total_skipped = 0
 
     for file in session_files:
-        # Extract session_id from filename
-        # Filename format: {session_id}_hypotheses.jsonl or similar
         session_id = file.stem.replace("_hypotheses", "")
 
         try:
@@ -63,12 +61,10 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
             continue
 
         for hyp in hypotheses:
-            # Skip pending/unlabeled
-            if hyp.label.value == "pending":
+            if hyp.rating.is_pending:
                 total_skipped += 1
                 continue
 
-            # Build test statistic string from available fields
             stat_parts = []
             if hyp.result.hazard_ratio is not None:
                 stat_parts.append(f"HR={hyp.result.hazard_ratio:.3f}")
@@ -79,7 +75,7 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO hypotheses VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
             """,
                 (
@@ -95,8 +91,13 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
                     test_statistic_str,
                     hyp.result.p_value,
                     hyp.narrative.summary,
-                    hyp.label.value,
-                    hyp.label_notes,
+                    hyp.rating.novelty,
+                    hyp.rating.uncontrolled,
+                    hyp.rating.trustworthiness,
+                    int(hyp.rating.is_duplicate)
+                    if hyp.rating.is_duplicate is not None
+                    else None,
+                    hyp.notes,
                     (hyp.labeled_at.isoformat() if hyp.labeled_at else None),
                     hyp.labeled_by,
                     hyp.llm_model,
@@ -108,7 +109,7 @@ def export_to_sqlite(storage_dir: Path, db_path: Path):
     conn.commit()
     conn.close()
 
-    print(f"✓ Exported {total_exported} labeled hypotheses to {db_path}")
+    print(f"Exported {total_exported} labeled hypotheses to {db_path}")
     if total_skipped > 0:
         print(f"  Skipped {total_skipped} pending hypotheses")
 

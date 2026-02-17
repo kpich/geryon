@@ -1,10 +1,23 @@
 """Format prior hypotheses for injection into the LLM prompt."""
 
-from msk_cycl.labeling.labels import HypothesisLabel
 from msk_cycl.labeling.models import LabeledHypothesis
 
 MAX_RATED = 50
 MAX_SESSION = 20
+
+
+def _format_rating_tag(hyp: LabeledHypothesis) -> str:
+    """Build compact [novelty=2, trust=3, dup] tag from rated dimensions."""
+    parts: list[str] = []
+    if hyp.rating.novelty is not None:
+        parts.append(f"novelty={hyp.rating.novelty}")
+    if hyp.rating.uncontrolled is not None:
+        parts.append(f"uncontrolled={hyp.rating.uncontrolled}")
+    if hyp.rating.trustworthiness is not None:
+        parts.append(f"trust={hyp.rating.trustworthiness}")
+    if hyp.rating.is_duplicate is True:
+        parts.append("dup")
+    return "[" + ", ".join(parts) + "]"
 
 
 def format_previous_hypotheses(
@@ -22,7 +35,7 @@ def format_previous_hypotheses(
     """
     labeled_ids = {h.hypothesis_id for h in labeled}
 
-    rated = [h for h in labeled if h.label != HypothesisLabel.PENDING]
+    rated = [h for h in labeled if not h.rating.is_pending]
 
     unrated_session = [
         h for h in session_previous if h.hypothesis_id not in labeled_ids
@@ -41,10 +54,10 @@ def format_previous_hypotheses(
                 f"{hyp.proposal.cohort_a_description} vs "
                 f"{hyp.proposal.cohort_b_description}"
             )
-            tag = f"[{hyp.label.value.upper()}]"
-            entry = f"{idx}. {tag} {desc}"
-            if hyp.label_notes:
-                entry += f" — {hyp.label_notes}"
+            tag = _format_rating_tag(hyp)
+            entry = f"{idx}. {desc} {tag}"
+            if hyp.notes:
+                entry += f" — {hyp.notes}"
             lines.append(entry)
             idx += 1
         if len(rated) > MAX_RATED:
