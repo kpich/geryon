@@ -12,13 +12,13 @@ from msk_cycl.llm.generator import HypothesisProposal
 
 
 class SessionTracer:
-    """Writes a compact {session_id}_trace.jsonl event log."""
+    """Writes a compact trace.jsonl event log per run directory."""
 
     def __init__(self, storage_dir: Path, session_id: str, model: str):
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
-        self.trace_path = self.storage_dir / f"{session_id}_trace.jsonl"
-        self.detail_path = self.storage_dir / f"{session_id}_detail.jsonl"
+        self.trace_path = self.storage_dir / "trace.jsonl"
+        self.detail_path = self.storage_dir / "detail.jsonl"
 
         self._write(
             event="session_start",

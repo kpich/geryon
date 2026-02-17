@@ -57,6 +57,9 @@ class SessionConfig(BaseModel):
         default=True, description="Enable LLM conversation logging"
     )
 
+    def to_config_dict(self) -> dict:
+        return self.model_dump(mode="json", exclude={"api_key"})
+
 
 class Session:
     """Manages a hypothesis generation session.

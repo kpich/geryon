@@ -8,13 +8,14 @@ from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.labeling.schema import HypothesisRecord, SessionFileMetadata
 
 SUPPORTED_VERSIONS = {1}
+HYPOTHESES_FILENAME = "hypotheses.jsonl"
 
 
 class HypothesisStore:
     """JSONL storage for labeled hypotheses.
 
-    Simple append-only interface: save() creates session files as needed,
-    load_session() reads all hypotheses from a session.
+    Simple append-only interface: save() appends to the session file,
+    load() reads all hypotheses back. The directory _is_ the session.
     """
 
     def __init__(self, storage_dir: Path | str):
@@ -36,7 +37,7 @@ class HypothesisStore:
         hypothesis : LabeledHypothesis
             Hypothesis to save
         """
-        session_file = self.storage_dir / f"{hypothesis.session_id}.jsonl"
+        session_file = self.storage_dir / HYPOTHESES_FILENAME
 
         if not session_file.exists():
             metadata = SessionFileMetadata(
@@ -53,20 +54,15 @@ class HypothesisStore:
         with open(session_file, "a") as f:
             f.write(json_line)
 
-    def load_session(self, session_id: str) -> list[LabeledHypothesis]:
-        """Load all hypotheses from a session.
-
-        Parameters
-        ----------
-        session_id : str
-            Session identifier
+    def load(self) -> list[LabeledHypothesis]:
+        """Load all hypotheses from this store's directory.
 
         Returns
         -------
         list[LabeledHypothesis]
             Hypotheses in the session
         """
-        session_file = self.storage_dir / f"{session_id}.jsonl"
+        session_file = self.storage_dir / HYPOTHESES_FILENAME
 
         if not session_file.exists():
             return []

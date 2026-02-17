@@ -221,7 +221,7 @@ class AutonomousWorkflow:
 
         # Load labeled hypotheses (from prior annotation) and same-session hypotheses
         labeled = self.labeled_store.load_all()
-        session_previous = self.store.load_session(self.session.session_id)
+        session_previous = self.store.load()
         previous_context = self._format_previous_hypotheses(labeled, session_previous)
 
         print(

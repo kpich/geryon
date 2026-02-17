@@ -5,9 +5,10 @@ Can be run as: python -m msk_cycl.workflow.runner
 
 import argparse
 from datetime import datetime
+import json
 import logging
 from pathlib import Path
-from typing import Literal
+import uuid
 
 from msk_cycl.labeling.models import LabeledHypothesis
 from msk_cycl.workflow import SessionConfig
@@ -49,31 +50,30 @@ def run_workflow(
     output_dir: Path | None = None,
     data_dir: Path | None = None,
     data_base: Path | None = None,
-    provider: Literal["openai", "anthropic", "aws_bedrock"] = "aws_bedrock",
-    model: str = "us.anthropic.claude-opus-4-5-20251101-v1:0",
+    provider: str | None = None,
+    model: str | None = None,
     base_url: str | None = None,
     api_key: str | None = None,
     aws_region: str | None = None,
     aws_profile: str | None = None,
-    num_proposals: int = 5,
-    max_iterations: int = 10,
-    enable_llm_logging: bool = True,
-    labeled_dir: Path = Path("labeled_hypotheses"),
+    num_proposals: int | None = None,
+    max_iterations: int | None = None,
+    enable_llm_logging: bool | None = None,
+    labeled_dir: Path | None = None,
 ) -> list[LabeledHypothesis]:
     """Run hypothesis generation workflow.
 
     Parameters
     ----------
     output_dir : Path, optional
-        Output directory for hypothesis JSONL files
-        (default: cycl_run_outputs/YYYY-MM-DD)
+        Base output directory (default: cycl_run_outputs/)
     data_dir : Path, optional
         ETL output directory (default: auto-detect latest from data_base)
     data_base : Path, optional
         Base directory for ETL outputs (default: ~/data/msk_cycle_data)
-    provider : Literal["openai", "anthropic", "aws_bedrock"]
+    provider : str, optional
         LLM provider (default: aws_bedrock)
-    model : str
+    model : str, optional
         Model name (default: us.anthropic.claude-opus-4-5-20251101-v1:0)
     base_url : str, optional
         Custom API endpoint (e.g., AWS-hosted inference server)
@@ -83,13 +83,13 @@ def run_workflow(
         AWS region for Bedrock (default: us-east-1)
     aws_profile : str, optional
         AWS credentials profile name
-    num_proposals : int
+    num_proposals : int, optional
         Number of proposals per iteration (default: 5)
-    max_iterations : int
+    max_iterations : int, optional
         Maximum iterations (default: 10)
-    enable_llm_logging : bool
+    enable_llm_logging : bool, optional
         Enable LLM conversation logging (default: True)
-    labeled_dir : Path
+    labeled_dir : Path, optional
         Directory with labeled hypothesis JSON files
         (default: labeled_hypotheses/)
 
@@ -98,11 +98,13 @@ def run_workflow(
     list[LabeledHypothesis]
         All generated hypotheses
     """
-    if output_dir is None:
-        today = datetime.now().strftime("%Y-%m-%d")
-        output_dir = Path.cwd() / "cycl_run_outputs" / today
+    session_id = str(uuid.uuid4())
+    today = datetime.now().strftime("%Y-%m-%d")
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_dir is None:
+        output_dir = Path.cwd() / "cycl_run_outputs"
+    run_dir = output_dir / today / session_id
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     if data_base is None:
         data_base = Path.home() / "data" / "msk_cycle_data"
@@ -113,23 +115,31 @@ def run_workflow(
         parquet_dir = data_dir
 
     print(f"Using ETL data from: {parquet_dir}")
-    print(f"Output directory: {output_dir}")
+    print(f"Output directory: {run_dir}")
     print()
 
+    overrides: dict = {
+        "provider_type": provider,
+        "model": model,
+        "base_url": base_url,
+        "api_key": api_key,
+        "aws_region": aws_region,
+        "aws_profile": aws_profile,
+        "num_proposals_per_iteration": num_proposals,
+        "max_iterations": max_iterations,
+        "enable_llm_logging": enable_llm_logging,
+        "labeled_dir": labeled_dir,
+    }
+    overrides = {k: v for k, v in overrides.items() if v is not None}
+
     config = SessionConfig(
+        session_id=session_id,
         parquet_dir=parquet_dir,
-        storage_dir=output_dir,
-        provider_type=provider,
-        model=model,
-        base_url=base_url,
-        api_key=api_key,
-        aws_region=aws_region,
-        aws_profile=aws_profile,
-        num_proposals_per_iteration=num_proposals,
-        max_iterations=max_iterations,
-        enable_llm_logging=enable_llm_logging,
-        labeled_dir=labeled_dir,
+        storage_dir=run_dir,
+        **overrides,
     )
+
+    (run_dir / "config.json").write_text(json.dumps(config.to_config_dict(), indent=2))
 
     print("Initializing autonomous workflow...")
     print()
@@ -140,7 +150,7 @@ def run_workflow(
 
     print()
 
-    print(f"Running full session (up to {max_iterations} iterations)...")
+    print(f"Running full session (up to {config.max_iterations} iterations)...")
     print()
 
     hypotheses = workflow.run_full_session()
@@ -148,7 +158,7 @@ def run_workflow(
     print()
     print("Session complete!")
     print(f"  Generated {len(hypotheses)} hypotheses")
-    print(f"  Stored in: {output_dir}")
+    print(f"  Stored in: {run_dir}")
 
     return hypotheses
 
@@ -198,12 +208,12 @@ def main() -> None:
     parser.add_argument(
         "--provider",
         choices=["openai", "anthropic", "aws_bedrock"],
-        default="aws_bedrock",
+        default=None,
         help="LLM provider (default: aws_bedrock)",
     )
     parser.add_argument(
         "--model",
-        default="us.anthropic.claude-opus-4-5-20251101-v1:0",
+        default=None,
         help="Model name (default: us.anthropic.claude-opus-4-5-20251101-v1:0)",
     )
     parser.add_argument(
@@ -216,6 +226,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--aws-region",
+        default=None,
         help="AWS region for Bedrock (default: us-east-1)",
     )
     parser.add_argument(
@@ -225,19 +236,19 @@ def main() -> None:
     parser.add_argument(
         "--num-proposals",
         type=int,
-        default=5,
+        default=None,
         help="Number of proposals per iteration (default: 5)",
     )
     parser.add_argument(
         "--max-iterations",
         type=int,
-        default=10,
+        default=None,
         help="Maximum iterations (default: 10)",
     )
     parser.add_argument(
         "--labeled-dir",
         type=Path,
-        default=Path("labeled_hypotheses"),
+        default=None,
         help="Directory with labeled hypothesis JSON files "
         "(default: labeled_hypotheses/)",
     )
@@ -269,7 +280,7 @@ def main() -> None:
         aws_profile=args.aws_profile,
         num_proposals=args.num_proposals,
         max_iterations=args.max_iterations,
-        enable_llm_logging=not args.no_log,
+        enable_llm_logging=False if args.no_log else None,
         labeled_dir=args.labeled_dir,
     )
 
