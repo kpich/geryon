@@ -27,5 +27,8 @@ class HypothesisLabel(str, Enum):
     NOT_NOVEL = "not_novel"
     """Known or obvious result, not informative."""
 
+    WRONG_SPEC = "wrong_spec"
+    """Spec filters don't capture the intended cohort semantics."""
+
     PENDING = "pending"
     """Not yet labeled by human reviewer."""
