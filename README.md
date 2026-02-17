@@ -61,18 +61,22 @@ uv run ruff format src/
 # Or: make format
 ```
 
-### Reviewing hypotheses
+### Annotating hypotheses
 
 ```bash
-# List available sessions
-python -m msk_cycl.cli.list_sessions --storage-dir cycl_run_outputs/
+# Launch browser-based annotator (recommended)
+make annotate
 
-# Review a session interactively
-python -m msk_cycl.cli.review \
-  --storage-dir cycl_run_outputs/ \
-  --session <session_id> \
-  --reviewer "Your Name"
+# Or with options:
+uv run python -m msk_cycl.cli.annotate \
+  --output-dir cycl_run_outputs/ \
+  --labeled-dir labeled_hypotheses/ \
+  --port 8765
+```
 
+Opens a local page at `http://localhost:8765` that auto-discovers all session JSONLs under `cycl_run_outputs/`, shows unlabeled hypotheses newest-first with cohort descriptions, stats, and narrative, and lets you label via radio buttons. Labels are saved as individual JSON files in `labeled_hypotheses/`.
+
+```bash
 # Export labeled hypotheses to SQLite
 python -m msk_cycl.cli.export_db \
   --storage-dir cycl_run_outputs/ \
