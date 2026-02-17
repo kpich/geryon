@@ -1,7 +1,5 @@
 """Cox proportional hazards method implementation."""
 
-import warnings
-
 from lifelines import CoxPHFitter  # type: ignore
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
@@ -47,14 +45,13 @@ class CoxHazardRatioMethod:
 
         # confidence_intervals_ returns log-scale (coefficient); exponentiate to match
         # HR
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
+        with np.errstate(over="ignore"):
             ci_lower = float(np.exp(ci.iloc[0]))
             ci_upper = float(np.exp(ci.iloc[1]))
 
         return {
             "hazard_ratio": float(hr),
-            "confidence_interval_lower": ci_lower,
-            "confidence_interval_upper": ci_upper,
+            "confidence_interval_lower": ci_lower if np.isfinite(ci_lower) else None,
+            "confidence_interval_upper": ci_upper if np.isfinite(ci_upper) else None,
             "p_value": float(p_value),
         }
