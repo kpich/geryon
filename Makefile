@@ -36,6 +36,10 @@ format:
 etl:
 	./scripts/etl.sh
 
+.PHONY: profile
+profile:
+	uv run python -m msk_cycl.etl.profiler --dir $$(ls -d ~/data/msk_cycle_data/*/ | tail -1)
+
 .PHONY: etl-clean
 etl-clean:
 	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*

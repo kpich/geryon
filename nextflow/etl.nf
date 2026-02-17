@@ -28,7 +28,7 @@ process extractTSV {
     path tsv_file
 
     output:
-    path "${tsv_file.baseName}.parquet"
+    tuple path("${tsv_file.baseName}.parquet"), path("${tsv_file.baseName}.profile.json")
 
     script:
     """
@@ -45,14 +45,14 @@ process publishResults {
                overwrite: false
 
     input:
-    path parquet
+    tuple path(parquet), path(profile)
 
     output:
-    path parquet
+    tuple path(parquet), path(profile)
 
     script:
     """
-    echo "Publishing ${parquet.name}"
+    echo "Publishing ${parquet.name} + ${profile.name}"
     """
 }
 

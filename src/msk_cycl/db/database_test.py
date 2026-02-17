@@ -104,3 +104,31 @@ def test_database_works_as_context_manager(tmp_path: Path):
     with Database(tmp_path) as db:
         tables = db.list_tables()
         assert "clinical_patient" in tables
+
+
+def test_database_loads_profiles(tmp_path: Path):
+    """Profile JSON files alongside parquet are loaded into profiles dict."""
+    import json
+
+    df = pd.DataFrame({"PATIENT_ID": ["P001"]})
+    df.to_parquet(tmp_path / "data_clinical_patient.parquet", index=False)
+
+    profile = {"table_name": "clinical_patient", "row_count": 1, "columns": []}
+    (tmp_path / "data_clinical_patient.profile.json").write_text(json.dumps(profile))
+
+    db = Database(tmp_path)
+    p = db.get_profile("clinical_patient")
+    assert p is not None
+    assert p["row_count"] == 1
+    db.close()
+
+
+def test_database_no_profiles_graceful(tmp_path: Path):
+    """No profile files → empty dict, everything works."""
+    df = pd.DataFrame({"PATIENT_ID": ["P001"]})
+    df.to_parquet(tmp_path / "data_clinical_patient.parquet", index=False)
+
+    db = Database(tmp_path)
+    assert db.profiles == {}
+    assert db.get_profile("clinical_patient") is None
+    db.close()

@@ -22,6 +22,7 @@ def test_list_tables():
 def test_describe_table_basic():
     """Test describe_table formats table schema."""
     mock_db = Mock()
+    mock_db.get_profile.return_value = None
 
     # Mock DESCRIBE query
     describe_df = pd.DataFrame(
@@ -55,6 +56,7 @@ def test_describe_table_basic():
 def test_describe_table_shows_sample_values():
     """Test describe_table includes sample values for VARCHAR columns."""
     mock_db = Mock()
+    mock_db.get_profile.return_value = None
 
     # Mock DESCRIBE query
     describe_df = pd.DataFrame(
@@ -82,6 +84,7 @@ def test_describe_table_shows_sample_values():
 def test_describe_table_limits_to_20_columns():
     """Test describe_table limits output to 20 columns."""
     mock_db = Mock()
+    mock_db.get_profile.return_value = None
 
     # Create table with 30 columns
     columns = [f"COL_{i}" for i in range(30)]
@@ -103,6 +106,7 @@ def test_describe_table_limits_to_20_columns():
 def test_describe_table_handles_error():
     """Test describe_table returns error message on failure."""
     mock_db = Mock()
+    mock_db.get_profile.return_value = None
     mock_db.execute.side_effect = Exception("Table not found")
 
     result = describe_table(mock_db, "nonexistent")
@@ -178,3 +182,71 @@ def test_query_data_handles_sql_error():
 
     assert "ERROR" in result
     assert "Exception" in result
+
+
+def test_describe_table_uses_profile():
+    """When profile exists, describe_table uses profile-based rendering."""
+    mock_db = Mock()
+    mock_db.get_profile.return_value = {
+        "table_name": "clinical_patient",
+        "row_count": 1000,
+        "column_count": 3,
+        "profile_strategy": "standard",
+        "columns": [
+            {
+                "column_name": "PATIENT_ID",
+                "dtype": "VARCHAR",
+                "null_count": 0,
+                "null_rate": 0.0,
+                "distinct_count": 1000,
+                "total_count": 1000,
+                "top_values": [{"value": "P001", "count": 1}],
+                "is_high_cardinality": True,
+            },
+            {
+                "column_name": "SEX",
+                "dtype": "VARCHAR",
+                "null_count": 0,
+                "null_rate": 0.0,
+                "distinct_count": 2,
+                "total_count": 1000,
+                "top_values": [
+                    {"value": "Female", "count": 520},
+                    {"value": "Male", "count": 480},
+                ],
+                "is_high_cardinality": False,
+            },
+        ],
+    }
+
+    result = describe_table(mock_db, "clinical_patient")
+
+    assert "1,000 rows" in result
+    assert "3 columns" in result
+    assert "Distinct" in result
+    assert "Null%" in result
+    assert "Female (520)" in result
+    assert "Male (480)" in result
+    # Should NOT have called execute (no fallback)
+    mock_db.execute.assert_not_called()
+
+
+def test_describe_table_fallback_without_profile():
+    """No profile → falls back to old sample-based behavior."""
+    mock_db = Mock()
+    mock_db.get_profile.return_value = None
+
+    describe_df = pd.DataFrame(
+        {
+            "column_name": ["PATIENT_ID", "AGE"],
+            "column_type": ["VARCHAR", "BIGINT"],
+        }
+    )
+    count_df = pd.DataFrame({"cnt": [50]})
+    sample_df = pd.DataFrame({"PATIENT_ID": ["P001", "P002"], "AGE": [65, 52]})
+    mock_db.execute.side_effect = [describe_df, count_df, sample_df]
+
+    result = describe_table(mock_db, "clinical_patient")
+
+    assert "Sample Values" in result
+    assert "P001" in result or "P002" in result
