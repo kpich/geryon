@@ -10,7 +10,7 @@ class CoxHazardRatioMethod:
 
     def calculate(
         self, cohort_a_data: pd.DataFrame, cohort_b_data: pd.DataFrame
-    ) -> dict[str, float]:
+    ) -> dict[str, float | None]:
         """Calculate hazard ratio using Cox proportional hazards model.
 
         Parameters
