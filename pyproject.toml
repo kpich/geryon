@@ -36,7 +36,11 @@ dev = [
     "types-tqdm",
 ]
 test = [
+    "flask>=2.3",
     "pytest",
+]
+annotate = [
+    "flask>=2.3",
 ]
 viewer = [
     "harlequin[duckdb]>=1.0",
@@ -47,6 +51,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mbird_data = ["py.typed"]
+msk_cycl = ["cli/templates/*.html"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
