@@ -43,6 +43,7 @@ class HypothesisRating(BaseModel):
     uncontrolled: int | None = None
     trustworthiness: int | None = None
     is_duplicate: bool | None = None
+    is_na: bool | None = None
 
     @field_validator("novelty", "uncontrolled", "trustworthiness")
     @classmethod
@@ -60,5 +61,6 @@ class HypothesisRating(BaseModel):
                 self.uncontrolled,
                 self.trustworthiness,
                 self.is_duplicate,
+                self.is_na,
             )
         )

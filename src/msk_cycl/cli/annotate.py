@@ -62,6 +62,7 @@ def _load_unlabeled(output_dir: Path, labeled_store: LabeledStore) -> list[dict]
                         "uncontrolled": hyp.rating.uncontrolled,
                         "trustworthiness": hyp.rating.trustworthiness,
                         "is_duplicate": hyp.rating.is_duplicate,
+                        "is_na": hyp.rating.is_na,
                     }
                     if hyp.labeled_by == "llm_critic"
                     else None
@@ -134,6 +135,11 @@ HTML_PAGE = (
   .dup-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
   .dup-row label { font-size: 14px; cursor: pointer; display: flex;
                    align-items: center; gap: 6px; }
+  button.na-btn { padding: 6px 16px; border: 2px solid #ddd; border-radius: 6px;
+                  background: #fff; cursor: pointer; font-size: 13px; font-weight: 600;
+                  color: #666; transition: all .15s; }
+  button.na-btn:hover { border-color: #999; }
+  button.na-btn.selected { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
   textarea { width: 100%; height: 60px; border: 1px solid #ddd; border-radius: 6px;
              padding: 8px; font-family: inherit; font-size: 14px; resize: vertical; }
   button.submit { display: block; margin: 16px auto 0; padding: 10px 32px;
@@ -262,7 +268,10 @@ async function loadHypotheses() {
         <div class="field-label">Ratings</div>
         ${dimHTML}
         <div class="dup-row">
-          <label><input type="checkbox" id="dup-${h.hypothesis_id}"> Duplicate</label>
+          <label><input type="checkbox" id="dup-${h.hypothesis_id}"
+                        onchange="clearNA('${h.hypothesis_id}')"> Duplicate</label>
+          <button type="button" class="na-btn" id="na-${h.hypothesis_id}"
+                  onclick="toggleNA('${h.hypothesis_id}')">N/A &mdash; Result is broken</button>
         </div>
       </div>
       <div class="field">
@@ -306,6 +315,25 @@ function selectDim(btn, hid, dim, val) {
   const row = btn.parentElement;
   row.querySelectorAll("button").forEach(b => b.classList.remove("selected"));
   btn.classList.add("selected");
+  clearNA(hid);
+}
+
+function toggleNA(hid) {
+  const naBtn = document.getElementById("na-" + hid);
+  const isActive = naBtn.classList.toggle("selected");
+  if (isActive) {
+    // Clear all dimension selections
+    const card = document.getElementById("card-" + hid);
+    card.querySelectorAll(".dim-buttons button").forEach(b => b.classList.remove("selected"));
+    selections[hid] = {};
+    const dupEl = document.getElementById("dup-" + hid);
+    if (dupEl) dupEl.checked = false;
+  }
+}
+
+function clearNA(hid) {
+  const naBtn = document.getElementById("na-" + hid);
+  if (naBtn) naBtn.classList.remove("selected");
 }
 
 function esc(s) {
@@ -319,8 +347,10 @@ async function submitRating(hid) {
   const sel = selections[hid] || {};
   const dupEl = document.getElementById("dup-" + hid);
   const isDup = dupEl ? dupEl.checked : false;
+  const naBtn = document.getElementById("na-" + hid);
+  const isNA = naBtn ? naBtn.classList.contains("selected") : false;
 
-  const hasAnyDim = sel.novelty || sel.uncontrolled || sel.trustworthiness || isDup;
+  const hasAnyDim = sel.novelty || sel.uncontrolled || sel.trustworthiness || isDup || isNA;
   if (!hasAnyDim) { showMsg("Rate at least one dimension.", true); return; }
 
   const notes = document.getElementById("notes-" + hid).value.trim();
@@ -337,6 +367,7 @@ async function submitRating(hid) {
       uncontrolled: sel.uncontrolled || null,
       trustworthiness: sel.trustworthiness || null,
       is_duplicate: isDup || null,
+      is_na: isNA || null,
       notes: notes || null,
     }),
   });
@@ -422,6 +453,7 @@ def _make_handler(output_dir: Path, labeled_store: LabeledStore):
                 uncontrolled=body.get("uncontrolled"),
                 trustworthiness=body.get("trustworthiness"),
                 is_duplicate=body.get("is_duplicate"),
+                is_na=body.get("is_na"),
             )
 
             if rating.is_pending:
