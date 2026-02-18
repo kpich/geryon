@@ -43,7 +43,7 @@ class ResultNarrator:
             ChatMessage(role="user", content=user_prompt),
         ]
 
-        response = self.provider.generate(messages, temperature=0.3)
+        response = self.provider.generate(messages, temperature=0.3, cache_system=True)
         narrative = self._parse_narrative(response.content)
 
         if self.logger:
