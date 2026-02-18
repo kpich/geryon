@@ -1,15 +1,16 @@
 """Browser-based annotation server for labeling hypotheses.
 
-Local HTTP server using Python stdlib. Serves a single HTML page that
-lets reviewers rate hypotheses on multiple dimensions instead of typing
-label strings at a terminal prompt.
+Flask app that serves a template and JSON API. Lets reviewers rate
+hypotheses on multiple dimensions instead of typing label strings
+at a terminal prompt.
 """
 
 from datetime import UTC, datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import json
 from pathlib import Path
 import webbrowser
+
+from flask import Flask, jsonify, render_template, request
+from pydantic import ValidationError
 
 from msk_cycl.labeling.labeled_store import LabeledStore
 from msk_cycl.labeling.labels import RATING_DIMENSIONS, HypothesisRating
@@ -94,360 +95,52 @@ def _count_all(output_dir: Path, labeled_store: LabeledStore) -> dict:
     return {"total": total, "labeled": labeled, "pending": total - labeled}
 
 
-# ruff: noqa: E501
-HTML_PAGE = (
-    """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CYCL Hypothesis Annotator</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         background: #f5f5f5; color: #333; line-height: 1.5; padding: 20px; }
-  h1 { text-align: center; margin-bottom: 8px; }
-  #stats { text-align: center; color: #666; margin-bottom: 24px; font-size: 14px; }
-  .empty { text-align: center; color: #999; margin-top: 60px; font-size: 18px; }
-  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12);
-          padding: 24px; margin: 0 auto 24px; max-width: 800px; }
-  .card h2 { font-size: 14px; color: #999; margin-bottom: 12px; }
-  .field { margin-bottom: 12px; }
-  .field-label { font-weight: 600; font-size: 13px; color: #666;
-                 text-transform: uppercase; letter-spacing: .5px;
-                 margin-bottom: 2px; }
-  .field-value { font-size: 15px; }
-  table.stats { border-collapse: collapse; width: 100%; margin: 8px 0; }
-  table.stats th, table.stats td { padding: 6px 12px; text-align: left;
-                                    border-bottom: 1px solid #eee; font-size: 14px; }
-  table.stats th { color: #666; font-weight: 600; }
-  .dim-row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
-  .dim-label { min-width: 130px; font-weight: 600; font-size: 14px; }
-  .dim-end { font-size: 12px; color: #888; min-width: 90px; }
-  .dim-end.right { text-align: right; }
-  .dim-buttons { display: flex; gap: 4px; }
-  .dim-buttons button { width: 36px; height: 36px; border: 2px solid #ddd;
-                         border-radius: 6px; background: #fff; cursor: pointer;
-                         font-size: 15px; font-weight: 600; transition: all .15s; }
-  .dim-buttons button:hover { border-color: #999; }
-  .dim-buttons button.selected { border-color: #2563eb; background: #eff6ff;
-                                   color: #2563eb; }
-  .dup-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
-  .dup-row label { font-size: 14px; cursor: pointer; display: flex;
-                   align-items: center; gap: 6px; }
-  button.na-btn { padding: 6px 16px; border: 2px solid #ddd; border-radius: 6px;
-                  background: #fff; cursor: pointer; font-size: 13px; font-weight: 600;
-                  color: #666; transition: all .15s; }
-  button.na-btn:hover { border-color: #999; }
-  button.na-btn.selected { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
-  textarea { width: 100%; height: 60px; border: 1px solid #ddd; border-radius: 6px;
-             padding: 8px; font-family: inherit; font-size: 14px; resize: vertical; }
-  button.submit { display: block; margin: 16px auto 0; padding: 10px 32px;
-                  background: #2563eb; color: #fff; border: none; border-radius: 6px;
-                  font-size: 15px; font-weight: 600; cursor: pointer; }
-  button.submit:hover { background: #1d4ed8; }
-  button.submit:disabled { background: #93c5fd; cursor: not-allowed; }
-  .msg { text-align: center; padding: 12px; border-radius: 6px; margin: 0 auto 16px;
-         max-width: 800px; font-size: 14px; }
-  .msg.ok { background: #dcfce7; color: #166534; }
-  .msg.err { background: #fee2e2; color: #991b1b; }
-  pre.spec { background: #f8f8f8; border: 1px solid #e0e0e0;
-             border-radius: 6px; padding: 12px; font-size: 13px;
-             overflow-x: auto; line-height: 1.4; }
-</style>
-</head>
-<body>
-<h1>CYCL Hypothesis Annotator</h1>
-<div id="stats"></div>
-<div id="msg"></div>
-<div id="cards"></div>
+def _find_hypothesis(output_dir: Path, hypothesis_id: str):
+    """Find a hypothesis by ID across all session stores."""
+    for jsonl_file in output_dir.rglob("hypotheses.jsonl"):
+        store = HypothesisStore(jsonl_file.parent)
+        try:
+            for hyp in store.load():
+                if hyp.hypothesis_id == hypothesis_id:
+                    return hyp
+        except Exception:
+            continue
+    return None
 
-<script>
-const DIMENSIONS = """
-    + json.dumps(
-        {
-            k: {
-                "label": v["label"],
-                "levels": {str(lk): lv for lk, lv in v["levels"].items()},
-            }
-            for k, v in RATING_DIMENSIONS.items()
+
+def create_app(output_dir: Path, labeled_store: LabeledStore) -> Flask:
+    """App factory for the annotation server."""
+    app = Flask(__name__)
+
+    dimensions = {
+        k: {
+            "label": v["label"],
+            "levels": {str(lk): lv for lk, lv in v["levels"].items()},
         }
-    )
-    + """;
-
-const DIM_ENDPOINTS = {
-  novelty: ["Unsurprising", "Intriguing"],
-  uncontrolled: ["Clean", "Heavily mixed"],
-  trustworthiness: ["Suspect", "Credible"],
-};
-
-async function loadStats() {
-  const r = await fetch("/api/stats");
-  const s = await r.json();
-  document.getElementById("stats").textContent =
-    s.total + " total | " + s.labeled + " labeled | " + s.pending + " pending";
-}
-
-async function loadHypotheses() {
-  const r = await fetch("/api/hypotheses");
-  const hyps = await r.json();
-  const container = document.getElementById("cards");
-  container.innerHTML = "";
-
-  if (hyps.length === 0) {
-    container.innerHTML = '<div class="empty">No unlabeled hypotheses.</div>';
-    return;
-  }
-
-  hyps.forEach((h, idx) => {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.id = "card-" + h.hypothesis_id;
-
-    const fmtVal = (v, digits) => v != null ? Number(v).toFixed(digits) : "N/A";
-
-    const hid_short = h.hypothesis_id.substring(0, 8);
-    const iterTag = h.iteration ? ` | iter ${h.iteration}` : "";
-    const criticBadge = h.labeled_by === "llm_critic"
-      ? ' <span style="background:#f59e0b;color:#fff;font-size:10px;font-variant:small-caps;padding:2px 6px;border-radius:3px;margin-left:6px">LLM CRITIC</span>'
-      : "";
-
-    let dimHTML = "";
-    for (const [key, dim] of Object.entries(DIMENSIONS)) {
-      const ends = DIM_ENDPOINTS[key] || ["", ""];
-      dimHTML += `<div class="dim-row">
-        <span class="dim-label">${dim.label}</span>
-        <span class="dim-end">${ends[0]}</span>
-        <span class="dim-buttons">
-          ${[1,2,3].map(n =>
-            `<button type="button" data-dim="${key}" data-val="${n}"
-                     title="${dim.levels[n]}"
-                     onclick="selectDim(this,'${h.hypothesis_id}','${key}',${n})">${n}</button>`
-          ).join("")}
-        </span>
-        <span class="dim-end right">${ends[1]}</span>
-      </div>`;
+        for k, v in RATING_DIMENSIONS.items()
     }
 
-    card.innerHTML = `
-      <h2>#${idx + 1} &mdash; ${hid_short}...${iterTag} &mdash; ${h.created_at}${criticBadge}</h2>
-      <div class="field">
-        <div class="field-label">Cohort A</div>
-        <div class="field-value">${esc(h.cohort_a_description)}</div>
-      </div>
-      <div class="field">
-        <div class="field-label">Cohort B</div>
-        <div class="field-value">${esc(h.cohort_b_description)}</div>
-      </div>
-      <div class="field">
-        <div class="field-label">Rationale</div>
-        <div class="field-value">${esc(h.rationale)}</div>
-      </div>
-      <table class="stats">
-        <tr><th>N (A)</th><th>N (B)</th><th>HR</th><th>95% CI</th><th>p-value</th></tr>
-        <tr>
-          <td>${h.cohort_a_size}</td>
-          <td>${h.cohort_b_size}</td>
-          <td>${fmtVal(h.hazard_ratio, 3)}</td>
-          <td>[${fmtVal(h.confidence_interval_lower, 3)},
-              ${fmtVal(h.confidence_interval_upper, 3)}]</td>
-          <td>${fmtVal(h.p_value, 4)}</td>
-        </tr>
-      </table>
-      <div class="field">
-        <div class="field-label">Spec</div>
-        <pre class="spec">${esc(
-          JSON.stringify(h.spec, null, 2)
-        )}</pre>
-      </div>
-      <div class="field">
-        <div class="field-label">Summary</div>
-        <div class="field-value">${esc(h.summary)}</div>
-      </div>
-      <div class="field">
-        <div class="field-label">Ratings</div>
-        ${dimHTML}
-        <div class="dup-row">
-          <label><input type="checkbox" id="dup-${h.hypothesis_id}"
-                        onchange="clearNA('${h.hypothesis_id}')"> Duplicate</label>
-          <button type="button" class="na-btn" id="na-${h.hypothesis_id}"
-                  onclick="toggleNA('${h.hypothesis_id}')">N/A &mdash; Result is broken</button>
-        </div>
-      </div>
-      <div class="field">
-        <div class="field-label">Notes (optional)</div>
-        <textarea id="notes-${h.hypothesis_id}"></textarea>
-      </div>
-      <button class="submit"
-        onclick="submitRating('${h.hypothesis_id}')">Submit</button>
-    `;
-    container.appendChild(card);
+    @app.get("/")
+    def index():
+        return render_template("annotate.html", dimensions=dimensions)
 
-    // Pre-fill critic ratings
-    if (h.critic_rating) {
-      if (!selections[h.hypothesis_id]) selections[h.hypothesis_id] = {};
-      for (const [dim, val] of Object.entries(h.critic_rating)) {
-        if (dim === "is_duplicate") {
-          if (val) {
-            const dupEl = document.getElementById("dup-" + h.hypothesis_id);
-            if (dupEl) dupEl.checked = true;
-          }
-        } else if (val != null) {
-          selections[h.hypothesis_id][dim] = val;
-          const btn = card.querySelector(
-                `button[data-dim="${dim}"][data-val="${val}"]`);
-          if (btn) btn.classList.add("selected");
-        }
-      }
-    }
-    if (h.critic_notes) {
-      const notesEl = document.getElementById("notes-" + h.hypothesis_id);
-      if (notesEl) notesEl.value = h.critic_notes;
-    }
-  });
-}
+    @app.get("/api/hypotheses")
+    def api_hypotheses():
+        return jsonify(_load_unlabeled(output_dir, labeled_store))
 
-const selections = {};
+    @app.get("/api/stats")
+    def api_stats():
+        return jsonify(_count_all(output_dir, labeled_store))
 
-function selectDim(btn, hid, dim, val) {
-  if (!selections[hid]) selections[hid] = {};
-  selections[hid][dim] = val;
-  const row = btn.parentElement;
-  row.querySelectorAll("button").forEach(b => b.classList.remove("selected"));
-  btn.classList.add("selected");
-  clearNA(hid);
-}
+    @app.post("/api/label")
+    def api_label():
+        body = request.get_json()
 
-function toggleNA(hid) {
-  const naBtn = document.getElementById("na-" + hid);
-  const isActive = naBtn.classList.toggle("selected");
-  if (isActive) {
-    // Clear all dimension selections
-    const card = document.getElementById("card-" + hid);
-    card.querySelectorAll(".dim-buttons button").forEach(b => b.classList.remove("selected"));
-    selections[hid] = {};
-    const dupEl = document.getElementById("dup-" + hid);
-    if (dupEl) dupEl.checked = false;
-  }
-}
+        hid = body.get("hypothesis_id")
+        if not hid:
+            return "Missing hypothesis_id", 400
 
-function clearNA(hid) {
-  const naBtn = document.getElementById("na-" + hid);
-  if (naBtn) naBtn.classList.remove("selected");
-}
-
-function esc(s) {
-  if (s == null) return "";
-  const d = document.createElement("div");
-  d.textContent = String(s);
-  return d.innerHTML;
-}
-
-async function submitRating(hid) {
-  const sel = selections[hid] || {};
-  const dupEl = document.getElementById("dup-" + hid);
-  const isDup = dupEl ? dupEl.checked : false;
-  const naBtn = document.getElementById("na-" + hid);
-  const isNA = naBtn ? naBtn.classList.contains("selected") : false;
-
-  const hasAnyDim = sel.novelty || sel.uncontrolled || sel.trustworthiness || isDup || isNA;
-  if (!hasAnyDim) { showMsg("Rate at least one dimension.", true); return; }
-
-  const notes = document.getElementById("notes-" + hid).value.trim();
-  const btn = document.querySelector("#card-" + hid + " button.submit");
-  btn.disabled = true;
-  btn.textContent = "Saving...";
-
-  const r = await fetch("/api/label", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      hypothesis_id: hid,
-      novelty: sel.novelty || null,
-      uncontrolled: sel.uncontrolled || null,
-      trustworthiness: sel.trustworthiness || null,
-      is_duplicate: isDup || null,
-      is_na: isNA || null,
-      notes: notes || null,
-    }),
-  });
-
-  if (r.ok) {
-    document.getElementById("card-" + hid).remove();
-    showMsg("Rated " + hid.substring(0, 8) + "...", false);
-    loadStats();
-    if (!document.querySelector(".card")) {
-      document.getElementById("cards").innerHTML =
-        '<div class="empty">No unlabeled hypotheses.</div>';
-    }
-  } else {
-    const e = await r.text();
-    showMsg("Error: " + e, true);
-    btn.disabled = false;
-    btn.textContent = "Submit";
-  }
-}
-
-function showMsg(text, isErr) {
-  const el = document.getElementById("msg");
-  el.className = "msg " + (isErr ? "err" : "ok");
-  el.textContent = text;
-  setTimeout(() => { el.textContent = ""; el.className = ""; }, 4000);
-}
-
-loadStats();
-loadHypotheses();
-</script>
-</body>
-</html>"""
-)
-
-
-def _make_handler(output_dir: Path, labeled_store: LabeledStore):
-    """Create request handler class with closure over config."""
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == "/":
-                self._serve_html()
-            elif self.path == "/api/hypotheses":
-                self._serve_hypotheses()
-            elif self.path == "/api/stats":
-                self._serve_stats()
-            else:
-                self.send_error(404)
-
-        def do_POST(self):
-            if self.path == "/api/label":
-                self._handle_label()
-            else:
-                self.send_error(404)
-
-        def _serve_html(self):
-            body = HTML_PAGE.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _serve_hypotheses(self):
-            data = _load_unlabeled(output_dir, labeled_store)
-            self._json_response(data)
-
-        def _serve_stats(self):
-            data = _count_all(output_dir, labeled_store)
-            self._json_response(data)
-
-        def _handle_label(self):
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length))
-
-            hid = body.get("hypothesis_id")
-            if not hid:
-                self.send_error(400, "Missing hypothesis_id")
-                return
-
+        try:
             rating = HypothesisRating(
                 novelty=body.get("novelty"),
                 uncontrolled=body.get("uncontrolled"),
@@ -455,47 +148,25 @@ def _make_handler(output_dir: Path, labeled_store: LabeledStore):
                 is_duplicate=body.get("is_duplicate"),
                 is_na=body.get("is_na"),
             )
+        except ValidationError as exc:
+            return str(exc), 400
 
-            if rating.is_pending:
-                self.send_error(400, "At least one dimension must be rated")
-                return
+        if rating.is_pending:
+            return "At least one dimension must be rated", 400
 
-            hyp = self._find_hypothesis(hid)
-            if hyp is None:
-                self.send_error(404, f"Hypothesis {hid} not found")
-                return
+        hyp = _find_hypothesis(output_dir, hid)
+        if hyp is None:
+            return f"Hypothesis {hid} not found", 404
 
-            hyp.rating = rating
-            hyp.notes = body.get("notes")
-            hyp.labeled_at = datetime.now(UTC)
-            hyp.labeled_by = "annotator"
+        hyp.rating = rating
+        hyp.notes = body.get("notes")
+        hyp.labeled_at = datetime.now(UTC)
+        hyp.labeled_by = "annotator"
 
-            labeled_store.save(hyp)
-            self._json_response({"ok": True})
+        labeled_store.save(hyp)
+        return jsonify({"ok": True})
 
-        def _find_hypothesis(self, hypothesis_id: str):
-            for jsonl_file in output_dir.rglob("hypotheses.jsonl"):
-                store = HypothesisStore(jsonl_file.parent)
-                try:
-                    for hyp in store.load():
-                        if hyp.hypothesis_id == hypothesis_id:
-                            return hyp
-                except Exception:
-                    continue
-            return None
-
-        def _json_response(self, data, status=200):
-            body = json.dumps(data, default=str).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, format, *args):
-            pass
-
-    return Handler
+    return app
 
 
 def main():
@@ -526,19 +197,14 @@ def main():
     output_dir = Path(args.output_dir)
     labeled_store = LabeledStore(Path(args.labeled_dir))
 
-    handler = _make_handler(output_dir, labeled_store)
-    server = HTTPServer(("localhost", args.port), handler)
+    app = create_app(output_dir, labeled_store)
 
     url = f"http://localhost:{args.port}"
     print(f"Annotation server running at {url}")
     print("Press Ctrl+C to stop.\n")
     webbrowser.open(url)
 
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopped.")
-        server.server_close()
+    app.run(host="localhost", port=args.port)
 
 
 if __name__ == "__main__":
