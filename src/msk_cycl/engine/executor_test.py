@@ -153,3 +153,75 @@ def test_get_cohort_ids_uses_direct_query_for_clinical_patient():
     sql_called = mock_db.execute.call_args[0][0]
     assert "JOIN" not in sql_called
     assert 'SELECT "PATIENT_ID" FROM "clinical_patient"' in sql_called
+
+
+def test_get_cohort_ids_single_table_unchanged():
+    """Single-table cohorts still take the direct fast path."""
+    mock_db = MagicMock()
+    mock_db.execute.return_value = pd.DataFrame({"PATIENT_ID": ["P001", "P003"]})
+
+    executor = HypothesisExecutor(mock_db)
+    cohort = SelectCohort(
+        filters=[
+            CohortFilter(
+                table="clinical_patient",
+                column="CANCER_TYPE",
+                operator="==",
+                value="Lung",
+            ),
+            CohortFilter(
+                table="clinical_patient",
+                column="SEX",
+                operator="==",
+                value="Female",
+            ),
+        ]
+    )
+
+    ids = executor._get_cohort_ids(cohort)
+
+    assert ids == ["P001", "P003"]
+    assert mock_db.execute.call_count == 1
+
+
+def test_get_cohort_ids_multi_table_intersects():
+    """Multi-table filters resolve each table independently and intersect."""
+    mock_db = MagicMock()
+
+    def fake_execute(sql: str) -> pd.DataFrame:
+        if "clinical_patient" in sql:
+            return pd.DataFrame({"PATIENT_ID": ["P001", "P002", "P003"]})
+        if "mutations_extended" in sql:
+            return pd.DataFrame({"PATIENT_ID": ["P002", "P003", "P004"]})
+        raise ValueError(f"Unexpected SQL: {sql}")
+
+    mock_db.execute.side_effect = fake_execute
+
+    executor = HypothesisExecutor(mock_db)
+    cohort = SelectCohort(
+        filters=[
+            CohortFilter(
+                table="clinical_patient",
+                column="CANCER_TYPE",
+                operator="==",
+                value="Non-Small Cell Lung Cancer",
+            ),
+            CohortFilter(
+                table="mutations_extended",
+                column="Hugo_Symbol",
+                operator="==",
+                value="KEAP1",
+            ),
+        ]
+    )
+
+    ids = executor._get_cohort_ids(cohort)
+
+    assert ids == ["P002", "P003"]
+    assert mock_db.execute.call_count == 2
+
+    calls = [call[0][0] for call in mock_db.execute.call_args_list]
+    clinical_sql = [s for s in calls if "clinical_patient" in s][0]
+    mutations_sql = [s for s in calls if "mutations_extended" in s][0]
+    assert "JOIN" not in clinical_sql
+    assert "JOIN" in mutations_sql

@@ -36,6 +36,11 @@ METHOD_IMPLEMENTATIONS = {ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMetho
 - Hypothesis storage: JSONL files (one per session)
 - Very early stage - schema, prompts, error handling all subject to change
 
+## Testing
+
+- **Unit tests** go in `src/` next to the code they test (e.g., `executor_test.py`). Use mocks for external dependencies. Run with `make test`.
+- **Integration tests** go in `tests/integration/`. These use real parquet files, real DB connections, etc. Run with `make int-test`.
+
 ## Code Style
 
 **No vacuous comments** - Don't add comments that just restate what the code does. Only comment if adding non-obvious context (why, not what)
