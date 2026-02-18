@@ -4,6 +4,7 @@ Data writers for ETL pipeline.
 Handles writing DataFrames to parquet format for efficient storage and querying.
 """
 
+import json
 from pathlib import Path
 from typing import Any, Literal
 
@@ -48,6 +49,12 @@ def write_parquet(
         index=index,
         **kwargs,
     )
+
+
+def write_profile(profile: dict, output_path: Path) -> None:
+    """Write column profile to JSON sidecar file."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(profile, indent=2))
 
 
 def get_parquet_metadata(file_path: str | Path) -> dict[str, Any]:

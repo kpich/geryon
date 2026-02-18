@@ -259,12 +259,12 @@ Step 2: For EACH table you want to use in a hypothesis:
    - Note the EXACT column names, data types, and sample values
    - Do NOT assume column names - verify them first!
 
-Step 3 (REQUIRED): For EACH filter value you plan to use in a hypothesis:
-   - Call query_data_tool(sql) to verify the value actually exists
-   - Example: SELECT DISTINCT "CANCER_TYPE" FROM clinical_patient LIMIT 20
-   - Do NOT guess how values are encoded — check first!
-   - Common pitfalls: abbreviated vs full names (e.g. "NSCLC" vs
-     "Non-Small Cell Lung Cancer"), numeric coding (0/1 vs strings)
+Step 3: If you need to verify specific filter values beyond what describe_table
+   showed, call query_data_tool(sql).
+   Example: SELECT DISTINCT "CANCER_TYPE" FROM clinical_patient LIMIT 20
+   describe_table now shows top values with counts, so you can often skip
+   this step — but DO query if the column is high-cardinality or the value
+   you need wasn't in the top values shown.
 
 Step 4: Generate {n_proposals} hypothesis(es) using ONLY columns AND values
    you verified in Steps 2-3

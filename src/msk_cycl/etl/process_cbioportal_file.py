@@ -12,10 +12,20 @@ from pathlib import Path
 import sys
 from typing import Literal
 
+from msk_cycl.etl.profiler import profile_parquet
 from msk_cycl.etl.readers import read_tsv, write_cna_matrix_to_parquet
-from msk_cycl.etl.writers import write_parquet
+from msk_cycl.etl.writers import write_parquet, write_profile
 
 logger = logging.getLogger(__name__)
+
+
+def _write_profile(parquet_path: Path) -> None:
+    """Profile a parquet file and write the sidecar JSON."""
+    logger.info("Profiling columns...")
+    profile = profile_parquet(parquet_path)
+    profile_path = parquet_path.with_suffix(".profile.json")
+    write_profile(dict(profile), profile_path)
+    logger.info(f"Wrote profile: {profile_path.name}")
 
 
 def process_cbioportal_file(
@@ -36,6 +46,7 @@ def process_cbioportal_file(
         logger.info(f"Reading CNA file: {input_path}")
         logger.info("Transposing wide matrix to long format (streaming to parquet)")
         write_cna_matrix_to_parquet(input_path, output_path)
+        _write_profile(output_path)
         logger.info("Success!")
         return
 
@@ -48,6 +59,7 @@ def process_cbioportal_file(
 
     logger.info(f"Writing to parquet: {output_path}")
     write_parquet(df, output_path, compression=compression)
+    _write_profile(output_path)
 
     logger.info("Success!")
 

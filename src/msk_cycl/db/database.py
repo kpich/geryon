@@ -4,6 +4,7 @@ DuckDB database connection and query execution.
 Provides in-memory database with auto-registered parquet files.
 """
 
+import json
 from pathlib import Path
 import threading
 
@@ -43,8 +44,10 @@ class Database:
 
         self.conn = duckdb.connect(":memory:")
         self._lock = threading.Lock()
+        self.profiles: dict[str, dict] = {}
 
         self._register_tables()
+        self._load_profiles()
 
     def _register_tables(self) -> None:
         """Scan parquet directory and register each file as a table."""
@@ -61,6 +64,20 @@ class Database:
             # Quote table name to handle special characters like hyphens
             sql = f"CREATE VIEW \"{table_name}\" AS SELECT * FROM '{parquet_file}'"
             self.conn.execute(sql)
+
+    def _load_profiles(self) -> None:
+        """Load column profile JSON files alongside parquet."""
+        for profile_path in self.parquet_dir.glob("*.profile.json"):
+            try:
+                profile = json.loads(profile_path.read_text())
+                table_name = profile.get("table_name", profile_path.stem)
+                self.profiles[table_name] = profile
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    def get_profile(self, table_name: str) -> dict | None:
+        """Look up precomputed column profile for a table."""
+        return self.profiles.get(table_name)
 
     def execute(self, sql: str) -> pd.DataFrame:
         """
