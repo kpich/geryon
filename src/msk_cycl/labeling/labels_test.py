@@ -21,6 +21,11 @@ def test_is_duplicate_only_not_pending():
     assert not r.is_pending
 
 
+def test_is_na_only_not_pending():
+    r = HypothesisRating(is_na=True)
+    assert not r.is_pending
+
+
 def test_full_rating():
     r = HypothesisRating(
         novelty=1, uncontrolled=3, trustworthiness=2, is_duplicate=False

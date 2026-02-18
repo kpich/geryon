@@ -165,6 +165,7 @@ def test_load_unlabeled_has_critic_prefill_fields(setup):
         "uncontrolled": 1,
         "trustworthiness": 2,
         "is_duplicate": None,
+        "is_na": None,
     }
     assert item["critic_notes"] == "looks confounded"
     assert item["labeled_by"] == "llm_critic"
@@ -290,6 +291,35 @@ def test_api_label_saves_hypothesis():
         assert saved.rating.novelty == 2
         assert saved.rating.trustworthiness == 3
         assert saved.notes == "good"
+        assert saved.labeled_by == "annotator"
+    finally:
+        handler_cls._find_hypothesis = orig_find
+
+
+@patch("msk_cycl.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("msk_cycl.cli.annotate._count_all", _fake_stats)
+def test_api_label_saves_na_hypothesis():
+    mock_store = MagicMock()
+    hyp = _make_hypothesis("h-1")
+
+    handler_cls = _make_handler(Path("."), mock_store)
+    orig_find = handler_cls._find_hypothesis
+    handler_cls._find_hypothesis = lambda self, hid: hyp
+
+    try:
+        body = {
+            "hypothesis_id": "h-1",
+            "is_na": True,
+        }
+        status, _ = _invoke_handler(handler_cls, "POST", "/api/label", body=body)
+        assert status == 200
+
+        mock_store.save.assert_called_once()
+        saved = mock_store.save.call_args[0][0]
+        assert saved.rating.is_na is True
+        assert saved.rating.novelty is None
+        assert saved.rating.uncontrolled is None
+        assert saved.rating.trustworthiness is None
         assert saved.labeled_by == "annotator"
     finally:
         handler_cls._find_hypothesis = orig_find
