@@ -1,5 +1,7 @@
 """AWS Bedrock provider."""
 
+from typing import Any
+
 import boto3
 
 from msk_cycl.llm.providers.base import ChatMessage, LLMResponse
@@ -28,8 +30,9 @@ class BedrockProvider:
         messages: list[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        cache_system: bool = False,
     ) -> LLMResponse:
-        system_prompts = []
+        system_prompts: list[dict[str, Any]] = []
         converse_messages = []
 
         for msg in messages:
@@ -52,6 +55,8 @@ class BedrockProvider:
             },
         }
         if system_prompts:
+            if cache_system:
+                system_prompts.append({"cachePoint": {"type": "default"}})
             kwargs["system"] = system_prompts
 
         response = self.client.converse(**kwargs)
@@ -64,6 +69,12 @@ class BedrockProvider:
                 "prompt_tokens": response["usage"]["inputTokens"],
                 "completion_tokens": response["usage"]["outputTokens"],
                 "total_tokens": response["usage"]["totalTokens"],
+                "cache_read_tokens": response["usage"].get(
+                    "cacheReadInputTokenCount", 0
+                ),
+                "cache_write_tokens": response["usage"].get(
+                    "cacheWriteInputTokenCount", 0
+                ),
             }
 
         return LLMResponse(

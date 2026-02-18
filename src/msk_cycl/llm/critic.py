@@ -90,7 +90,7 @@ class HypothesisCritic:
             ChatMessage(role="user", content=user_prompt),
         ]
 
-        response = self.provider.generate(messages, temperature=0.2)
+        response = self.provider.generate(messages, temperature=0.2, cache_system=True)
         ratings = self._parse_response(response.content, hypotheses)
 
         rating_by_id = {r.hypothesis_id: r for r in ratings}

@@ -50,6 +50,7 @@ class OpenAIProvider:
         messages: list[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        cache_system: bool = False,
     ) -> LLMResponse:
         """Generate completion from messages via OpenAI API.
 
@@ -92,6 +93,10 @@ class OpenAIProvider:
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens,
             }
+            if response.usage.prompt_tokens_details:
+                usage["cache_read_tokens"] = (
+                    response.usage.prompt_tokens_details.cached_tokens or 0
+                )
 
         return LLMResponse(
             content=content,

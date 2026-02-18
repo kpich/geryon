@@ -33,6 +33,7 @@ class LLMProvider(Protocol):
         messages: list[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        cache_system: bool = False,
     ) -> LLMResponse:
         """Generate completion from messages.
 
