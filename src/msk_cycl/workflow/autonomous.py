@@ -250,6 +250,22 @@ prioritize:
 If a well-known association fails to replicate, flag it — that is valuable.
 But spend most proposals on genuinely exploratory comparisons.
 
+HYPOTHESIS REFINEMENT:
+
+When you see a previous hypothesis with uncontrolled=2 or
+uncontrolled=3, consider proposing a refined version that controls
+for the noted confounder (e.g., restrict both cohorts to a single
+cancer type or age range).
+
+To mark a proposal as a refinement, set "refines_hypothesis" to
+the 8-character ID shown in [brackets] next to the parent. This
+is OPTIONAL — only use it when genuinely building on a prior result.
+
+Example:
+  Previous: [a3f1c9e2] KRAS mut vs WT [uncontrolled=3] — confounded by age
+  Refinement: restrict both cohorts to age >= 60,
+  set "refines_hypothesis": "a3f1c9e2"
+
 REQUIRED EXPLORATION STEPS (DO NOT SKIP ANY):
 
 Step 1: Call list_tables_tool() to see all available tables
@@ -284,6 +300,7 @@ Output format:
       "cohort_b_description": "Patients without KRAS mutation",
       "outcome_description": "Overall survival",
       "rationale": "...",
+      "refines_hypothesis": null,
       "cycl_spec": {{
         "version": 1,
         "query": {{
@@ -401,6 +418,24 @@ IMPORTANT:
                 print(f"  {final_message.content[:1000]}")
                 print("  Continuing to next iteration...")
                 return []
+
+            # Resolve short IDs to full UUIDs
+            short_to_full: dict[str, str] = {}
+            for hyp in labeled + session_previous:
+                sid = hyp.hypothesis_id[:8]
+                short_to_full[sid] = hyp.hypothesis_id
+            for proposal in proposals:
+                ref = proposal.refines_hypothesis
+                if ref:
+                    full_id = short_to_full.get(ref)
+                    if full_id:
+                        proposal.refines_hypothesis = full_id
+                    else:
+                        print(
+                            f"  ⚠ Could not resolve refines_hypothesis "
+                            f"'{ref}', clearing"
+                        )
+                        proposal.refines_hypothesis = None
 
             print(f"Generated {len(proposals)} valid proposals. Executing all...")
             print()
@@ -561,6 +596,7 @@ IMPORTANT:
                     outcome_description=item["outcome_description"],
                     rationale=item["rationale"],
                     cycl_spec=CyclHyp(**item["cycl_spec"]),
+                    refines_hypothesis=item.get("refines_hypothesis"),
                 )
 
                 # Validate tables/columns exist before accepting
