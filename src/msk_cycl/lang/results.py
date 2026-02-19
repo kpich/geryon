@@ -18,6 +18,11 @@ class ComparisonResult(BaseModel):
     confidence_interval_upper: float | None = None
     p_value: float | None = None
 
+    # Wilcoxon rank-sum results
+    median_a: float | None = None
+    median_b: float | None = None
+    u_statistic: float | None = None
+
     # Raw data for statistical calculation (not serialized to JSONL)
     cohort_a_data: pd.DataFrame | None = Field(default=None)
     cohort_b_data: pd.DataFrame | None = Field(default=None)

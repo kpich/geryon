@@ -1683,6 +1683,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pydantic" },
     { name = "requests" },
+    { name = "scipy" },
     { name = "tqdm" },
 ]
 
@@ -1733,6 +1734,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "requests", specifier = ">=2.31" },
     { name = "ruff", marker = "extra == 'dev'" },
+    { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "types-requests", marker = "extra == 'dev'" },
     { name = "types-tqdm", marker = "extra == 'dev'" },

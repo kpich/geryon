@@ -21,3 +21,40 @@ class OverallSurvival(BaseModel):
         default="clinical_patient",
         description="Table containing outcome data (typically same as cohort table)",
     )
+
+
+class TimeToNextTreatment(BaseModel):
+    """Time to next treatment (TTNT) outcome for time-to-event analysis."""
+
+    outcome_type: Literal["time_to_next_treatment"] = "time_to_next_treatment"
+    agent: str = Field(
+        ...,
+        description="Agent whose first administration defines the index treatment",
+    )
+    gap_days: int = Field(
+        default=90,
+        description="Treatments starting within this many days of index START_DATE "
+        "are considered part of the same regimen (default 90)",
+    )
+    table: str = "timeline_treatment"
+
+
+class SurvivalFromTreatment(BaseModel):
+    """Survival measured from first administration of a specific agent."""
+
+    outcome_type: Literal["survival_from_treatment"] = "survival_from_treatment"
+    agent: str = Field(
+        ..., description="Agent whose first administration defines day 0"
+    )
+    table: str = "timeline_treatment"
+
+
+class MetastaticBurden(BaseModel):
+    """Number of distinct metastatic sites at a landmark timepoint."""
+
+    outcome_type: Literal["metastatic_burden"] = "metastatic_burden"
+    landmark_days: int = Field(
+        default=0, description="Reference timepoint (days from sequencing)"
+    )
+    window_days: int = Field(default=30, description="Half-window for scan proximity")
+    table: str = "timeline_tumor_sites"
