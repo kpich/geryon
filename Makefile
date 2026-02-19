@@ -22,7 +22,7 @@ clean:
 
 .PHONY: mypy
 mypy:
-	uv run --extra dev mypy --check-untyped-defs src/msk_cycl
+	uv run --extra dev mypy --check-untyped-defs src/geryon
 
 .PHONY: lint
 lint:
@@ -38,7 +38,7 @@ etl:
 
 .PHONY: profile
 profile:
-	uv run python -m msk_cycl.etl.profiler --dir $$(ls -d ~/data/msk_cycle_data/*/ | tail -1)
+	uv run python -m geryon.etl.profiler --dir $$(ls -d ~/data/geryone_data/*/ | tail -1)
 
 .PHONY: etl-clean
 etl-clean:
@@ -50,7 +50,7 @@ data:
 
 .PHONY: annotate
 annotate:
-	uv run python -m msk_cycl.cli.annotate
+	uv run python -m geryon.cli.annotate
 
 .PHONY: workflow
 workflow:

@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from msk_cycl.db import Database
-from msk_cycl.engine import HypothesisExecutor
-from msk_cycl.lang import (
+from geryon.db import Database
+from geryon.engine import HypothesisExecutor
+from geryon.lang import (
     CohortFilter,
     CompareCohorts,
     ComparisonMethod,
-    CyclHyp,
+    GeryonHyp,
     SelectCohort,
     TimeToNextTreatment,
 )
@@ -131,7 +131,7 @@ def _write_fixtures(tmp_path: Path) -> None:
 def test_ttnt_end_to_end(tmp_path: Path):
     _write_fixtures(tmp_path)
 
-    spec = CyclHyp(
+    spec = GeryonHyp(
         query=CompareCohorts(
             cohort_a=SelectCohort(
                 filters=[

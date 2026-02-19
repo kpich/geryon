@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 
 /*
- * MSK CYCL ETL Pipeline
+ * Geryon ETL Pipeline
  *
  * Extracts TSV files from MSK-IMPACT data, transforms to parquet format
  * for efficient querying and downstream analysis.
@@ -14,7 +14,7 @@ nextflow.enable.dsl = 2
 // ============================================================================
 
 params.data_root = '/Users/pichottk/data/msk-impact/msk_solid_heme'
-params.output_base = "${System.getProperty('user.home')}/data/msk_cycle_data"
+params.output_base = "${System.getProperty('user.home')}/data/geryone_data"
 params.file_pattern = '*.txt'
 
 // ============================================================================
@@ -32,7 +32,7 @@ process extractTSV {
 
     script:
     """
-    python -m msk_cycl.etl.process_cbioportal_file \
+    python -m geryon.etl.process_cbioportal_file \
         --input ${tsv_file} \
         --output ${tsv_file.baseName}.parquet \
         --log-level INFO

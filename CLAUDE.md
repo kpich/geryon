@@ -1,13 +1,13 @@
-# CYCL Project
+# Geryon Project
 
 Human-in-the-loop LLM tool for hypothesis generation on cancer genomics data. LLM proposes hypotheses in formal language, executor runs them, LLM narrates results.
 
 ## Structure
 
 ```
-msk_cycl/
+geryon/
 ├── etl/        # Nextflow pipeline: TSV → parquet (includes CNA transpose)
-├── lang/       # Formal hypothesis language (CyclHyp spec)
+├── lang/       # Formal hypothesis language (GeryonHyp spec)
 ├── db/         # DuckDB wrapper for parquet files
 ├── engine/     # Execution engine (registry-based for outcomes/methods)
 ├── llm/        # LLM integration (generator, narrator, providers, schema)
@@ -49,7 +49,7 @@ METHOD_IMPLEMENTATIONS = {ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMetho
 
 NEVER run commands that trigger external LLM API calls (Bedrock, OpenAI, Anthropic, Ollama, etc.). This includes:
 - `run.sh`, `scripts/run.sh`, or any wrapper that launches a session
-- `uv run python -m msk_cycl` or any direct invocation of the workflow
-- Any script or command that calls the LLM providers in `msk_cycl/llm/`
+- `uv run python -m geryon` or any direct invocation of the workflow
+- Any script or command that calls the LLM providers in `geryon/llm/`
 
 These calls are billable and should only be triggered by the human operator. Stick to code edits, tests, and read-only exploration.

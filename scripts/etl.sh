@@ -43,8 +43,8 @@ if ! command -v nextflow &> /dev/null; then
 fi
 
 # Check if Python package is installed
-if ! python -c "import msk_cycl.etl" 2>/dev/null; then
-    log_warn "msk_cycl package not found in Python environment"
+if ! python -c "import geryon.etl" 2>/dev/null; then
+    log_warn "geryon package not found in Python environment"
     log_info "Run: make install (or make dev for development mode)"
     exit 1
 fi

@@ -92,8 +92,8 @@ def main() -> None:
     parser.add_argument(
         "--data-base",
         type=Path,
-        default=Path.home() / "data" / "msk_cycle_data",
-        help="Base directory for ETL outputs (default: ~/data/msk_cycle_data)",
+        default=Path.home() / "data" / "geryone_data",
+        help="Base directory for ETL outputs (default: ~/data/geryone_data)",
     )
 
     args = parser.parse_args()
