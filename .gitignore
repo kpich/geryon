@@ -1,8 +1,7 @@
 # project-specific
 nextflow/pipeline_*.txt
 nextflow/pipeline_*.html
-geryon_run_outputs/
-labeled_hypotheses/
+geryon_data/
 
 
 # nextflow
