@@ -37,6 +37,14 @@ class LabeledStore:
             results.append(LabeledHypothesis(**data))
         return results
 
+    def load_one(self, hypothesis_id: str) -> LabeledHypothesis | None:
+        """Load a single labeled hypothesis by ID, or None if not found."""
+        path = self.labeled_dir / f"{hypothesis_id}.json"
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text())
+        return LabeledHypothesis(**data)
+
     def labeled_ids(self) -> set[str]:
         """Return set of already-labeled hypothesis_ids (fast, filenames only)."""
         return {p.stem for p in self.labeled_dir.glob("*.json")}

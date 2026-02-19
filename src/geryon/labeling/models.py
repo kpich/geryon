@@ -57,3 +57,13 @@ class LabeledHypothesis(BaseModel):
         default=None, description="Timestamp of labeling"
     )
     labeled_by: str | None = Field(default=None, description="Reviewer identifier")
+    human_rating: HypothesisRating | None = Field(
+        default=None, description="Human reviewer rating (overrides rating for context)"
+    )
+    human_notes: str | None = Field(default=None, description="Human reviewer notes")
+
+    @property
+    def effective_rating(self) -> HypothesisRating:
+        if self.human_rating is not None and not self.human_rating.is_pending:
+            return self.human_rating
+        return self.rating

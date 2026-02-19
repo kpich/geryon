@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Geryon Hypothesis Annotator</title>
+<title>Geryon Hypothesis Explorer</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -11,9 +11,45 @@
   h1 { text-align: center; margin-bottom: 8px; }
   #stats { text-align: center; color: #666; margin-bottom: 24px; font-size: 14px; }
   .empty { text-align: center; color: #999; margin-top: 60px; font-size: 18px; }
-  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12);
-          padding: 24px; margin: 0 auto 24px; max-width: 800px; }
-  .card h2 { font-size: 14px; color: #999; margin-bottom: 12px; }
+
+  /* Collapsed row */
+  .hyp-row { background: #fff; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,.08);
+             margin: 0 auto 4px; max-width: 900px; cursor: pointer;
+             transition: box-shadow .15s; }
+  .hyp-row:hover { box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+  .hyp-row.highlight { animation: flash 1.5s ease-out; }
+  @keyframes flash {
+    0% { background: #fef3c7; }
+    100% { background: #fff; }
+  }
+  .row-summary { display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+                 font-size: 13px; }
+  .row-id { font-family: "SF Mono", "Fira Code", monospace; color: #6b7280;
+            font-size: 12px; min-width: 72px; }
+  .row-date { color: #9ca3af; font-size: 12px; min-width: 80px; }
+  .row-desc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-stat { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px;
+              color: #4b5563; min-width: 140px; text-align: right; }
+  .row-badge { font-size: 10px; font-variant: small-caps; font-weight: 700;
+               padding: 2px 8px; border-radius: 3px; min-width: 52px;
+               text-align: center; }
+  .badge-human { background: #dcfce7; color: #166534; }
+  .badge-critic { background: #fef3c7; color: #92400e; }
+  .badge-pending { background: #f3f4f6; color: #6b7280; }
+  .row-toggle { color: #9ca3af; font-size: 14px; min-width: 16px; text-align: center;
+                transition: transform .2s; }
+  .hyp-row.open .row-toggle { transform: rotate(90deg); }
+  .row-refines { font-size: 11px; color: #8b5cf6; cursor: pointer; }
+  .row-refines:hover { text-decoration: underline; }
+
+  /* Session divider */
+  .session-divider { max-width: 900px; margin: 16px auto 8px; padding: 0 16px;
+                     font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb;
+                     padding-top: 8px; }
+
+  /* Expanded detail */
+  .hyp-detail { display: none; padding: 16px 24px; border-top: 1px solid #f0f0f0; }
+  .hyp-row.open .hyp-detail { display: block; }
   .field { margin-bottom: 12px; }
   .field-label { font-weight: 600; font-size: 13px; color: #666;
                  text-transform: uppercase; letter-spacing: .5px;
@@ -23,6 +59,24 @@
   table.stats th, table.stats td { padding: 6px 12px; text-align: left;
                                     border-bottom: 1px solid #eee; font-size: 14px; }
   table.stats th { color: #666; font-weight: 600; }
+  pre.spec { background: #f8f8f8; border: 1px solid #e0e0e0;
+             border-radius: 6px; padding: 12px; font-size: 13px;
+             overflow-x: auto; line-height: 1.4; }
+
+  /* Critic rating display */
+  .critic-section { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px;
+                    padding: 12px; margin-bottom: 12px; }
+  .critic-section .section-title { font-size: 12px; font-weight: 700; color: #92400e;
+                                    text-transform: uppercase; margin-bottom: 6px; }
+  .critic-badge { display: inline-block; background: #fef3c7; color: #92400e;
+                  font-size: 12px; padding: 2px 8px; border-radius: 3px;
+                  margin-right: 6px; margin-bottom: 4px; }
+
+  /* Human rating controls */
+  .human-section { border: 1px solid #d1d5db; border-radius: 6px; padding: 12px;
+                   margin-bottom: 12px; }
+  .human-section .section-title { font-size: 12px; font-weight: 700; color: #166534;
+                                   text-transform: uppercase; margin-bottom: 6px; }
   .dim-row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
   .dim-label { min-width: 130px; font-weight: 600; font-size: 14px; }
   .dim-end { font-size: 12px; color: #888; min-width: 90px; }
@@ -49,20 +103,18 @@
                   font-size: 15px; font-weight: 600; cursor: pointer; }
   button.submit:hover { background: #1d4ed8; }
   button.submit:disabled { background: #93c5fd; cursor: not-allowed; }
+
   .msg { text-align: center; padding: 12px; border-radius: 6px; margin: 0 auto 16px;
-         max-width: 800px; font-size: 14px; }
+         max-width: 900px; font-size: 14px; }
   .msg.ok { background: #dcfce7; color: #166534; }
   .msg.err { background: #fee2e2; color: #991b1b; }
-  pre.spec { background: #f8f8f8; border: 1px solid #e0e0e0;
-             border-radius: 6px; padding: 12px; font-size: 13px;
-             overflow-x: auto; line-height: 1.4; }
 </style>
 </head>
 <body>
-<h1>Geryon Hypothesis Annotator</h1>
+<h1>Geryon Hypothesis Explorer</h1>
 <div id="stats"></div>
 <div id="msg"></div>
-<div id="cards"></div>
+<div id="rows"></div>
 
 <script>
 const DIMENSIONS = {{ dimensions | tojson }};
@@ -77,126 +129,265 @@ async function loadStats() {
   const r = await fetch("/api/stats");
   const s = await r.json();
   document.getElementById("stats").textContent =
-    s.total + " total | " + s.labeled + " labeled | " + s.pending + " pending";
+    s.total + " total | " + s.human_labeled + " human-rated | " +
+    s.critic_labeled + " critic-rated | " + s.pending + " pending";
+}
+
+function fmtVal(v, digits) {
+  return v != null ? Number(v).toFixed(digits) : "N/A";
+}
+
+function keyStat(h) {
+  if (h.hazard_ratio != null) {
+    return "HR=" + fmtVal(h.hazard_ratio, 2) + ", p=" + fmtVal(h.p_value, 4);
+  }
+  if (h.u_statistic != null) {
+    return "U=" + fmtVal(h.u_statistic, 1) + ", p=" + fmtVal(h.p_value, 4);
+  }
+  return "p=" + fmtVal(h.p_value, 4);
+}
+
+function badgeClass(status) {
+  if (status === "human_labeled") return "badge-human";
+  if (status === "critic_labeled") return "badge-critic";
+  return "badge-pending";
+}
+
+function badgeLabel(status) {
+  if (status === "human_labeled") return "HUMAN";
+  if (status === "critic_labeled") return "CRITIC";
+  return "PENDING";
+}
+
+function esc(s) {
+  if (s == null) return "";
+  const d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function scrollToHyp(hid) {
+  const el = document.getElementById("row-" + hid);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("highlight");
+    setTimeout(() => el.classList.remove("highlight"), 2000);
+  }
+}
+
+function buildResultsTable(h) {
+  if (h.hazard_ratio != null) {
+    return `<table class="stats">
+      <tr><th>N (A)</th><th>N (B)</th><th>HR</th><th>95% CI</th><th>p-value</th></tr>
+      <tr>
+        <td>${h.cohort_a_size}</td><td>${h.cohort_b_size}</td>
+        <td>${fmtVal(h.hazard_ratio, 3)}</td>
+        <td>[${fmtVal(h.confidence_interval_lower, 3)}, ${fmtVal(h.confidence_interval_upper, 3)}]</td>
+        <td>${fmtVal(h.p_value, 4)}</td>
+      </tr>
+    </table>`;
+  }
+  if (h.u_statistic != null) {
+    return `<table class="stats">
+      <tr><th>N (A)</th><th>N (B)</th><th>Median A</th><th>Median B</th><th>U</th><th>p-value</th></tr>
+      <tr>
+        <td>${h.cohort_a_size}</td><td>${h.cohort_b_size}</td>
+        <td>${fmtVal(h.median_a, 2)}</td><td>${fmtVal(h.median_b, 2)}</td>
+        <td>${fmtVal(h.u_statistic, 1)}</td><td>${fmtVal(h.p_value, 4)}</td>
+      </tr>
+    </table>`;
+  }
+  return `<table class="stats">
+    <tr><th>N (A)</th><th>N (B)</th><th>p-value</th></tr>
+    <tr><td>${h.cohort_a_size}</td><td>${h.cohort_b_size}</td><td>${fmtVal(h.p_value, 4)}</td></tr>
+  </table>`;
+}
+
+function buildCriticSection(h) {
+  if (!h.critic_rating) return "";
+  const cr = h.critic_rating;
+  let badges = "";
+  if (cr.novelty != null) badges += `<span class="critic-badge">Novelty: ${cr.novelty}</span>`;
+  if (cr.uncontrolled != null) badges += `<span class="critic-badge">Uncontrolled: ${cr.uncontrolled}</span>`;
+  if (cr.trustworthiness != null) badges += `<span class="critic-badge">Trust: ${cr.trustworthiness}</span>`;
+  if (cr.is_duplicate) badges += `<span class="critic-badge">Duplicate</span>`;
+  if (cr.is_na) badges += `<span class="critic-badge">N/A</span>`;
+  let notes = h.critic_notes ? `<div style="margin-top:6px;font-size:13px;color:#92400e">${esc(h.critic_notes)}</div>` : "";
+  return `<div class="critic-section">
+    <div class="section-title">Critic Rating</div>
+    ${badges}${notes}
+  </div>`;
+}
+
+function buildHumanSection(h) {
+  const hid = h.hypothesis_id;
+  let dimHTML = "";
+  for (const [key, dim] of Object.entries(DIMENSIONS)) {
+    const ends = DIM_ENDPOINTS[key] || ["", ""];
+    dimHTML += `<div class="dim-row">
+      <span class="dim-label">${dim.label}</span>
+      <span class="dim-end">${ends[0]}</span>
+      <span class="dim-buttons">
+        ${[1,2,3].map(n =>
+          `<button type="button" data-dim="${key}" data-val="${n}"
+                   title="${dim.levels[n]}"
+                   onclick="event.stopPropagation();selectDim(this,'${hid}','${key}',${n})">${n}</button>`
+        ).join("")}
+      </span>
+      <span class="dim-end right">${ends[1]}</span>
+    </div>`;
+  }
+  return `<div class="human-section">
+    <div class="section-title">Human Rating</div>
+    ${dimHTML}
+    <div class="dup-row">
+      <label><input type="checkbox" id="dup-${hid}"
+                    onclick="event.stopPropagation()"
+                    onchange="clearNA('${hid}')"> Duplicate</label>
+      <button type="button" class="na-btn" id="na-${hid}"
+              onclick="event.stopPropagation();toggleNA('${hid}')">N/A &mdash; Result is broken</button>
+    </div>
+    <div class="field" onclick="event.stopPropagation()">
+      <div class="field-label">Notes (optional)</div>
+      <textarea id="notes-${hid}"></textarea>
+    </div>
+    <button class="submit" onclick="event.stopPropagation();submitRating('${hid}')">Submit</button>
+  </div>`;
 }
 
 async function loadHypotheses() {
   const r = await fetch("/api/hypotheses");
   const hyps = await r.json();
-  const container = document.getElementById("cards");
+  const container = document.getElementById("rows");
   container.innerHTML = "";
 
   if (hyps.length === 0) {
-    container.innerHTML = '<div class="empty">No unlabeled hypotheses.</div>';
+    container.innerHTML = '<div class="empty">No hypotheses found.</div>';
     return;
   }
 
-  hyps.forEach((h, idx) => {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.id = "card-" + h.hypothesis_id;
+  let lastSession = null;
 
-    const fmtVal = (v, digits) => v != null ? Number(v).toFixed(digits) : "N/A";
+  hyps.forEach((h) => {
+    // Session divider
+    if (lastSession !== null && h.session_id !== lastSession) {
+      const divider = document.createElement("div");
+      divider.className = "session-divider";
+      divider.textContent = "Session: " + h.session_id;
+      container.appendChild(divider);
+    }
+    lastSession = h.session_id;
 
-    const hid_short = h.hypothesis_id.substring(0, 8);
-    const iterTag = h.iteration ? ` | iter ${h.iteration}` : "";
-    const criticBadge = h.labeled_by === "llm_critic"
-      ? ' <span style="background:#f59e0b;color:#fff;font-size:10px;font-variant:small-caps;padding:2px 6px;border-radius:3px;margin-left:6px">LLM CRITIC</span>'
-      : "";
+    const row = document.createElement("div");
+    row.className = "hyp-row";
+    row.id = "row-" + h.hypothesis_id;
 
-    let dimHTML = "";
-    for (const [key, dim] of Object.entries(DIMENSIONS)) {
-      const ends = DIM_ENDPOINTS[key] || ["", ""];
-      dimHTML += `<div class="dim-row">
-        <span class="dim-label">${dim.label}</span>
-        <span class="dim-end">${ends[0]}</span>
-        <span class="dim-buttons">
-          ${[1,2,3].map(n =>
-            `<button type="button" data-dim="${key}" data-val="${n}"
-                     title="${dim.levels[n]}"
-                     onclick="selectDim(this,'${h.hypothesis_id}','${key}',${n})">${n}</button>`
-          ).join("")}
-        </span>
-        <span class="dim-end right">${ends[1]}</span>
+    const hidShort = h.hypothesis_id.substring(0, 8);
+    const dateStr = h.created_at.substring(0, 10);
+    const desc = esc(h.cohort_a_description) + " vs " + esc(h.cohort_b_description);
+    const stat = keyStat(h);
+    const badge = badgeClass(h.status);
+    const label = badgeLabel(h.status);
+
+    let refinesLink = "";
+    if (h.refines_hypothesis_short) {
+      refinesLink = `<span class="row-refines" onclick="event.stopPropagation();scrollToHyp('${esc(h.refines_hypothesis)}')"
+        title="Refines ${esc(h.refines_hypothesis_short)}">&#8627; ${esc(h.refines_hypothesis_short)}</span>`;
+    }
+
+    let refinementField = "";
+    if (h.refines_hypothesis) {
+      refinementField = `<div class="field">
+        <div class="field-label">Refines</div>
+        <div class="field-value">
+          <a href="#" onclick="event.preventDefault();event.stopPropagation();scrollToHyp('${esc(h.refines_hypothesis)}')"
+             style="color:#8b5cf6">${esc(h.refines_hypothesis_short)}</a>
+        </div>
       </div>`;
     }
 
-    card.innerHTML = `
-      <h2>#${idx + 1} &mdash; ${hid_short}...${iterTag} &mdash; ${h.created_at}${criticBadge}</h2>
-      <div class="field">
-        <div class="field-label">Cohort A</div>
-        <div class="field-value">${esc(h.cohort_a_description)}</div>
+    row.innerHTML = `
+      <div class="row-summary" onclick="toggleRow('${h.hypothesis_id}')">
+        <span class="row-id">${hidShort}</span>
+        <span class="row-date">${dateStr}</span>
+        <span class="row-desc">${desc}</span>
+        ${refinesLink}
+        <span class="row-stat">${stat}</span>
+        <span class="row-badge ${badge}">${label}</span>
+        <span class="row-toggle">&#9656;</span>
       </div>
-      <div class="field">
-        <div class="field-label">Cohort B</div>
-        <div class="field-value">${esc(h.cohort_b_description)}</div>
-      </div>
-      <div class="field">
-        <div class="field-label">Rationale</div>
-        <div class="field-value">${esc(h.rationale)}</div>
-      </div>
-      <table class="stats">
-        <tr><th>N (A)</th><th>N (B)</th><th>HR</th><th>95% CI</th><th>p-value</th></tr>
-        <tr>
-          <td>${h.cohort_a_size}</td>
-          <td>${h.cohort_b_size}</td>
-          <td>${fmtVal(h.hazard_ratio, 3)}</td>
-          <td>[${fmtVal(h.confidence_interval_lower, 3)},
-              ${fmtVal(h.confidence_interval_upper, 3)}]</td>
-          <td>${fmtVal(h.p_value, 4)}</td>
-        </tr>
-      </table>
-      <div class="field">
-        <div class="field-label">Spec</div>
-        <pre class="spec">${esc(
-          JSON.stringify(h.spec, null, 2)
-        )}</pre>
-      </div>
-      <div class="field">
-        <div class="field-label">Summary</div>
-        <div class="field-value">${esc(h.summary)}</div>
-      </div>
-      <div class="field">
-        <div class="field-label">Ratings</div>
-        ${dimHTML}
-        <div class="dup-row">
-          <label><input type="checkbox" id="dup-${h.hypothesis_id}"
-                        onchange="clearNA('${h.hypothesis_id}')"> Duplicate</label>
-          <button type="button" class="na-btn" id="na-${h.hypothesis_id}"
-                  onclick="toggleNA('${h.hypothesis_id}')">N/A &mdash; Result is broken</button>
+      <div class="hyp-detail" onclick="event.stopPropagation()">
+        <div class="field">
+          <div class="field-label">Cohort A</div>
+          <div class="field-value">${esc(h.cohort_a_description)}</div>
         </div>
+        <div class="field">
+          <div class="field-label">Cohort B</div>
+          <div class="field-value">${esc(h.cohort_b_description)}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Rationale</div>
+          <div class="field-value">${esc(h.rationale)}</div>
+        </div>
+        ${refinementField}
+        ${buildResultsTable(h)}
+        <div class="field">
+          <div class="field-label">Summary</div>
+          <div class="field-value">${esc(h.summary)}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Findings</div>
+          <div class="field-value">${esc(h.findings)}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Limitations</div>
+          <div class="field-value">${esc(Array.isArray(h.limitations) ? h.limitations.join("; ") : h.limitations)}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Clinical Relevance</div>
+          <div class="field-value">${esc(h.clinical_relevance)}</div>
+        </div>
+        <details style="margin-bottom:12px">
+          <summary style="cursor:pointer;font-size:13px;color:#666">Spec JSON</summary>
+          <pre class="spec">${esc(JSON.stringify(h.spec, null, 2))}</pre>
+        </details>
+        ${buildCriticSection(h)}
+        ${buildHumanSection(h)}
       </div>
-      <div class="field">
-        <div class="field-label">Notes (optional)</div>
-        <textarea id="notes-${h.hypothesis_id}"></textarea>
-      </div>
-      <button class="submit"
-        onclick="submitRating('${h.hypothesis_id}')">Submit</button>
     `;
-    container.appendChild(card);
+    container.appendChild(row);
 
-    // Pre-fill critic ratings
-    if (h.critic_rating) {
+    // Pre-fill existing human ratings
+    if (h.human_rating) {
       if (!selections[h.hypothesis_id]) selections[h.hypothesis_id] = {};
-      for (const [dim, val] of Object.entries(h.critic_rating)) {
+      for (const [dim, val] of Object.entries(h.human_rating)) {
         if (dim === "is_duplicate") {
           if (val) {
             const dupEl = document.getElementById("dup-" + h.hypothesis_id);
             if (dupEl) dupEl.checked = true;
           }
+        } else if (dim === "is_na") {
+          if (val) {
+            const naBtn = document.getElementById("na-" + h.hypothesis_id);
+            if (naBtn) naBtn.classList.add("selected");
+          }
         } else if (val != null) {
           selections[h.hypothesis_id][dim] = val;
-          const btn = card.querySelector(
-                `button[data-dim="${dim}"][data-val="${val}"]`);
+          const btn = row.querySelector(`button[data-dim="${dim}"][data-val="${val}"]`);
           if (btn) btn.classList.add("selected");
         }
       }
     }
-    if (h.critic_notes) {
+    if (h.human_notes) {
       const notesEl = document.getElementById("notes-" + h.hypothesis_id);
-      if (notesEl) notesEl.value = h.critic_notes;
+      if (notesEl) notesEl.value = h.human_notes;
     }
   });
+}
+
+function toggleRow(hid) {
+  const row = document.getElementById("row-" + hid);
+  if (row) row.classList.toggle("open");
 }
 
 const selections = {};
@@ -214,9 +405,8 @@ function toggleNA(hid) {
   const naBtn = document.getElementById("na-" + hid);
   const isActive = naBtn.classList.toggle("selected");
   if (isActive) {
-    // Clear all dimension selections
-    const card = document.getElementById("card-" + hid);
-    card.querySelectorAll(".dim-buttons button").forEach(b => b.classList.remove("selected"));
+    const row = document.getElementById("row-" + hid);
+    row.querySelectorAll(".dim-buttons button").forEach(b => b.classList.remove("selected"));
     selections[hid] = {};
     const dupEl = document.getElementById("dup-" + hid);
     if (dupEl) dupEl.checked = false;
@@ -226,13 +416,6 @@ function toggleNA(hid) {
 function clearNA(hid) {
   const naBtn = document.getElementById("na-" + hid);
   if (naBtn) naBtn.classList.remove("selected");
-}
-
-function esc(s) {
-  if (s == null) return "";
-  const d = document.createElement("div");
-  d.textContent = String(s);
-  return d.innerHTML;
 }
 
 async function submitRating(hid) {
@@ -246,7 +429,7 @@ async function submitRating(hid) {
   if (!hasAnyDim) { showMsg("Rate at least one dimension.", true); return; }
 
   const notes = document.getElementById("notes-" + hid).value.trim();
-  const btn = document.querySelector("#card-" + hid + " button.submit");
+  const btn = document.querySelector("#row-" + hid + " button.submit");
   btn.disabled = true;
   btn.textContent = "Saving...";
 
@@ -265,13 +448,17 @@ async function submitRating(hid) {
   });
 
   if (r.ok) {
-    document.getElementById("card-" + hid).remove();
+    // Update badge in-place
+    const row = document.getElementById("row-" + hid);
+    const badge = row.querySelector(".row-badge");
+    if (badge) {
+      badge.className = "row-badge badge-human";
+      badge.textContent = "HUMAN";
+    }
+    btn.disabled = false;
+    btn.textContent = "Submit";
     showMsg("Rated " + hid.substring(0, 8) + "...", false);
     loadStats();
-    if (!document.querySelector(".card")) {
-      document.getElementById("cards").innerHTML =
-        '<div class="empty">No unlabeled hypotheses.</div>';
-    }
   } else {
     const e = await r.text();
     showMsg("Error: " + e, true);

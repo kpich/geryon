@@ -16,16 +16,27 @@ def short_id(hypothesis_id: str) -> str:
 
 def _format_rating_tag(hyp: LabeledHypothesis) -> str:
     """Build compact [novelty=2, trust=3, dup] tag from rated dimensions."""
+    rating = hyp.effective_rating
     parts: list[str] = []
-    if hyp.rating.novelty is not None:
-        parts.append(f"novelty={hyp.rating.novelty}")
-    if hyp.rating.uncontrolled is not None:
-        parts.append(f"uncontrolled={hyp.rating.uncontrolled}")
-    if hyp.rating.trustworthiness is not None:
-        parts.append(f"trust={hyp.rating.trustworthiness}")
-    if hyp.rating.is_duplicate is True:
+    if rating.novelty is not None:
+        parts.append(f"novelty={rating.novelty}")
+    if rating.uncontrolled is not None:
+        parts.append(f"uncontrolled={rating.uncontrolled}")
+    if rating.trustworthiness is not None:
+        parts.append(f"trust={rating.trustworthiness}")
+    if rating.is_duplicate is True:
         parts.append("dup")
     return "[" + ", ".join(parts) + "]"
+
+
+def _source_label(hyp: LabeledHypothesis) -> str:
+    """Return 'human', 'critic', or 'auto' based on rating source."""
+    hr = hyp.human_rating
+    if hr is not None and not hr.is_pending:
+        return "human"
+    if hyp.labeled_by == "llm_critic":
+        return "critic"
+    return "auto"
 
 
 def _format_refines_tag(hyp: LabeledHypothesis) -> str:
@@ -90,7 +101,7 @@ def format_previous_hypotheses(
     """
     labeled_ids = {h.hypothesis_id for h in labeled}
 
-    rated = [h for h in labeled if not h.rating.is_pending]
+    rated = [h for h in labeled if not h.effective_rating.is_pending]
 
     unrated_session = [
         h for h in session_previous if h.hypothesis_id not in labeled_ids
@@ -113,9 +124,11 @@ def format_previous_hypotheses(
             tag = _format_rating_tag(hyp)
             refines = _format_refines_tag(hyp)
             summary = _format_summary_suffix(hyp)
-            entry = f"{idx}. [{sid}] {desc} {tag}{refines}"
-            if hyp.notes:
-                entry += f" — {hyp.notes}"
+            src = _source_label(hyp)
+            entry = f"{idx}. [{sid}] {desc} {tag} [{src}]{refines}"
+            notes = hyp.human_notes or hyp.notes
+            if notes:
+                entry += f" — {notes}"
             entry += summary
             lines.append(entry)
             idx += 1
@@ -133,12 +146,13 @@ def format_previous_hypotheses(
             refines = _format_refines_tag(hyp)
             summary = _format_summary_suffix(hyp)
             entry = f"{idx}. [{sid}] {desc}"
-            if not hyp.rating.is_pending:
+            if not hyp.effective_rating.is_pending:
                 tag = _format_rating_tag(hyp)
-                source = "critic" if hyp.labeled_by == "llm_critic" else "auto"
-                entry += f" {tag} [{source}]"
-                if hyp.notes:
-                    entry += f" — {hyp.notes}"
+                src = _source_label(hyp)
+                entry += f" {tag} [{src}]"
+                notes = hyp.human_notes or hyp.notes
+                if notes:
+                    entry += f" — {notes}"
             entry += refines + summary
             lines.append(entry)
             idx += 1
