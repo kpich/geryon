@@ -86,6 +86,15 @@ class ResultNarrator:
                     f"**P-value**: {result.p_value:.4f}",
                 ]
             )
+        elif result.u_statistic is not None:
+            stats_lines.extend(
+                [
+                    f"**Median A**: {result.median_a:.2f}",
+                    f"**Median B**: {result.median_b:.2f}",
+                    f"**Mann-Whitney U statistic**: {result.u_statistic:.1f}",
+                    f"**P-value**: {result.p_value:.4f}",
+                ]
+            )
 
         prompt = f"""# HYPOTHESIS
 

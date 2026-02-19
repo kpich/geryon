@@ -313,11 +313,42 @@ Output format:
   ]
 }}
 
+ADDITIONAL OUTCOME EXAMPLES:
+
+Time to next treatment (use with hazard_ratio_cox):
+  "outcome": {{
+    "outcome_type": "time_to_next_treatment",
+    "agent": "Pembrolizumab",
+    "gap_days": 90,
+    "table": "timeline_treatment"
+  }}
+
+Survival from treatment (use with hazard_ratio_cox):
+  "outcome": {{
+    "outcome_type": "survival_from_treatment",
+    "agent": "Carboplatin",
+    "table": "timeline_treatment"
+  }}
+
+Metastatic burden (use with wilcoxon_rank_sum):
+  "outcome": {{
+    "outcome_type": "metastatic_burden",
+    "landmark_days": 0,
+    "window_days": 30,
+    "table": "timeline_tumor_sites"
+  }}
+
 IMPORTANT:
 - operator must be one of: ==, !=, >, <, >=, <=, in
-- method must be "hazard_ratio_cox"
-- outcome_type must be "overall_survival"
-- cohort_a and cohort_b must have "filters" as an ARRAY of filter objects"""
+- method: "hazard_ratio_cox" or "wilcoxon_rank_sum"
+- outcome_type: "overall_survival",
+  "time_to_next_treatment", "survival_from_treatment",
+  or "metastatic_burden"
+- hazard_ratio_cox works with: overall_survival,
+  time_to_next_treatment, survival_from_treatment
+- wilcoxon_rank_sum works with: metastatic_burden
+- cohort_a and cohort_b must have "filters"
+  as an ARRAY of filter objects"""
         initial_message = HumanMessage(content=prompt_text)
 
         # Run LangGraph
@@ -620,7 +651,7 @@ IMPORTANT:
         outcome = spec.query.outcome
         if outcome.table not in tables:
             errors.append(f"Outcome table '{outcome.table}' does not exist")
-        else:
+        elif hasattr(outcome, "time_column") and hasattr(outcome, "event_column"):
             try:
                 table_df = self.db.execute(f"SELECT * FROM {outcome.table} LIMIT 0")
                 columns = table_df.columns.tolist()

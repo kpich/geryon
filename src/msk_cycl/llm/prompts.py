@@ -38,4 +38,15 @@ Return JSON:
 - Always mention sample sizes
 - Be skeptical of very small p-values or extreme hazard ratios
 - Consider potential confounders not adjusted for
+
+# ADDITIONAL OUTCOME TYPES
+
+- **Time to Next Treatment (TTNT)**: Time from first administration of an agent
+  to start of next line of therapy. Interpreted like OS (Cox HR), but the event
+  is starting a new treatment rather than death. Longer TTNT = better response.
+- **Survival from Treatment**: OS anchored to first dose of a specific agent
+  rather than diagnosis. Interpreted like standard OS.
+- **Metastatic Burden**: Count of distinct metastatic sites at a timepoint.
+  Compared with Wilcoxon rank-sum (Mann-Whitney U). Higher median = more
+  widespread disease. Report medians and whether the difference is significant.
 """

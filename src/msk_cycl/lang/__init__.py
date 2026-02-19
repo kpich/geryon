@@ -6,7 +6,12 @@ from msk_cycl.lang.compiler import (
     compile_select_cohort_ids,
 )
 from msk_cycl.lang.methods import ComparisonMethod
-from msk_cycl.lang.outcomes import OverallSurvival
+from msk_cycl.lang.outcomes import (
+    MetastaticBurden,
+    OverallSurvival,
+    SurvivalFromTreatment,
+    TimeToNextTreatment,
+)
 from msk_cycl.lang.results import ComparisonResult
 from msk_cycl.lang.spec import (
     CohortFilter,
@@ -24,6 +29,9 @@ __all__ = [
     "CohortFilter",
     # Outcomes
     "OverallSurvival",
+    "TimeToNextTreatment",
+    "SurvivalFromTreatment",
+    "MetastaticBurden",
     # Comparison methods
     "ComparisonMethod",
     # Results

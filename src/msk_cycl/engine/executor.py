@@ -116,4 +116,7 @@ class HypothesisExecutor:
             confidence_interval_lower=stats.get("confidence_interval_lower"),
             confidence_interval_upper=stats.get("confidence_interval_upper"),
             p_value=stats.get("p_value"),
+            median_a=stats.get("median_a"),
+            median_b=stats.get("median_b"),
+            u_statistic=stats.get("u_statistic"),
         )

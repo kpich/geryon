@@ -71,3 +71,27 @@ def test_comparison_result_data_fields_default_to_none():
     )
     assert result.cohort_a_data is None
     assert result.cohort_b_data is None
+
+
+def test_wilcoxon_fields_default_to_none():
+    """Wilcoxon fields default to None for backward compatibility."""
+    result = ComparisonResult(cohort_a_size=1, cohort_b_size=1)
+    assert result.median_a is None
+    assert result.median_b is None
+    assert result.u_statistic is None
+
+
+def test_wilcoxon_fields_can_be_set():
+    """Wilcoxon fields can be explicitly set."""
+    result = ComparisonResult(
+        cohort_a_size=10,
+        cohort_b_size=10,
+        median_a=3.5,
+        median_b=1.0,
+        u_statistic=25.0,
+        p_value=0.01,
+    )
+    assert result.median_a == 3.5
+    assert result.median_b == 1.0
+    assert result.u_statistic == 25.0
+    assert result.p_value == 0.01

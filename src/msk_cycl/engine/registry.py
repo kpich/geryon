@@ -11,10 +11,25 @@ Adding new outcomes or methods is as simple as:
 
 from typing import Any
 
-from msk_cycl.engine.methods import ComparisonMethodImpl, CoxHazardRatioMethod
-from msk_cycl.engine.outcomes import OutcomeHandler, OverallSurvivalHandler
+from msk_cycl.engine.methods import (
+    ComparisonMethodImpl,
+    CoxHazardRatioMethod,
+    WilcoxonRankSumMethod,
+)
+from msk_cycl.engine.outcomes import (
+    MetastaticBurdenHandler,
+    OutcomeHandler,
+    OverallSurvivalHandler,
+    SurvivalFromTreatmentHandler,
+    TimeToNextTreatmentHandler,
+)
 from msk_cycl.lang.methods import ComparisonMethod
-from msk_cycl.lang.outcomes import OverallSurvival
+from msk_cycl.lang.outcomes import (
+    MetastaticBurden,
+    OverallSurvival,
+    SurvivalFromTreatment,
+    TimeToNextTreatment,
+)
 
 # ============================================================================
 # OUTCOME HANDLERS REGISTRY
@@ -24,9 +39,9 @@ from msk_cycl.lang.outcomes import OverallSurvival
 
 OUTCOME_HANDLERS: dict[type[Any], type[Any]] = {
     OverallSurvival: OverallSurvivalHandler,
-    # Add new outcomes here:
-    # ProgressionFreeSurvival: ProgressionFreeSurvivalHandler,
-    # ResponseRate: ResponseRateHandler,
+    TimeToNextTreatment: TimeToNextTreatmentHandler,
+    SurvivalFromTreatment: SurvivalFromTreatmentHandler,
+    MetastaticBurden: MetastaticBurdenHandler,
 }
 
 # ============================================================================
@@ -37,9 +52,7 @@ OUTCOME_HANDLERS: dict[type[Any], type[Any]] = {
 
 METHOD_IMPLEMENTATIONS: dict[ComparisonMethod, type[Any]] = {
     ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMethod,
-    # Add new methods here:
-    # ComparisonMethod.LOG_RANK_TEST: LogRankTestMethod,
-    # ComparisonMethod.FISHERS_EXACT: FishersExactMethod,
+    ComparisonMethod.WILCOXON_RANK_SUM: WilcoxonRankSumMethod,
 }
 
 
