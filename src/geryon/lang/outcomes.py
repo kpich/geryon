@@ -49,6 +49,17 @@ class SurvivalFromTreatment(BaseModel):
     table: str = "timeline_treatment"
 
 
+class ProgressionFromTreatment(BaseModel):
+    """PFS measured from first administration of a specific agent."""
+
+    outcome_type: Literal["progression_from_treatment"] = "progression_from_treatment"
+    agent: str = Field(
+        ..., description="Agent whose first administration defines day 0"
+    )
+    treatment_table: str = "timeline_treatment"
+    progression_table: str = "timeline_progression"
+
+
 class MetastaticBurden(BaseModel):
     """Number of distinct metastatic sites at a landmark timepoint."""
 

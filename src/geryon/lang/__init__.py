@@ -9,6 +9,7 @@ from geryon.lang.methods import ComparisonMethod
 from geryon.lang.outcomes import (
     MetastaticBurden,
     OverallSurvival,
+    ProgressionFromTreatment,
     SurvivalFromTreatment,
     TimeToNextTreatment,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "OverallSurvival",
     "TimeToNextTreatment",
     "SurvivalFromTreatment",
+    "ProgressionFromTreatment",
     "MetastaticBurden",
     # Comparison methods
     "ComparisonMethod",

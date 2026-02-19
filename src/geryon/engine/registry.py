@@ -20,6 +20,7 @@ from geryon.engine.outcomes import (
     MetastaticBurdenHandler,
     OutcomeHandler,
     OverallSurvivalHandler,
+    ProgressionFromTreatmentHandler,
     SurvivalFromTreatmentHandler,
     TimeToNextTreatmentHandler,
 )
@@ -27,6 +28,7 @@ from geryon.lang.methods import ComparisonMethod
 from geryon.lang.outcomes import (
     MetastaticBurden,
     OverallSurvival,
+    ProgressionFromTreatment,
     SurvivalFromTreatment,
     TimeToNextTreatment,
 )
@@ -41,6 +43,7 @@ OUTCOME_HANDLERS: dict[type[Any], type[Any]] = {
     OverallSurvival: OverallSurvivalHandler,
     TimeToNextTreatment: TimeToNextTreatmentHandler,
     SurvivalFromTreatment: SurvivalFromTreatmentHandler,
+    ProgressionFromTreatment: ProgressionFromTreatmentHandler,
     MetastaticBurden: MetastaticBurdenHandler,
 }
 

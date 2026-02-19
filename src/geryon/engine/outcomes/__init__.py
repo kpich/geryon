@@ -2,6 +2,9 @@
 
 from geryon.engine.outcomes.base import OutcomeHandler
 from geryon.engine.outcomes.metastatic_burden import MetastaticBurdenHandler
+from geryon.engine.outcomes.progression_from_treatment import (
+    ProgressionFromTreatmentHandler,
+)
 from geryon.engine.outcomes.survival import OverallSurvivalHandler
 from geryon.engine.outcomes.survival_from_treatment import (
     SurvivalFromTreatmentHandler,
@@ -13,5 +16,6 @@ __all__ = [
     "OverallSurvivalHandler",
     "TimeToNextTreatmentHandler",
     "SurvivalFromTreatmentHandler",
+    "ProgressionFromTreatmentHandler",
     "MetastaticBurdenHandler",
 ]
