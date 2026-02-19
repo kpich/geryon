@@ -116,3 +116,18 @@ def test_empty_store_returns_empty(tmp_path: Path):
     store = LabeledStore(tmp_path)
     assert store.load_all() == []
     assert store.labeled_ids() == set()
+
+
+def test_load_one_found(tmp_path: Path):
+    store = LabeledStore(tmp_path)
+    store.save(_make_hypothesis("id-1"))
+
+    loaded = store.load_one("id-1")
+    assert loaded is not None
+    assert loaded.hypothesis_id == "id-1"
+    assert loaded.rating.novelty == 2
+
+
+def test_load_one_not_found(tmp_path: Path):
+    store = LabeledStore(tmp_path)
+    assert store.load_one("nonexistent") is None

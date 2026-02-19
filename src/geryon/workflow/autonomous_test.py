@@ -108,9 +108,9 @@ def test_rated_only():
     result = format_previous_hypotheses(labeled, [])
 
     assert "PREVIOUSLY RATED" in result
-    assert "[h1] KRAS mut vs WT [novelty=3, trust=3]" in result
+    assert "[h1] KRAS mut vs WT [novelty=3, trust=3] [auto]" in result
     assert (
-        "[h2] Lung vs Non-lung [uncontrolled=3, dup] — used wrong column | Test"
+        "[h2] Lung vs Non-lung [uncontrolled=3, dup] [auto] — used wrong column | Test"
         in result
     )
     assert "PREVIOUSLY TESTED" not in result
@@ -241,8 +241,8 @@ def test_numbering_is_continuous():
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
     result = format_previous_hypotheses(labeled, session)
 
-    assert "1. [h1] KRAS mut vs WT [novelty=2, trust=3]" in result
-    assert "2. [h2] BRAF mut vs WT [uncontrolled=2]" in result
+    assert "1. [h1] KRAS mut vs WT [novelty=2, trust=3] [auto]" in result
+    assert "2. [h2] BRAF mut vs WT [uncontrolled=2] [auto]" in result
     assert "3. [s1] TP53 mut vs WT" in result
 
 
@@ -392,3 +392,42 @@ def test_prior_hypotheses_excludes_current_session(tmp_path):
     result = load_prior_hypotheses(tmp_path, "my-session")
 
     assert len(result) == 0
+
+
+def test_human_rating_preferred_over_critic():
+    """effective_rating returns human values when both human and critic are set."""
+    hyp = _make_hyp(
+        "h1",
+        a_desc="KRAS mut",
+        b_desc="WT",
+        rating=HypothesisRating(novelty=1, trustworthiness=1),
+    )
+    hyp.labeled_by = "llm_critic"
+    hyp.human_rating = HypothesisRating(novelty=3, trustworthiness=3)
+
+    assert hyp.effective_rating.novelty == 3
+    assert hyp.effective_rating.trustworthiness == 3
+
+    labeled = [hyp]
+    result = format_previous_hypotheses(labeled, [])
+    assert "[novelty=3, trust=3]" in result
+    assert "[human]" in result
+
+
+def test_effective_rating_falls_back_to_critic():
+    """effective_rating falls back to rating when human_rating is None."""
+    hyp = _make_hyp(
+        "h1",
+        a_desc="KRAS mut",
+        b_desc="WT",
+        rating=HypothesisRating(novelty=2, trustworthiness=2),
+    )
+    hyp.labeled_by = "llm_critic"
+
+    assert hyp.effective_rating.novelty == 2
+    assert hyp.human_rating is None
+
+    labeled = [hyp]
+    result = format_previous_hypotheses(labeled, [])
+    assert "[novelty=2, trust=2]" in result
+    assert "[critic]" in result

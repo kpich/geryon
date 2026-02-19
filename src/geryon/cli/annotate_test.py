@@ -7,7 +7,7 @@ import pytest
 
 from geryon.cli.annotate import (
     _count_all,
-    _load_unlabeled,
+    _load_all,
     create_app,
 )
 from geryon.labeling.labeled_store import LabeledStore
@@ -111,41 +111,70 @@ def setup(tmp_path):
     return output_dir, labeled_store, labeled_dir
 
 
-def test_load_unlabeled_returns_all_pending(setup):
+def test_load_all_returns_all_hypotheses(setup):
     output_dir, labeled_store, _ = setup
-    items = _load_unlabeled(output_dir, labeled_store)
+    items = _load_all(output_dir, labeled_store)
     assert len(items) == 2
     ids = {h["hypothesis_id"] for h in items}
     assert ids == {"h-1", "h-2"}
+    assert items[0]["created_at"] <= items[1]["created_at"]
 
 
-def test_load_unlabeled_excludes_labeled(setup):
+def test_load_all_includes_labeled(setup):
+    """Labeled hypotheses show with status == 'human_labeled'."""
     output_dir, labeled_store, _ = setup
     hyp = _make_hypothesis("h-1", "sess-1")
-    hyp.rating = HypothesisRating(novelty=2, trustworthiness=3)
+    hyp.human_rating = HypothesisRating(novelty=2, trustworthiness=3)
+    hyp.labeled_by = "annotator"
     labeled_store.save(hyp)
 
-    items = _load_unlabeled(output_dir, labeled_store)
-    assert len(items) == 1
-    assert items[0]["hypothesis_id"] == "h-2"
+    items = _load_all(output_dir, labeled_store)
+    assert len(items) == 2
+    h1 = next(h for h in items if h["hypothesis_id"] == "h-1")
+    assert h1["status"] == "human_labeled"
 
 
-def test_load_unlabeled_includes_critic_rated(setup):
-    """Critic-rated hypotheses still appear for human review."""
+def test_load_all_merges_labeled_store_data(setup):
+    """Both critic and human ratings present after merge."""
     output_dir, labeled_store, _ = setup
     hyp = _make_hypothesis("h-1", "sess-1")
     hyp.rating = HypothesisRating(novelty=2, trustworthiness=2)
     hyp.labeled_by = "llm_critic"
-    # Re-seed with critic-rated hypothesis
+    hyp.notes = "critic note"
     store = HypothesisStore(output_dir / "sess-1")
     store.save_all([hyp, _make_hypothesis("h-2", "sess-1")])
 
-    items = _load_unlabeled(output_dir, labeled_store)
-    ids = {h["hypothesis_id"] for h in items}
-    assert "h-1" in ids
+    labeled_hyp = _make_hypothesis("h-1", "sess-1")
+    labeled_hyp.rating = HypothesisRating(novelty=2, trustworthiness=2)
+    labeled_hyp.labeled_by = "llm_critic"
+    labeled_hyp.notes = "critic note"
+    labeled_hyp.human_rating = HypothesisRating(novelty=3, trustworthiness=3)
+    labeled_hyp.human_notes = "human note"
+    labeled_store.save(labeled_hyp)
+
+    items = _load_all(output_dir, labeled_store)
+    h1 = next(h for h in items if h["hypothesis_id"] == "h-1")
+    assert h1["critic_rating"]["novelty"] == 2
+    assert h1["human_rating"]["novelty"] == 3
+    assert h1["human_notes"] == "human note"
+    assert h1["status"] == "human_labeled"
 
 
-def test_load_unlabeled_has_critic_prefill_fields(setup):
+def test_load_all_includes_critic_rated(setup):
+    """Critic-rated hypotheses appear with status critic_labeled."""
+    output_dir, labeled_store, _ = setup
+    hyp = _make_hypothesis("h-1", "sess-1")
+    hyp.rating = HypothesisRating(novelty=2, trustworthiness=2)
+    hyp.labeled_by = "llm_critic"
+    store = HypothesisStore(output_dir / "sess-1")
+    store.save_all([hyp, _make_hypothesis("h-2", "sess-1")])
+
+    items = _load_all(output_dir, labeled_store)
+    h1 = next(h for h in items if h["hypothesis_id"] == "h-1")
+    assert h1["status"] == "critic_labeled"
+
+
+def test_load_all_has_critic_prefill_fields(setup):
     """Critic-rated hypothesis data dict has critic_rating and critic_notes."""
     output_dir, labeled_store, _ = setup
     hyp = _make_hypothesis("h-1", "sess-1")
@@ -155,7 +184,7 @@ def test_load_unlabeled_has_critic_prefill_fields(setup):
     store = HypothesisStore(output_dir / "sess-1")
     store.save_all([hyp])
 
-    items = _load_unlabeled(output_dir, labeled_store)
+    items = _load_all(output_dir, labeled_store)
     assert len(items) == 1
     item = items[0]
     assert item["critic_rating"] == {
@@ -169,31 +198,32 @@ def test_load_unlabeled_has_critic_prefill_fields(setup):
     assert item["labeled_by"] == "llm_critic"
 
 
-def test_count_all(setup):
+def test_count_all_categories(setup):
     output_dir, labeled_store, _ = setup
     counts = _count_all(output_dir, labeled_store)
-    assert counts == {"total": 2, "labeled": 0, "pending": 2}
+    assert counts == {"total": 2, "human_labeled": 0, "critic_labeled": 0, "pending": 2}
 
     hyp = _make_hypothesis("h-1", "sess-1")
-    hyp.rating = HypothesisRating(novelty=1)
+    hyp.human_rating = HypothesisRating(novelty=1)
+    hyp.labeled_by = "annotator"
     labeled_store.save(hyp)
 
     counts = _count_all(output_dir, labeled_store)
-    assert counts == {"total": 2, "labeled": 1, "pending": 1}
+    assert counts == {"total": 2, "human_labeled": 1, "critic_labeled": 0, "pending": 1}
 
 
 # -- Flask route tests (test client, mocked data layer) --
 
 
-def _fake_unlabeled(*_args):
+def _fake_all(*_args):
     return [
-        {"hypothesis_id": "h-1", "summary": "test"},
-        {"hypothesis_id": "h-2", "summary": "test2"},
+        {"hypothesis_id": "h-1", "summary": "test", "status": "pending"},
+        {"hypothesis_id": "h-2", "summary": "test2", "status": "pending"},
     ]
 
 
 def _fake_stats(*_args):
-    return {"total": 5, "labeled": 2, "pending": 3}
+    return {"total": 5, "human_labeled": 2, "critic_labeled": 1, "pending": 2}
 
 
 @pytest.fixture
@@ -203,15 +233,15 @@ def client():
     return app.test_client()
 
 
-@patch("geryon.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("geryon.cli.annotate._load_all", _fake_all)
 @patch("geryon.cli.annotate._count_all", _fake_stats)
 def test_get_html(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert b"Geryon Hypothesis Annotator" in r.data
+    assert b"Hypothesis Explorer" in r.data
 
 
-@patch("geryon.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("geryon.cli.annotate._load_all", _fake_all)
 @patch("geryon.cli.annotate._count_all", _fake_stats)
 def test_api_hypotheses(client):
     r = client.get("/api/hypotheses")
@@ -220,20 +250,24 @@ def test_api_hypotheses(client):
     assert len(data) == 2
 
 
-@patch("geryon.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("geryon.cli.annotate._load_all", _fake_all)
 @patch("geryon.cli.annotate._count_all", _fake_stats)
 def test_api_stats(client):
     r = client.get("/api/stats")
     assert r.status_code == 200
     data = r.get_json()
-    assert data == {"total": 5, "labeled": 2, "pending": 3}
+    assert data == {"total": 5, "human_labeled": 2, "critic_labeled": 1, "pending": 2}
 
 
-@patch("geryon.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("geryon.cli.annotate._load_all", _fake_all)
 @patch("geryon.cli.annotate._count_all", _fake_stats)
-def test_api_label_saves_hypothesis():
+def test_api_label_sets_human_rating():
     mock_store = MagicMock()
+    mock_store.load_one.return_value = None
     hyp = _make_hypothesis("h-1")
+    hyp.rating = HypothesisRating(novelty=1, trustworthiness=1)
+    hyp.labeled_by = "llm_critic"
+    hyp.notes = "critic note"
 
     app = create_app(Path("."), mock_store)
     app.config["TESTING"] = True
@@ -252,16 +286,52 @@ def test_api_label_saves_hypothesis():
 
     mock_store.save.assert_called_once()
     saved = mock_store.save.call_args[0][0]
-    assert saved.rating.novelty == 2
-    assert saved.rating.trustworthiness == 3
-    assert saved.notes == "good"
+    assert saved.human_rating.novelty == 2
+    assert saved.human_rating.trustworthiness == 3
+    assert saved.human_notes == "good"
     assert saved.labeled_by == "annotator"
 
 
-@patch("geryon.cli.annotate._load_unlabeled", _fake_unlabeled)
+@patch("geryon.cli.annotate._load_all", _fake_all)
+@patch("geryon.cli.annotate._count_all", _fake_stats)
+def test_api_label_preserves_critic_rating():
+    """Critic values preserved alongside human rating."""
+    mock_store = MagicMock()
+    mock_store.load_one.return_value = None
+    hyp = _make_hypothesis("h-1")
+    hyp.rating = HypothesisRating(novelty=1, trustworthiness=1)
+    hyp.labeled_by = "llm_critic"
+    hyp.notes = "critic note"
+
+    app = create_app(Path("."), mock_store)
+    app.config["TESTING"] = True
+
+    with patch("geryon.cli.annotate._find_hypothesis", return_value=hyp):
+        r = app.test_client().post(
+            "/api/label",
+            json={
+                "hypothesis_id": "h-1",
+                "novelty": 3,
+                "trustworthiness": 3,
+                "notes": "human note",
+            },
+        )
+        assert r.status_code == 200
+
+    saved = mock_store.save.call_args[0][0]
+    assert saved.rating.novelty == 1
+    assert saved.rating.trustworthiness == 1
+    assert saved.notes == "critic note"
+    assert saved.human_rating.novelty == 3
+    assert saved.human_rating.trustworthiness == 3
+    assert saved.human_notes == "human note"
+
+
+@patch("geryon.cli.annotate._load_all", _fake_all)
 @patch("geryon.cli.annotate._count_all", _fake_stats)
 def test_api_label_saves_na_hypothesis():
     mock_store = MagicMock()
+    mock_store.load_one.return_value = None
     hyp = _make_hypothesis("h-1")
 
     app = create_app(Path("."), mock_store)
@@ -279,8 +349,8 @@ def test_api_label_saves_na_hypothesis():
 
     mock_store.save.assert_called_once()
     saved = mock_store.save.call_args[0][0]
-    assert saved.rating.is_na is True
-    assert saved.rating.novelty is None
-    assert saved.rating.uncontrolled is None
-    assert saved.rating.trustworthiness is None
+    assert saved.human_rating.is_na is True
+    assert saved.human_rating.novelty is None
+    assert saved.human_rating.uncontrolled is None
+    assert saved.human_rating.trustworthiness is None
     assert saved.labeled_by == "annotator"
