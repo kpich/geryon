@@ -138,6 +138,7 @@ def run_workflow(
         session_id=session_id,
         parquet_dir=parquet_dir,
         storage_dir=run_dir,
+        output_dir=output_dir,
         **overrides,
     )
 
