@@ -30,6 +30,21 @@ class SessionTracer:
     # Public API
     # ------------------------------------------------------------------
 
+    def log_iteration_start(
+        self,
+        iteration: int,
+        previous_ids: list[str],
+        n_rated: int,
+        n_unrated_session: int,
+    ) -> None:
+        self._write(
+            event="iteration_start",
+            iteration=iteration,
+            previous_hypothesis_ids=previous_ids,
+            n_rated=n_rated,
+            n_unrated_session=n_unrated_session,
+        )
+
     def log_tool_call(self, tool_name: str, args: dict, result: str) -> None:
         extra = self._extract_tool_metadata(tool_name, args, result)
         self._write(event="tool_call", tool=tool_name, args=args, **extra)
