@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from msk_cycl.db import Database
-from msk_cycl.engine import HypothesisExecutor
-from msk_cycl.lang import CohortFilter, SelectCohort
+from geryon.db import Database
+from geryon.engine import HypothesisExecutor
+from geryon.lang import CohortFilter, SelectCohort
 
 
 def _write_parquet_tables(tmp_path: Path) -> None:

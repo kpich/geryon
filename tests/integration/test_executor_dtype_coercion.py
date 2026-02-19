@@ -5,13 +5,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from msk_cycl.db import Database
-from msk_cycl.engine import HypothesisExecutor
-from msk_cycl.lang import (
+from geryon.db import Database
+from geryon.engine import HypothesisExecutor
+from geryon.lang import (
     CohortFilter,
     CompareCohorts,
     ComparisonMethod,
-    CyclHyp,
+    GeryonHyp,
     OverallSurvival,
     SelectCohort,
 )
@@ -48,7 +48,7 @@ def test_executor_succeeds_with_cbioportal_string_status(tmp_path: Path):
     with Database(tmp_path) as db:
         executor = HypothesisExecutor(db)
 
-        spec = CyclHyp(
+        spec = GeryonHyp(
             query=CompareCohorts(
                 cohort_a=SelectCohort(
                     filters=[

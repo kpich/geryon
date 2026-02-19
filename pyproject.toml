@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "msk_cycl"
+name = "geryon"
 version = "0.1.0"
 description = "cancer hypothesis generation"
 requires-python = ">=3.11, <4"
@@ -52,7 +52,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mbird_data = ["py.typed"]
-msk_cycl = ["cli/templates/*.html"]
+geryon = ["cli/templates/*.html"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
@@ -80,4 +80,4 @@ ignore = ["SIM108"]  # Allow if-else over ternary for readability
 [tool.ruff.lint.isort]
 force-single-line = false
 force-sort-within-sections = true
-known-first-party = ["msk_cycl"]
+known-first-party = ["geryon"]
