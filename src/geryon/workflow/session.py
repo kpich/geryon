@@ -55,6 +55,10 @@ class SessionConfig(BaseModel):
         default=Path("labeled_hypotheses"),
         description="Directory with labeled hypothesis JSON files",
     )
+    output_dir: Path | None = Field(
+        default=None,
+        description="Parent output directory (for loading prior sessions)",
+    )
 
     # Logging
     enable_llm_logging: bool = Field(

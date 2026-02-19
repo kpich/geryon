@@ -1,6 +1,9 @@
 """Format prior hypotheses for injection into the LLM prompt."""
 
+from pathlib import Path
+
 from geryon.labeling.models import LabeledHypothesis
+from geryon.labeling.storage import HypothesisStore
 
 MAX_RATED = 50
 MAX_SESSION = 20
@@ -38,6 +41,38 @@ def _format_summary_suffix(hyp: LabeledHypothesis) -> str:
     if hyp.narrative and hyp.narrative.summary:
         return f" | {hyp.narrative.summary}"
     return ""
+
+
+def load_prior_hypotheses(
+    output_dir: Path | None, current_session_id: str
+) -> list[LabeledHypothesis]:
+    """Load hypotheses from prior sessions under output_dir.
+
+    Parameters
+    ----------
+    output_dir : Path | None
+        Parent output directory containing session subdirectories
+    current_session_id : str
+        Session ID to exclude (current session)
+
+    Returns
+    -------
+    list[LabeledHypothesis]
+        Hypotheses from all prior sessions
+    """
+    if output_dir is None or not output_dir.exists():
+        return []
+    all_hyps = []
+    for jsonl_file in sorted(output_dir.rglob("hypotheses.jsonl")):
+        store = HypothesisStore(jsonl_file.parent)
+        try:
+            hyps = store.load()
+        except Exception:
+            continue
+        for h in hyps:
+            if h.session_id != current_session_id:
+                all_hyps.append(h)
+    return all_hyps
 
 
 def format_previous_hypotheses(
@@ -88,7 +123,7 @@ def format_previous_hypotheses(
             lines.append(f"... and {len(rated) - MAX_RATED} more rated hypotheses")
 
     if unrated_session:
-        lines.append("**PREVIOUSLY TESTED THIS SESSION (avoid duplicates):**")
+        lines.append("**PREVIOUSLY TESTED (avoid duplicates):**")
         for hyp in unrated_session[:MAX_SESSION]:
             sid = short_id(hyp.hypothesis_id)
             desc = (

@@ -222,7 +222,10 @@ class AutonomousWorkflow:
 
         # Load labeled hypotheses (from prior annotation) and same-session hypotheses
         labeled = self.labeled_store.load_all()
-        session_previous = self.store.load()
+        from geryon.workflow.context import load_prior_hypotheses
+
+        prior = load_prior_hypotheses(self.config.output_dir, self.config.session_id)
+        session_previous = prior + self.store.load()
         previous_context = self._format_previous_hypotheses(labeled, session_previous)
 
         print(f"Generating {n_proposals} hypothesis(es)...")

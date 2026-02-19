@@ -10,7 +10,11 @@ from geryon.lang.results import ComparisonResult
 from geryon.lang.spec import CohortFilter, CompareCohorts, GeryonHyp, SelectCohort
 from geryon.llm.generator import HypothesisProposal
 from geryon.llm.narrator import HypothesisNarrative
-from geryon.workflow.context import format_previous_hypotheses, short_id
+from geryon.workflow.context import (
+    format_previous_hypotheses,
+    load_prior_hypotheses,
+    short_id,
+)
 
 
 def _make_hyp(
@@ -109,14 +113,14 @@ def test_rated_only():
         "[h2] Lung vs Non-lung [uncontrolled=3, dup] — used wrong column | Test"
         in result
     )
-    assert "PREVIOUSLY TESTED THIS SESSION" not in result
+    assert "PREVIOUSLY TESTED" not in result
 
 
 def test_session_only():
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
     result = format_previous_hypotheses([], session)
 
-    assert "PREVIOUSLY TESTED THIS SESSION" in result
+    assert "PREVIOUSLY TESTED" in result
     assert "[s1] TP53 mut vs WT" in result
     assert "PREVIOUSLY RATED" not in result
 
@@ -134,10 +138,10 @@ def test_both_sections():
     result = format_previous_hypotheses(labeled, session)
 
     assert "PREVIOUSLY RATED" in result
-    assert "PREVIOUSLY TESTED THIS SESSION" in result
+    assert "PREVIOUSLY TESTED" in result
     lines = result.split("\n")
     rated_idx = next(i for i, line in enumerate(lines) if "RATED" in line)
-    session_idx = next(i for i, line in enumerate(lines) if "THIS SESSION" in line)
+    session_idx = next(i for i, line in enumerate(lines) if "PREVIOUSLY TESTED" in line)
     assert rated_idx < session_idx
 
 
@@ -354,3 +358,37 @@ def test_refines_tag_in_session_section():
     result = format_previous_hypotheses([], session)
 
     assert "(refines deadbeef)" in result
+
+
+def test_prior_session_hypotheses_loaded(tmp_path):
+    """Prior session hypotheses are loaded and included in context."""
+    from geryon.labeling.storage import HypothesisStore
+
+    prior_dir = tmp_path / "2024-01-01" / "prior-session-id"
+    prior_dir.mkdir(parents=True)
+    prior_hyp = _make_hyp(
+        "prior-h1", session_id="prior-session-id", a_desc="BRAF mut", b_desc="WT"
+    )
+    store = HypothesisStore(prior_dir)
+    store.save(prior_hyp)
+
+    result = load_prior_hypotheses(tmp_path, "current-session-id")
+
+    assert len(result) == 1
+    assert result[0].hypothesis_id == "prior-h1"
+    assert result[0].proposal.cohort_a_description == "BRAF mut"
+
+
+def test_prior_hypotheses_excludes_current_session(tmp_path):
+    """Hypotheses from the current session are not returned by load_prior_hypotheses."""
+    from geryon.labeling.storage import HypothesisStore
+
+    session_dir = tmp_path / "2024-01-01" / "my-session"
+    session_dir.mkdir(parents=True)
+    hyp = _make_hyp("h1", session_id="my-session", a_desc="TP53 mut", b_desc="WT")
+    store = HypothesisStore(session_dir)
+    store.save(hyp)
+
+    result = load_prior_hypotheses(tmp_path, "my-session")
+
+    assert len(result) == 0
