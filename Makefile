@@ -55,3 +55,16 @@ annotate:
 .PHONY: workflow
 workflow:
 	./scripts/run.sh
+
+GERYON_DATA_DIR := geryon_data
+GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git
+
+.PHONY: backup
+backup:
+	cd $(GERYON_DATA_DIR) && git add -A && \
+	git diff --cached --quiet || git commit -m "backup $$(date +%Y-%m-%d_%H:%M:%S)" && \
+	git push
+
+.PHONY: restore
+restore:
+	git clone $(GERYON_DATA_REPO) $(GERYON_DATA_DIR)
