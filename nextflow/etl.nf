@@ -14,7 +14,7 @@ nextflow.enable.dsl = 2
 // ============================================================================
 
 params.data_root = '/Users/pichottk/data/msk-impact/msk_solid_heme'
-params.output_base = "${System.getProperty('user.home')}/data/geryone_data"
+params.output_base = "${System.getProperty('user.home')}/data/geryon_data"
 params.file_pattern = '*.txt'
 
 // ============================================================================

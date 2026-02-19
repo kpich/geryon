@@ -71,7 +71,7 @@ def run_workflow(
     data_dir : Path, optional
         ETL output directory (default: auto-detect latest from data_base)
     data_base : Path, optional
-        Base directory for ETL outputs (default: ~/data/geryone_data)
+        Base directory for ETL outputs (default: ~/data/geryon_data)
     provider : str, optional
         LLM provider (default: aws_bedrock)
     model : str, optional
@@ -108,7 +108,7 @@ def run_workflow(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     if data_base is None:
-        data_base = Path.home() / "data" / "geryone_data"
+        data_base = Path.home() / "data" / "geryon_data"
 
     if data_dir is None:
         parquet_dir = get_latest_etl_output(data_base)
@@ -204,8 +204,8 @@ def main() -> None:
     parser.add_argument(
         "--data-base",
         type=Path,
-        default=Path.home() / "data" / "geryone_data",
-        help="Base directory for ETL outputs (default: ~/data/geryone_data)",
+        default=Path.home() / "data" / "geryon_data",
+        help="Base directory for ETL outputs (default: ~/data/geryon_data)",
     )
     parser.add_argument(
         "--provider",

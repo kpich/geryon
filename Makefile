@@ -38,7 +38,7 @@ etl:
 
 .PHONY: profile
 profile:
-	uv run python -m geryon.etl.profiler --dir $$(ls -d ~/data/geryone_data/*/ | tail -1)
+	uv run python -m geryon.etl.profiler --dir $$(ls -d ~/data/geryon_data/*/ | tail -1)
 
 .PHONY: etl-clean
 etl-clean:
