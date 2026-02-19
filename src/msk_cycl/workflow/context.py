@@ -6,6 +6,11 @@ MAX_RATED = 50
 MAX_SESSION = 20
 
 
+def short_id(hypothesis_id: str) -> str:
+    """Return the first 8 characters of a hypothesis ID."""
+    return hypothesis_id[:8]
+
+
 def _format_rating_tag(hyp: LabeledHypothesis) -> str:
     """Build compact [novelty=2, trust=3, dup] tag from rated dimensions."""
     parts: list[str] = []
@@ -18,6 +23,21 @@ def _format_rating_tag(hyp: LabeledHypothesis) -> str:
     if hyp.rating.is_duplicate is True:
         parts.append("dup")
     return "[" + ", ".join(parts) + "]"
+
+
+def _format_refines_tag(hyp: LabeledHypothesis) -> str:
+    """Build optional (refines xxxxxxxx) tag."""
+    ref = hyp.proposal.refines_hypothesis
+    if ref:
+        return f" (refines {short_id(ref)})"
+    return ""
+
+
+def _format_summary_suffix(hyp: LabeledHypothesis) -> str:
+    """Build optional | summary suffix from narrative."""
+    if hyp.narrative and hyp.narrative.summary:
+        return f" | {hyp.narrative.summary}"
+    return ""
 
 
 def format_previous_hypotheses(
@@ -50,14 +70,18 @@ def format_previous_hypotheses(
     if rated:
         lines.append("**PREVIOUSLY RATED HYPOTHESES (learn from this feedback):**")
         for hyp in rated[:MAX_RATED]:
+            sid = short_id(hyp.hypothesis_id)
             desc = (
                 f"{hyp.proposal.cohort_a_description} vs "
                 f"{hyp.proposal.cohort_b_description}"
             )
             tag = _format_rating_tag(hyp)
-            entry = f"{idx}. {desc} {tag}"
+            refines = _format_refines_tag(hyp)
+            summary = _format_summary_suffix(hyp)
+            entry = f"{idx}. [{sid}] {desc} {tag}{refines}"
             if hyp.notes:
                 entry += f" — {hyp.notes}"
+            entry += summary
             lines.append(entry)
             idx += 1
         if len(rated) > MAX_RATED:
@@ -66,17 +90,21 @@ def format_previous_hypotheses(
     if unrated_session:
         lines.append("**PREVIOUSLY TESTED THIS SESSION (avoid duplicates):**")
         for hyp in unrated_session[:MAX_SESSION]:
+            sid = short_id(hyp.hypothesis_id)
             desc = (
                 f"{hyp.proposal.cohort_a_description} vs "
                 f"{hyp.proposal.cohort_b_description}"
             )
-            entry = f"{idx}. {desc}"
+            refines = _format_refines_tag(hyp)
+            summary = _format_summary_suffix(hyp)
+            entry = f"{idx}. [{sid}] {desc}"
             if not hyp.rating.is_pending:
                 tag = _format_rating_tag(hyp)
                 source = "critic" if hyp.labeled_by == "llm_critic" else "auto"
                 entry += f" {tag} [{source}]"
                 if hyp.notes:
                     entry += f" — {hyp.notes}"
+            entry += refines + summary
             lines.append(entry)
             idx += 1
         if len(unrated_session) > MAX_SESSION:

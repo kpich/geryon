@@ -13,3 +13,4 @@ class HypothesisProposal(BaseModel):
     outcome_description: str
     rationale: str
     cycl_spec: CyclHyp
+    refines_hypothesis: str | None = None

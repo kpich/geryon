@@ -230,3 +230,31 @@ def test_config_serialization(tmp_path: Path):
     assert "created_at" in d
     assert isinstance(d["parquet_dir"], str)
     assert isinstance(d["created_at"], str)
+
+
+def test_refines_hypothesis_round_trip(tmp_path: Path):
+    """Proposal with refines_hypothesis survives save/load."""
+    h = _make_hypothesis()
+    h.proposal.refines_hypothesis = "a3f1c9e2-1234-5678-9abc-def012345678"
+
+    store = HypothesisStore(tmp_path)
+    store.save(h)
+
+    loaded = store.load()
+    assert len(loaded) == 1
+    assert (
+        loaded[0].proposal.refines_hypothesis == "a3f1c9e2-1234-5678-9abc-def012345678"
+    )
+
+
+def test_refines_hypothesis_none_round_trip(tmp_path: Path):
+    """Proposal without refines_hypothesis loads as None."""
+    h = _make_hypothesis()
+    assert h.proposal.refines_hypothesis is None
+
+    store = HypothesisStore(tmp_path)
+    store.save(h)
+
+    loaded = store.load()
+    assert len(loaded) == 1
+    assert loaded[0].proposal.refines_hypothesis is None
