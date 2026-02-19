@@ -116,6 +116,14 @@ Survival from treatment (use with hazard_ratio_cox):
     "table": "timeline_treatment"
   }
 
+Progression-free survival from treatment (use with hazard_ratio_cox):
+  "outcome": {
+    "outcome_type": "progression_from_treatment",
+    "agent": "Pembrolizumab",
+    "treatment_table": "timeline_treatment",
+    "progression_table": "timeline_progression"
+  }
+
 Metastatic burden (use with wilcoxon_rank_sum):
   "outcome": {
     "outcome_type": "metastatic_burden",
@@ -129,9 +137,10 @@ IMPORTANT:
 - method: "hazard_ratio_cox" or "wilcoxon_rank_sum"
 - outcome_type: "overall_survival",
   "time_to_next_treatment", "survival_from_treatment",
-  or "metastatic_burden"
+  "progression_from_treatment", or "metastatic_burden"
 - hazard_ratio_cox works with: overall_survival,
-  time_to_next_treatment, survival_from_treatment
+  time_to_next_treatment, survival_from_treatment,
+  progression_from_treatment
 - wilcoxon_rank_sum works with: metastatic_burden
 - cohort_a and cohort_b must have "filters"
   as an ARRAY of filter objects"""
@@ -182,6 +191,10 @@ Return JSON:
   is starting a new treatment rather than death. Longer TTNT = better response.
 - **Survival from Treatment**: OS anchored to first dose of a specific agent
   rather than diagnosis. Interpreted like standard OS.
+- **Progression-Free Survival from Treatment**: Time from first dose of an agent
+  to radiological progression or death, whichever comes first. Right-censored
+  for patients alive without progression. Interpreted like OS (Cox HR); shorter
+  PFS = worse disease control.
 - **Metastatic Burden**: Count of distinct metastatic sites at a timepoint.
   Compared with Wilcoxon rank-sum (Mann-Whitney U). Higher median = more
   widespread disease. Report medians and whether the difference is significant.

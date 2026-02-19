@@ -12,6 +12,7 @@ from geryon.lang.methods import ComparisonMethod
 from geryon.lang.outcomes import (
     MetastaticBurden,
     OverallSurvival,
+    ProgressionFromTreatment,
     SurvivalFromTreatment,
     TimeToNextTreatment,
 )
@@ -20,7 +21,11 @@ from geryon.lang.outcomes import (
 QUERY_LANGUAGE_VERSION = 1
 
 Outcome = Annotated[
-    OverallSurvival | TimeToNextTreatment | SurvivalFromTreatment | MetastaticBurden,
+    OverallSurvival
+    | TimeToNextTreatment
+    | SurvivalFromTreatment
+    | ProgressionFromTreatment
+    | MetastaticBurden,
     Field(discriminator="outcome_type"),
 ]
 
@@ -28,6 +33,7 @@ _TIME_TO_EVENT = {
     "overall_survival",
     "time_to_next_treatment",
     "survival_from_treatment",
+    "progression_from_treatment",
 }
 _CONTINUOUS = {"metastatic_burden"}
 

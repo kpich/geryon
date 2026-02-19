@@ -7,6 +7,7 @@ from geryon.lang.methods import ComparisonMethod
 from geryon.lang.outcomes import (
     MetastaticBurden,
     OverallSurvival,
+    ProgressionFromTreatment,
     SurvivalFromTreatment,
     TimeToNextTreatment,
 )
@@ -343,6 +344,55 @@ def test_cox_with_survival_from_treatment_is_valid():
         cohort_a=_COHORT_A,
         cohort_b=_COHORT_B,
         outcome=SurvivalFromTreatment(agent="X"),
+        method=ComparisonMethod.HAZARD_RATIO_COX,
+    )
+
+
+def test_progression_from_treatment_defaults():
+    outcome = ProgressionFromTreatment(agent="Pembrolizumab")
+    assert outcome.outcome_type == "progression_from_treatment"
+    assert outcome.treatment_table == "timeline_treatment"
+    assert outcome.progression_table == "timeline_progression"
+
+
+def test_discriminated_union_parses_progression_from_treatment_from_dict():
+    data = {
+        "operation": "compare_cohorts",
+        "cohort_a": {
+            "operation": "select_cohort",
+            "filters": [
+                {
+                    "table": "clinical_patient",
+                    "column": "AGE",
+                    "operator": ">",
+                    "value": 50,
+                }
+            ],
+        },
+        "cohort_b": {
+            "operation": "select_cohort",
+            "filters": [
+                {
+                    "table": "clinical_patient",
+                    "column": "AGE",
+                    "operator": "<=",
+                    "value": 50,
+                }
+            ],
+        },
+        "outcome": {"outcome_type": "progression_from_treatment", "agent": "Pembro"},
+        "method": "hazard_ratio_cox",
+    }
+    cc = CompareCohorts.model_validate(data)
+    assert isinstance(cc.outcome, ProgressionFromTreatment)
+    assert cc.outcome.agent == "Pembro"
+
+
+def test_cox_with_progression_from_treatment_is_valid():
+    CompareCohorts(
+        cohort_a=_COHORT_A,
+        cohort_b=_COHORT_B,
+        outcome=ProgressionFromTreatment(agent="X"),
         method=ComparisonMethod.HAZARD_RATIO_COX,
     )
 
