@@ -69,12 +69,12 @@ make annotate
 
 # Or with options:
 uv run python -m geryon.cli.annotate \
-  --output-dir geryon_run_outputs/ \
-  --labeled-dir labeled_hypotheses/ \
+  --output-dir geryon_data/sessions/ \
+  --labeled-dir geryon_data/labeled/ \
   --port 8765
 ```
 
-Opens a local page at `http://localhost:8765` that auto-discovers all session JSONLs under `geryon_run_outputs/`, shows unlabeled hypotheses newest-first with cohort descriptions, stats, and narrative, and lets you label via radio buttons. Labels are saved as individual JSON files in `labeled_hypotheses/`.
+Opens a local page at `http://localhost:8765` that auto-discovers all session JSONLs under `geryon_data/sessions/`, shows unlabeled hypotheses newest-first with cohort descriptions, stats, and narrative, and lets you label via radio buttons. Labels are saved as individual JSON files in `geryon_data/labeled/`.
 ### Viewing data
 
 ```bash

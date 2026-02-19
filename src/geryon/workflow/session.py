@@ -52,7 +52,7 @@ class SessionConfig(BaseModel):
     parquet_dir: Path = Field(..., description="Directory with parquet files")
     storage_dir: Path = Field(..., description="Directory for JSONL output")
     labeled_dir: Path = Field(
-        default=Path("labeled_hypotheses"),
+        default=Path("geryon_data/labeled"),
         description="Directory with labeled hypothesis JSON files",
     )
     output_dir: Path | None = Field(

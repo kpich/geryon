@@ -67,7 +67,7 @@ def run_workflow(
     Parameters
     ----------
     output_dir : Path, optional
-        Base output directory (default: geryon_run_outputs/)
+        Base output directory (default: geryon_data/sessions/)
     data_dir : Path, optional
         ETL output directory (default: auto-detect latest from data_base)
     data_base : Path, optional
@@ -92,7 +92,7 @@ def run_workflow(
         Enable LLM conversation logging (default: True)
     labeled_dir : Path, optional
         Directory with labeled hypothesis JSON files
-        (default: labeled_hypotheses/)
+        (default: geryon_data/labeled/)
 
     Returns
     -------
@@ -103,7 +103,7 @@ def run_workflow(
     today = datetime.now().strftime("%Y-%m-%d")
 
     if output_dir is None:
-        output_dir = Path.cwd() / "geryon_run_outputs"
+        output_dir = Path.cwd() / "geryon_data" / "sessions"
     run_dir = output_dir / today / session_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -193,7 +193,7 @@ def main() -> None:
         type=Path,
         default=None,
         help="Output directory for hypothesis JSONL files "
-        "(default: geryon_run_outputs/YYYY-MM-DD)",
+        "(default: geryon_data/sessions/YYYY-MM-DD)",
     )
 
     parser.add_argument(
@@ -259,7 +259,7 @@ def main() -> None:
         type=Path,
         default=None,
         help="Directory with labeled hypothesis JSON files "
-        "(default: labeled_hypotheses/)",
+        "(default: geryon_data/labeled/)",
     )
     parser.add_argument(
         "--no-log",

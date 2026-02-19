@@ -221,14 +221,15 @@ def main():
     parser = argparse.ArgumentParser(description="Browser-based hypothesis annotator")
     parser.add_argument(
         "--output-dir",
-        default="geryon_run_outputs",
-        help="Directory containing session JSONL files (default: geryon_run_outputs/)",
+        default="geryon_data/sessions",
+        help="Directory containing session JSONL files "
+        "(default: geryon_data/sessions/)",
     )
     parser.add_argument(
         "--labeled-dir",
-        default="labeled_hypotheses",
+        default="geryon_data/labeled",
         help="Directory for labeled hypothesis JSON files "
-        "(default: labeled_hypotheses/)",
+        "(default: geryon_data/labeled/)",
     )
     parser.add_argument(
         "--port",
