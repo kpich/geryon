@@ -1,5 +1,6 @@
 """Format prior hypotheses for injection into the LLM prompt."""
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from geryon.labeling.models import LabeledHypothesis
@@ -7,6 +8,15 @@ from geryon.labeling.storage import HypothesisStore
 
 MAX_RATED = 50
 MAX_SESSION = 20
+
+
+@dataclass
+class PreviousHypothesesContext:
+    """Formatted context and metadata about previous hypotheses."""
+
+    text: str
+    rated_ids: list[str] = field(default_factory=list)
+    unrated_session_ids: list[str] = field(default_factory=list)
 
 
 def short_id(hypothesis_id: str) -> str:
@@ -89,7 +99,7 @@ def load_prior_hypotheses(
 def format_previous_hypotheses(
     labeled: list[LabeledHypothesis],
     session_previous: list[LabeledHypothesis],
-) -> str:
+) -> PreviousHypothesesContext:
     """Format labeled and same-session hypotheses for LLM context.
 
     Parameters
@@ -107,8 +117,13 @@ def format_previous_hypotheses(
         h for h in session_previous if h.hypothesis_id not in labeled_ids
     ]
 
+    rated_ids = [h.hypothesis_id for h in rated[:MAX_RATED]]
+    unrated_session_ids = [h.hypothesis_id for h in unrated_session[:MAX_SESSION]]
+
     if not rated and not unrated_session:
-        return "**No previous hypotheses yet.**"
+        return PreviousHypothesesContext(
+            text="**No previous hypotheses yet.**",
+        )
 
     lines: list[str] = []
     idx = 1
@@ -159,4 +174,8 @@ def format_previous_hypotheses(
         if len(unrated_session) > MAX_SESSION:
             lines.append(f"... and {len(unrated_session) - MAX_SESSION} more")
 
-    return "\n".join(lines)
+    return PreviousHypothesesContext(
+        text="\n".join(lines),
+        rated_ids=rated_ids,
+        unrated_session_ids=unrated_session_ids,
+    )

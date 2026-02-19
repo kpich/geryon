@@ -85,8 +85,10 @@ def _make_hyp(
 
 
 def test_empty_inputs():
-    result = format_previous_hypotheses([], [])
-    assert result == "**No previous hypotheses yet.**"
+    ctx = format_previous_hypotheses([], [])
+    assert ctx.text == "**No previous hypotheses yet.**"
+    assert ctx.rated_ids == []
+    assert ctx.unrated_session_ids == []
 
 
 def test_rated_only():
@@ -105,7 +107,8 @@ def test_rated_only():
             notes="used wrong column",
         ),
     ]
-    result = format_previous_hypotheses(labeled, [])
+    ctx = format_previous_hypotheses(labeled, [])
+    result = ctx.text
 
     assert "PREVIOUSLY RATED" in result
     assert "[h1] KRAS mut vs WT [novelty=3, trust=3] [auto]" in result
@@ -114,15 +117,20 @@ def test_rated_only():
         in result
     )
     assert "PREVIOUSLY TESTED" not in result
+    assert ctx.rated_ids == ["h1", "h2"]
+    assert ctx.unrated_session_ids == []
 
 
 def test_session_only():
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
-    result = format_previous_hypotheses([], session)
+    ctx = format_previous_hypotheses([], session)
+    result = ctx.text
 
     assert "PREVIOUSLY TESTED" in result
     assert "[s1] TP53 mut vs WT" in result
     assert "PREVIOUSLY RATED" not in result
+    assert ctx.rated_ids == []
+    assert ctx.unrated_session_ids == ["s1"]
 
 
 def test_both_sections():
@@ -135,7 +143,8 @@ def test_both_sections():
         ),
     ]
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
-    result = format_previous_hypotheses(labeled, session)
+    ctx = format_previous_hypotheses(labeled, session)
+    result = ctx.text
 
     assert "PREVIOUSLY RATED" in result
     assert "PREVIOUSLY TESTED" in result
@@ -143,6 +152,8 @@ def test_both_sections():
     rated_idx = next(i for i, line in enumerate(lines) if "RATED" in line)
     session_idx = next(i for i, line in enumerate(lines) if "PREVIOUSLY TESTED" in line)
     assert rated_idx < session_idx
+    assert ctx.rated_ids == ["h1"]
+    assert ctx.unrated_session_ids == ["s1"]
 
 
 def test_deduplication():
@@ -159,7 +170,8 @@ def test_deduplication():
         _make_hyp("h1", a_desc="KRAS mut", b_desc="WT"),
         _make_hyp("s2", a_desc="TP53 mut", b_desc="WT"),
     ]
-    result = format_previous_hypotheses(labeled, session)
+    ctx = format_previous_hypotheses(labeled, session)
+    result = ctx.text
 
     assert result.count("KRAS mut vs WT") == 1
     assert "TP53 mut vs WT" in result
@@ -170,9 +182,9 @@ def test_pending_labeled_excluded_from_rated_section():
     labeled = [
         _make_hyp("h1", a_desc="KRAS mut", b_desc="WT"),
     ]
-    result = format_previous_hypotheses(labeled, [])
+    ctx = format_previous_hypotheses(labeled, [])
 
-    assert result == "**No previous hypotheses yet.**"
+    assert ctx.text == "**No previous hypotheses yet.**"
 
 
 def test_truncation_rated():
@@ -185,22 +197,26 @@ def test_truncation_rated():
         )
         for i in range(60)
     ]
-    result = format_previous_hypotheses(labeled, [])
+    ctx = format_previous_hypotheses(labeled, [])
+    result = ctx.text
 
     assert "... and 10 more rated hypotheses" in result
     assert "Gene49" in result
     assert "Gene50" not in result
+    assert len(ctx.rated_ids) == 50
 
 
 def test_truncation_session():
     session = [
         _make_hyp(f"s{i:07d}", a_desc=f"Gene{i} mut", b_desc="WT") for i in range(25)
     ]
-    result = format_previous_hypotheses([], session)
+    ctx = format_previous_hypotheses([], session)
+    result = ctx.text
 
     assert "... and 5 more" in result
     assert "Gene19" in result
     assert "Gene20" not in result
+    assert len(ctx.unrated_session_ids) == 20
 
 
 def test_session_hypothesis_with_critic_rating_shows_tag():
@@ -215,7 +231,7 @@ def test_session_hypothesis_with_critic_rating_shows_tag():
         ),
     ]
     session[0].labeled_by = "llm_critic"
-    result = format_previous_hypotheses([], session)
+    result = format_previous_hypotheses([], session).text
 
     assert "EGFR mut vs WT" in result
     assert "[novelty=3, trust=2]" in result
@@ -239,7 +255,7 @@ def test_numbering_is_continuous():
         ),
     ]
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
-    result = format_previous_hypotheses(labeled, session)
+    result = format_previous_hypotheses(labeled, session).text
 
     assert "1. [h1] KRAS mut vs WT [novelty=2, trust=3] [auto]" in result
     assert "2. [h2] BRAF mut vs WT [uncontrolled=2] [auto]" in result
@@ -257,7 +273,7 @@ def test_short_id_shown_in_context():
             rating=HypothesisRating(novelty=2),
         ),
     ]
-    result = format_previous_hypotheses(labeled, [])
+    result = format_previous_hypotheses(labeled, []).text
 
     assert "[a3f1c9e2]" in result
     assert short_id(hyp_id) == "a3f1c9e2"
@@ -274,7 +290,7 @@ def test_narrative_summary_shown_in_context():
             summary="HR=0.72 suggesting protective effect",
         ),
     ]
-    result = format_previous_hypotheses(labeled, [])
+    result = format_previous_hypotheses(labeled, []).text
 
     assert "| HR=0.72 suggesting protective effect" in result
 
@@ -291,7 +307,7 @@ def test_refines_tag_shown_in_context():
             refines_hypothesis=parent_id,
         ),
     ]
-    result = format_previous_hypotheses(labeled, [])
+    result = format_previous_hypotheses(labeled, []).text
 
     assert "(refines a3f1c9e2)" in result
 
@@ -339,7 +355,7 @@ def test_summary_shown_in_session_section():
     session = [
         _make_hyp("s1", a_desc="KRAS mut", b_desc="WT", summary="No difference"),
     ]
-    result = format_previous_hypotheses([], session)
+    result = format_previous_hypotheses([], session).text
 
     assert "| No difference" in result
 
@@ -355,7 +371,7 @@ def test_refines_tag_in_session_section():
             refines_hypothesis=parent_id,
         ),
     ]
-    result = format_previous_hypotheses([], session)
+    result = format_previous_hypotheses([], session).text
 
     assert "(refines deadbeef)" in result
 
@@ -409,7 +425,7 @@ def test_human_rating_preferred_over_critic():
     assert hyp.effective_rating.trustworthiness == 3
 
     labeled = [hyp]
-    result = format_previous_hypotheses(labeled, [])
+    result = format_previous_hypotheses(labeled, []).text
     assert "[novelty=3, trust=3]" in result
     assert "[human]" in result
 
@@ -428,6 +444,6 @@ def test_effective_rating_falls_back_to_critic():
     assert hyp.human_rating is None
 
     labeled = [hyp]
-    result = format_previous_hypotheses(labeled, [])
+    result = format_previous_hypotheses(labeled, []).text
     assert "[novelty=2, trust=2]" in result
     assert "[critic]" in result
