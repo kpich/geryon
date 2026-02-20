@@ -34,6 +34,18 @@ from geryon.lang.outcomes import (
 )
 
 # ============================================================================
+# TABLE JOIN CONFIGURATION
+# ============================================================================
+# Tables that need a JOIN to resolve PATIENT_ID.
+# Maps table -> (sample_key_column, join_table, join_column)
+# To add a new table with a non-standard patient ID join: add an entry here.
+
+TABLE_PATIENT_ID_JOINS: dict[str, tuple[str, str, str]] = {
+    "mutations_extended": ("Tumor_Sample_Barcode", "clinical_sample", "SAMPLE_ID"),
+    "CNA": ("PATIENT_ID", "clinical_sample", "SAMPLE_ID"),
+}
+
+# ============================================================================
 # OUTCOME HANDLERS REGISTRY
 # ============================================================================
 # Maps outcome type → handler class

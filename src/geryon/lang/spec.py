@@ -29,14 +29,6 @@ Outcome = Annotated[
     Field(discriminator="outcome_type"),
 ]
 
-_TIME_TO_EVENT = {
-    "overall_survival",
-    "time_to_next_treatment",
-    "survival_from_treatment",
-    "progression_from_treatment",
-}
-_CONTINUOUS = {"metastatic_burden"}
-
 
 class CohortFilter(BaseModel):
     """Single filter criterion for cohort selection."""
@@ -77,21 +69,20 @@ class CompareCohorts(BaseModel):
     def validate_method_outcome_compatibility(self) -> "CompareCohorts":
         """Validate that the comparison method is compatible with the outcome type."""
         otype = self.outcome.outcome_type
+        category = type(self.outcome).outcome_category
         if (
             self.method == ComparisonMethod.HAZARD_RATIO_COX
-            and otype not in _TIME_TO_EVENT
+            and category != "time_to_event"
         ):
             raise ValueError(
-                f"hazard_ratio_cox requires a time-to-event outcome "
-                f"({', '.join(sorted(_TIME_TO_EVENT))}), got {otype}"
+                f"hazard_ratio_cox requires a time-to-event outcome, got {otype}"
             )
         if (
             self.method == ComparisonMethod.WILCOXON_RANK_SUM
-            and otype not in _CONTINUOUS
+            and category != "continuous"
         ):
             raise ValueError(
-                f"wilcoxon_rank_sum requires a continuous outcome "
-                f"({', '.join(sorted(_CONTINUOUS))}), got {otype}"
+                f"wilcoxon_rank_sum requires a continuous outcome, got {otype}"
             )
         return self
 

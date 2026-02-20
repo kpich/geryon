@@ -23,6 +23,9 @@ class ComparisonResult(BaseModel):
     median_b: float | None = None
     u_statistic: float | None = None
 
+    # Method-specific stats not covered by named fields above
+    extra_stats: dict[str, float] = Field(default_factory=dict)
+
     # Raw data for statistical calculation (not serialized to JSONL)
     cohort_a_data: pd.DataFrame | None = Field(default=None)
     cohort_b_data: pd.DataFrame | None = Field(default=None)
