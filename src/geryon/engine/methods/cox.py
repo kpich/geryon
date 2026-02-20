@@ -34,10 +34,19 @@ class CoxHazardRatioMethod:
 
         combined = pd.concat([cohort_a_data, cohort_b_data])
 
-        cox_data = combined[["time", "event", "cohort"]]
+        has_entry = "entry_time" in combined.columns
+        cols = ["time", "event", "cohort"] + (["entry_time"] if has_entry else [])
+        cox_data = combined[cols]
+
+        fit_kwargs: dict = {"duration_col": "time", "event_col": "event"}
+        # Without entry_col, patients who survived a long time from diagnosis to
+        # sequencing inflate early-period survival, biasing the hazard estimate
+        # downward at short durations.
+        if has_entry:
+            fit_kwargs["entry_col"] = "entry_time"
 
         cph = CoxPHFitter()
-        cph.fit(cox_data, duration_col="time", event_col="event")
+        cph.fit(cox_data, **fit_kwargs)
 
         hr = cph.hazard_ratios_["cohort"]
         ci = cph.confidence_intervals_.loc["cohort"]

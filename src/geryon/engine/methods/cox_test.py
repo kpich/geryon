@@ -42,6 +42,37 @@ def test_calculate_cox_hazard_ratio_with_known_data():
     assert 0 <= result["p_value"] <= 1
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::lifelines.utils.ConvergenceWarning")
+def test_calculate_with_left_truncation():
+    """Cox regression handles left-truncated data via entry_col."""
+    cohort_a = pd.DataFrame(
+        {
+            "PATIENT_ID": ["A1", "A2", "A3", "A4", "A5"],
+            "time": [24.0, 30.0, 20.0, 36.0, 28.0],
+            "event": [1, 0, 1, 0, 1],
+            "entry_time": [2.0, 3.0, 1.0, 4.0, 2.0],
+        }
+    )
+    cohort_b = pd.DataFrame(
+        {
+            "PATIENT_ID": ["B1", "B2", "B3", "B4", "B5"],
+            "time": [18.0, 22.0, 19.0, 17.0, 21.0],
+            "event": [1, 1, 1, 1, 1],
+            "entry_time": [1.0, 2.0, 1.5, 1.0, 2.0],
+        }
+    )
+
+    method = CoxHazardRatioMethod()
+    result = method.calculate(cohort_a, cohort_b)
+
+    assert "hazard_ratio" in result
+    assert "confidence_interval_lower" in result
+    assert "confidence_interval_upper" in result
+    assert "p_value" in result
+    assert result["hazard_ratio"] is not None and result["hazard_ratio"] > 0
+
+
 def test_cox_rejects_cbioportal_status_strings():
     """Cox regression fails on cBioPortal '1:DECEASED'/'0:LIVING' strings."""
     cohort_a = pd.DataFrame(

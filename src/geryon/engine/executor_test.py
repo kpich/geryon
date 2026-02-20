@@ -34,6 +34,16 @@ def test_executor_executes_compare_cohorts_query(tmp_path: Path):
     parquet_file = tmp_path / "data_clinical_patient.parquet"
     df.to_parquet(parquet_file, index=False)
 
+    dx_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003", "P004"],
+            "START_DATE": [-365.0, -365.0, -365.0, -365.0],
+        }
+    )
+    (tmp_path / "data_timeline_diagnosis.parquet").write_bytes(
+        dx_df.to_parquet(index=False)
+    )
+
     with Database(tmp_path) as db:
         executor = HypothesisExecutor(db)
 
