@@ -9,11 +9,21 @@ import numpy as np
 
 from geryon.plot._loader import load_hypotheses
 
-# Colors match the annotator UI (annotate.html)
+# Okabe-Ito colorblind-safe palette; GOOD/NEUTRAL/BAD mapped per dimension
+_GOOD = "#0072B2"  # blue
+_NEUTRAL = "#E69F00"  # amber
+_BAD = "#D55E00"  # vermillion
+
 COLORS: dict[str, dict[int, str]] = {
-    "novelty": {1: "#9ca3af", 2: "#d97706", 3: "#059669"},
-    "uncontrolled": {1: "#059669", 2: "#d97706", 3: "#dc2626"},
-    "trustworthiness": {1: "#dc2626", 2: "#d97706", 3: "#059669"},
+    "novelty": {1: _BAD, 2: _NEUTRAL, 3: _GOOD},  # surprising=good
+    "uncontrolled": {1: _GOOD, 2: _NEUTRAL, 3: _BAD},  # clean=good
+    "trustworthiness": {1: _BAD, 2: _NEUTRAL, 3: _GOOD},  # credible=good
+}
+
+DIRECTION: dict[str, str] = {
+    "novelty": "↑ higher = better",
+    "uncontrolled": "↓ lower = better",
+    "trustworthiness": "↑ higher = better",
 }
 
 DIMENSIONS = ["novelty", "uncontrolled", "trustworthiness"]
@@ -133,7 +143,7 @@ def main() -> None:
         ax.set_xlabel("Refinement depth (0 = original hypothesis)")
         ax.set_ylabel("Proportion")
         ax.set_ylim(0, 1.15)
-        ax.set_title(DIMENSION_LABELS[dim])
+        ax.set_title(f"{DIMENSION_LABELS[dim]} ({DIRECTION[dim]})")
         ax.legend(title="Rating", loc="upper right")
         ax.grid(True, alpha=0.3, axis="y")
 
