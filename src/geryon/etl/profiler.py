@@ -4,12 +4,9 @@ Precomputes per-column stats (distinct count, top N values, null rate)
 so describe_table can show value distributions without expensive runtime queries.
 """
 
-import argparse
 from datetime import UTC, datetime
-import json
 import logging
 from pathlib import Path
-import sys
 from typing import TypedDict
 
 import duckdb
@@ -197,62 +194,3 @@ def profile_parquet(
         return profile
     finally:
         conn.close()
-
-
-def main() -> None:
-    """CLI entry point for profiling existing parquet files."""
-    parser = argparse.ArgumentParser(
-        description="Profile existing parquet files (backfill profiles without "
-        "re-running ETL)"
-    )
-    parser.add_argument(
-        "--dir",
-        type=Path,
-        required=True,
-        help="Directory containing parquet files to profile",
-    )
-    parser.add_argument(
-        "--top-n",
-        type=int,
-        default=20,
-        help="Max top values for high-cardinality columns (default: 20)",
-    )
-    parser.add_argument(
-        "--log-level",
-        type=str,
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging level (default: INFO)",
-    )
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(levelname)s: %(message)s",
-        stream=sys.stdout,
-    )
-
-    parquet_dir = Path(args.dir)
-    if not parquet_dir.exists():
-        logger.error(f"Directory not found: {parquet_dir}")
-        sys.exit(1)
-
-    parquet_files = list(parquet_dir.glob("*.parquet"))
-    if not parquet_files:
-        logger.error(f"No parquet files found in {parquet_dir}")
-        sys.exit(1)
-
-    logger.info(f"Found {len(parquet_files)} parquet file(s) in {parquet_dir}")
-
-    for pf in parquet_files:
-        logger.info(f"Profiling {pf.name}...")
-        profile = profile_parquet(pf, top_n=args.top_n)
-        output_path = pf.with_suffix(".profile.json")
-        output_path.write_text(json.dumps(profile, indent=2))
-        logger.info(f"  → {output_path.name}")
-
-    logger.info("Done.")
-
-
-if __name__ == "__main__":
-    main()
