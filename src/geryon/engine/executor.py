@@ -121,6 +121,6 @@ class HypothesisExecutor:
             cohort_b_size=len(cohort_b_ids),
             cohort_a_data=cohort_a_data,
             cohort_b_data=cohort_b_data,
-            **{k: v for k, v in stats.items() if k in _KNOWN_STAT_KEYS},
+            **{k: v for k, v in stats.items() if k in _KNOWN_STAT_KEYS},  # type: ignore[arg-type]
             extra_stats={k: v for k, v in stats.items() if k not in _KNOWN_STAT_KEYS},
         )
