@@ -243,8 +243,13 @@ class AutonomousWorkflow:
 
         # Build messages: static system prompt + dynamic user message
         from geryon.llm.prompts import PROPOSAL_SYSTEM_PROMPT
+        from geryon.llm.schema_context import load_schema_context
 
-        system_message = SystemMessage(content=PROPOSAL_SYSTEM_PROMPT)
+        schema_ctx = load_schema_context(self.config.parquet_dir, self.db)
+        system_content = PROPOSAL_SYSTEM_PROMPT
+        if schema_ctx:
+            system_content = system_content + "\n\n" + schema_ctx
+        system_message = SystemMessage(content=system_content)
         user_text = (
             f"{previous_context}\n\n"
             f"Generate {n_proposals} hypothesis(es). "

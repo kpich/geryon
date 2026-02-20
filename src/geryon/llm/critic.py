@@ -54,6 +54,13 @@ CALIBRATION:
 - A well-known association (e.g., TP53 mutation and survival) gets novelty=1.
 - A hypothesis with tiny cohorts or extreme HR values gets trustworthiness=1.
 
+ACTIONABLE NOTES:
+When uncontrolled >= 2, end your notes with a single "Suggested fix:" line
+giving the most specific actionable filter to add to both cohorts. Examples:
+  "Suggested fix: restrict both cohorts to STAGE_HIGHEST_RECORDED = 'Stage 4'"
+  "Suggested fix: restrict both cohorts to timeline_treatment.SUBTYPE = 'Immuno'"
+  "Suggested fix: add MSI_TYPE filter to isolate MSS patients in both cohorts"
+
 Return ONLY valid JSON matching this schema:
 ```json
 {{
