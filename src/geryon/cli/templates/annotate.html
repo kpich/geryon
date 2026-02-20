@@ -38,9 +38,19 @@
   .badge-pending { background: #f3f4f6; color: #6b7280; }
   .row-novelty { font-size: 11px; font-weight: 600; min-width: 20px;
                  text-align: center; border-radius: 3px; padding: 1px 5px; }
-  .novelty-1 { color: #9ca3af; }
-  .novelty-2 { color: #d97706; }
-  .novelty-3 { color: #059669; }
+  .row-novelty-1 { color: #9ca3af; }
+  .row-novelty-2 { color: #d97706; }
+  .row-novelty-3 { color: #059669; }
+  .row-uncontrolled { font-size: 11px; font-weight: 600; min-width: 20px;
+                      text-align: center; border-radius: 3px; padding: 1px 5px; }
+  .row-uncontrolled-1 { color: #059669; }
+  .row-uncontrolled-2 { color: #d97706; }
+  .row-uncontrolled-3 { color: #dc2626; }
+  .row-trust { font-size: 11px; font-weight: 600; min-width: 20px;
+               text-align: center; border-radius: 3px; padding: 1px 5px; }
+  .row-trust-1 { color: #dc2626; }
+  .row-trust-2 { color: #d97706; }
+  .row-trust-3 { color: #059669; }
   .row-toggle { color: #9ca3af; font-size: 14px; min-width: 16px; text-align: center;
                 transition: transform .2s; }
   .hyp-row.open .row-toggle { transform: rotate(90deg); }
@@ -164,13 +174,26 @@ function badgeLabel(status) {
   return "PENDING";
 }
 
-function noveltySpan(h) {
-  const n = (h.human_rating && h.human_rating.novelty) ||
-            (h.critic_rating && h.critic_rating.novelty);
-  if (n == null) return "";
-  const labels = {1: "N1", 2: "N2", 3: "N3"};
-  const titles = {1: "Known/obvious", 2: "Somewhat expected", 3: "Surprising"};
-  return `<span class="row-novelty novelty-${n}" title="${titles[n]}">${labels[n]}</span>`;
+function ratingSpan(val, prefix, titlesMap, colorClass) {
+  if (val == null) return "";
+  return `<span class="${colorClass} ${colorClass}-${val}"
+               title="${titlesMap[val]}">${prefix}${val}</span>`;
+}
+
+function ratingsSpans(h) {
+  const hr = h.human_rating || {};
+  const cr = h.critic_rating || {};
+  const nov = hr.novelty ?? cr.novelty ?? null;
+  const unc = hr.uncontrolled ?? cr.uncontrolled ?? null;
+  const tru = hr.trustworthiness ?? cr.trustworthiness ?? null;
+
+  const novTitles = {1: "Known/obvious", 2: "Somewhat expected", 3: "Surprising"};
+  const uncTitles = {1: "Clean", 2: "Partially mixed", 3: "Heavily mixed"};
+  const truTitles = {1: "Suspect", 2: "Uncertain", 3: "Credible"};
+
+  return ratingSpan(nov, "N", novTitles, "row-novelty")
+       + ratingSpan(unc, "U", uncTitles, "row-uncontrolled")
+       + ratingSpan(tru, "T", truTitles, "row-trust");
 }
 
 function esc(s) {
@@ -327,7 +350,7 @@ async function loadHypotheses() {
         <span class="row-desc">${desc}</span>
         ${refinesLink}
         <span class="row-stat">${stat}</span>
-        ${noveltySpan(h)}
+        ${ratingsSpans(h)}
         <span class="row-badge ${badge}">${label}</span>
         <span class="row-toggle">&#9656;</span>
       </div>
