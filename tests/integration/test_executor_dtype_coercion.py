@@ -45,6 +45,16 @@ def test_executor_succeeds_with_cbioportal_string_status(tmp_path: Path):
     )
     df.to_parquet(tmp_path / "data_clinical_patient.parquet", index=False)
 
+    dx_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003", "P004", "P005", "P006"],
+            "START_DATE": [-365.0, -365.0, -365.0, -365.0, -365.0, -365.0],
+        }
+    )
+    pd.DataFrame(dx_df).to_parquet(
+        tmp_path / "data_timeline_diagnosis.parquet", index=False
+    )
+
     with Database(tmp_path) as db:
         executor = HypothesisExecutor(db)
 

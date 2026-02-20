@@ -574,22 +574,25 @@ class AutonomousWorkflow:
 
         # Check outcome table/columns
         outcome = spec.query.outcome
-        if outcome.table not in tables:
-            errors.append(f"Outcome table '{outcome.table}' does not exist")
-        elif hasattr(outcome, "time_column") and hasattr(outcome, "event_column"):
+        # ProgressionFromTreatment uses two tables (treatment_table/progression_table)
+        # rather than a single `table` field; skip the single-table check for it.
+        table = getattr(outcome, "table", None)
+        time_col = getattr(outcome, "time_column", None)
+        event_col = getattr(outcome, "event_column", None)
+        if table is None:
+            pass
+        elif table not in tables:
+            errors.append(f"Outcome table '{table}' does not exist")
+        elif time_col is not None and event_col is not None:
             try:
-                table_df = self.db.execute(f"SELECT * FROM {outcome.table} LIMIT 0")
+                table_df = self.db.execute(f"SELECT * FROM {table} LIMIT 0")
                 columns = table_df.columns.tolist()
-                if outcome.time_column not in columns:
-                    errors.append(
-                        f"Time column '{outcome.time_column}' not in {outcome.table}"
-                    )
-                if outcome.event_column not in columns:
-                    errors.append(
-                        f"Event column '{outcome.event_column}' not in {outcome.table}"
-                    )
+                if time_col not in columns:
+                    errors.append(f"Time column '{time_col}' not in {table}")
+                if event_col not in columns:
+                    errors.append(f"Event column '{event_col}' not in {table}")
             except Exception as e:
-                errors.append(f"Error checking {outcome.table}: {str(e)}")
+                errors.append(f"Error checking {table}: {str(e)}")
 
         return errors
 
