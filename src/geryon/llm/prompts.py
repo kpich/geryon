@@ -23,8 +23,14 @@ HYPOTHESIS REFINEMENT:
 
 When you see a previous hypothesis with uncontrolled=2 or
 uncontrolled=3, consider proposing a refined version that controls
-for the noted confounder (e.g., restrict both cohorts to a single
-cancer type or age range).
+for the noted confounder. Common controls include: restricting both
+cohorts to a single cancer type, age range, disease stage (e.g.,
+Stage 4 only), or treatment class (e.g., immunotherapy only).
+If a "Suggested fix:" line appears in the critic notes, follow it.
+
+If an "AVAILABLE CONFOUNDER CONTROLS" block appears below, it lists
+verified column names and values from this database — use those
+exact strings as filter values.
 
 To mark a proposal as a refinement, set "refines_hypothesis" to
 the 8-character ID shown in [brackets] next to the parent. This

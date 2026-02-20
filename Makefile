@@ -59,6 +59,10 @@ workflow:
 GERYON_DATA_DIR := geryon_data
 GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git
 
+.PHONY: schema-context
+schema-context:  ## Pre-generate schema_context.txt from confounder_config.json
+	uv run python -m geryon.llm.schema_context --write
+
 .PHONY: backup
 backup:
 	cd $(GERYON_DATA_DIR) && git add -A && \
