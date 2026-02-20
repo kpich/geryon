@@ -40,6 +40,14 @@ etl:
 etl-clean:
 	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*
 
+.PHONY: plot
+plot:
+	./scripts/plot.sh
+
+.PHONY: plot-clean
+plot-clean:
+	rm -rf plots/
+
 .PHONY: data
 data:
 	uv run --extra viewer python scripts/view_data.py
