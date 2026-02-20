@@ -1,6 +1,6 @@
 """Outcome definitions for hypothesis comparisons."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class OverallSurvival(BaseModel):
     """Overall survival outcome definition for time-to-event analysis."""
 
+    outcome_category: ClassVar[str] = "time_to_event"
     outcome_type: Literal["overall_survival"] = "overall_survival"
     time_column: str = Field(
         default="OS_MONTHS",
@@ -26,6 +27,7 @@ class OverallSurvival(BaseModel):
 class TimeToNextTreatment(BaseModel):
     """Time to next treatment (TTNT) outcome for time-to-event analysis."""
 
+    outcome_category: ClassVar[str] = "time_to_event"
     outcome_type: Literal["time_to_next_treatment"] = "time_to_next_treatment"
     agent: str = Field(
         ...,
@@ -42,6 +44,7 @@ class TimeToNextTreatment(BaseModel):
 class SurvivalFromTreatment(BaseModel):
     """Survival measured from first administration of a specific agent."""
 
+    outcome_category: ClassVar[str] = "time_to_event"
     outcome_type: Literal["survival_from_treatment"] = "survival_from_treatment"
     agent: str = Field(
         ..., description="Agent whose first administration defines day 0"
@@ -52,6 +55,7 @@ class SurvivalFromTreatment(BaseModel):
 class ProgressionFromTreatment(BaseModel):
     """PFS measured from first administration of a specific agent."""
 
+    outcome_category: ClassVar[str] = "time_to_event"
     outcome_type: Literal["progression_from_treatment"] = "progression_from_treatment"
     agent: str = Field(
         ..., description="Agent whose first administration defines day 0"
@@ -63,6 +67,7 @@ class ProgressionFromTreatment(BaseModel):
 class MetastaticBurden(BaseModel):
     """Number of distinct metastatic sites at a landmark timepoint."""
 
+    outcome_category: ClassVar[str] = "continuous"
     outcome_type: Literal["metastatic_burden"] = "metastatic_burden"
     landmark_days: int = Field(
         default=0, description="Reference timepoint (days from sequencing)"
