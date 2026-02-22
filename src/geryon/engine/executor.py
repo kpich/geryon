@@ -16,8 +16,15 @@ from geryon.lang.compiler import (
     compile_select_cohort_ids,
     compile_select_cohort_ids_via_join,
 )
+from geryon.lang.methods import ComparisonMethod
 from geryon.lang.results import ComparisonResult
-from geryon.lang.spec import CohortFilter, CompareCohorts, GeryonHyp, SelectCohort
+from geryon.lang.spec import (
+    CohortFilter,
+    CompareCohorts,
+    GeryonHyp,
+    Outcome,
+    SelectCohort,
+)
 
 _KNOWN_STAT_KEYS = frozenset(
     {
@@ -92,6 +99,38 @@ class HypothesisExecutor:
 
         df = self.db.execute(sql)
         return df["PATIENT_ID"].tolist()
+
+    def compare_ids(
+        self,
+        cohort_a_ids: list[str],
+        cohort_b_ids: list[str],
+        outcome: Outcome,
+        method: ComparisonMethod,
+    ) -> ComparisonResult:
+        """Compare pre-resolved patient ID lists without cohort-ID resolution."""
+        try:
+            outcome_handler = get_outcome_handler(outcome)
+            cohort_a_data = outcome_handler.extract_data(cohort_a_ids, outcome, self.db)
+            cohort_b_data = outcome_handler.extract_data(cohort_b_ids, outcome, self.db)
+            method_impl = get_method_implementation(method)
+            stats = method_impl.calculate(cohort_a_data, cohort_b_data)
+            return ComparisonResult(
+                cohort_a_size=len(cohort_a_data),
+                cohort_b_size=len(cohort_b_data),
+                cohort_a_data=cohort_a_data,
+                cohort_b_data=cohort_b_data,
+                **{k: v for k, v in stats.items() if k in _KNOWN_STAT_KEYS},  # type: ignore[arg-type]
+                extra_stats={
+                    k: v for k, v in stats.items() if k not in _KNOWN_STAT_KEYS
+                },
+            )
+        except Exception as e:
+            return ComparisonResult(
+                cohort_a_size=0,
+                cohort_b_size=0,
+                success=False,
+                error_message=str(e),
+            )
 
     def _execute_compare_cohorts(self, query: CompareCohorts) -> ComparisonResult:
         """Execute cohort comparison using statistical method.

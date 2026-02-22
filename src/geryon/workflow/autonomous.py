@@ -20,6 +20,7 @@ from geryon.llm.generator import HypothesisProposal
 from geryon.llm.narrator import ResultNarrator
 from geryon.llm.provider import create_provider
 from geryon.tools.database import describe_table, list_tables, query_data
+from geryon.tools.volcano import scan_groupby
 from geryon.workflow.session import Session, SessionConfig
 
 
@@ -109,7 +110,52 @@ class AutonomousWorkflow:
             print(f"[TOOL] query_data_tool done, {len(result)} chars")
             return result
 
-        return [list_tables_tool, describe_table_tool, query_data_tool]
+        @tool
+        def scan_groupby_tool(
+            group_table: str,
+            group_column: str,
+            outcome_spec: str,
+            method: str = "hazard_ratio_cox",
+            min_group_size: int = 10,
+            top_n: int = 20,
+        ) -> str:
+            """Scan all unique values of a categorical column, comparing each group vs
+            the rest of patients for a clinical outcome. Returns the top hits ranked by
+            significance with effect sizes — the data for a volcano plot.
+
+            Args:
+                group_table: Table containing the grouping variable (e.g.
+                    'mutations_extended', 'clinical_patient')
+                group_column: Column to scan (e.g. 'Hugo_Symbol', 'CANCER_TYPE')
+                outcome_spec: JSON outcome descriptor, e.g.
+                    '{"outcome_type": "overall_survival"}' or
+                    '{"outcome_type": "time_to_next_treatment", "agent": "Sotorasib"}'
+                method: 'hazard_ratio_cox' (time-to-event) or 'wilcoxon_rank_sum'
+                    (continuous)
+                min_group_size: Minimum patients per group after outcome filtering
+                    (default 10)
+                top_n: Number of top hits to return (default 20)
+            """
+            print(f"[TOOL] scan_groupby_tool({group_table}.{group_column}) called")
+            result = scan_groupby(
+                self.db,
+                self.executor,
+                group_table,
+                group_column,
+                outcome_spec,
+                method=method,
+                min_group_size=min_group_size,
+                top_n=top_n,
+            )
+            print(f"[TOOL] scan_groupby_tool done, {len(result)} chars")
+            return result
+
+        return [
+            list_tables_tool,
+            describe_table_tool,
+            query_data_tool,
+            scan_groupby_tool,
+        ]
 
     def _create_llm(self):
         """Create LangChain model from provider config."""

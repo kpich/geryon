@@ -1,0 +1,160 @@
+"""Volcano scan tool: scan a categorical column, run one-vs-rest comparisons."""
+
+from collections import Counter
+import json
+import math
+import sys
+
+from pydantic import TypeAdapter
+from scipy.stats import false_discovery_control  # type: ignore[import-untyped]
+
+from geryon.db import Database
+from geryon.engine.executor import HypothesisExecutor
+from geryon.engine.registry import TABLE_PATIENT_ID_JOINS
+from geryon.lang.methods import ComparisonMethod
+from geryon.lang.spec import Outcome
+
+P_MIN = sys.float_info.min
+
+
+def _parse_outcome(outcome_spec: str) -> Outcome:
+    adapter: TypeAdapter[Outcome] = TypeAdapter(Outcome)
+    return adapter.validate_python(json.loads(outcome_spec))
+
+
+def scan_groupby(
+    db: Database,
+    executor: HypothesisExecutor,
+    group_table: str,
+    group_column: str,
+    outcome_spec: str,
+    method: str = "hazard_ratio_cox",
+    min_group_size: int = 10,
+    top_n: int = 20,
+    max_groups: int = 200,
+) -> str:
+    """Scan all unique values of a categorical column, one-vs-rest comparisons.
+
+    Returns the top hits ranked by significance with FDR correction, formatted
+    as a markdown table suitable for volcano plot inspection.
+    """
+    outcome = _parse_outcome(outcome_spec)
+    method_enum = ComparisonMethod(method)
+
+    # Batch ID resolution: one SQL query for all group → patient mappings
+    join_info = TABLE_PATIENT_ID_JOINS.get(group_table)
+    if join_info is not None:
+        sample_key, join_table, join_column = join_info
+        sql = (
+            f'SELECT t."{group_column}" AS grp, cs."PATIENT_ID" '
+            f'FROM "{group_table}" t '
+            f'JOIN "{join_table}" cs ON t."{sample_key}" = cs."{join_column}" '
+            f'WHERE t."{group_column}" IS NOT NULL'
+        )
+    else:
+        sql = (
+            f'SELECT "{group_column}" AS grp, "PATIENT_ID" '
+            f'FROM "{group_table}" '
+            f'WHERE "{group_column}" IS NOT NULL'
+        )
+
+    df = db.execute(sql)
+    if df.empty:
+        return "No data found for the specified table/column."
+
+    grp_to_ids: dict[str, frozenset[str]] = {
+        str(grp): frozenset(sub["PATIENT_ID"]) for grp, sub in df.groupby("grp")
+    }
+
+    # Limit to max_groups most-frequent values
+    counts = Counter({grp: len(ids) for grp, ids in grp_to_ids.items()})
+    top_groups = [grp for grp, _ in counts.most_common(max_groups)]
+
+    # Base population: all patients (complement denominator)
+    all_ids = frozenset(
+        db.execute('SELECT "PATIENT_ID" FROM "clinical_patient"')["PATIENT_ID"].tolist()
+    )
+
+    # Run one-vs-rest comparisons
+    successful: list[dict] = []
+    for grp in top_groups:
+        group_ids = grp_to_ids[grp]
+        if len(group_ids) < min_group_size:
+            continue
+
+        rest_ids = list(all_ids - group_ids)
+        result = executor.compare_ids(list(group_ids), rest_ids, outcome, method_enum)
+
+        if not result.success:
+            continue
+        if result.cohort_a_size < min_group_size:
+            continue
+        if result.p_value is None:
+            continue
+
+        successful.append(
+            {
+                "group": grp,
+                "n_group": result.cohort_a_size,
+                "n_rest": result.cohort_b_size,
+                "hazard_ratio": result.hazard_ratio,
+                "p_value": result.p_value,
+            }
+        )
+
+    if not successful:
+        return "No successful comparisons found."
+
+    # Clip p-values to avoid BH underflow on literal 0.0 from Cox
+    raw_ps = [r["p_value"] for r in successful]
+    clipped_ps = [max(p, P_MIN) for p in raw_ps]
+    q_values = false_discovery_control(clipped_ps, method="bh")
+
+    for row, clipped_p, q in zip(successful, clipped_ps, q_values, strict=False):
+        row["p_value_clipped"] = clipped_p
+        row["q_value"] = q
+        hr = row["hazard_ratio"]
+        row["log2_hr"] = math.log2(hr) if hr is not None and hr > 0 else None
+
+    # Sort: p_value_clipped ascending, then |log2_hr| descending (breaks ties)
+    successful.sort(
+        key=lambda r: (
+            r["p_value_clipped"],
+            -(abs(r["log2_hr"]) if r["log2_hr"] is not None else 0.0),
+        )
+    )
+    top_rows = successful[:top_n]
+
+    return _format_markdown(top_rows, method_enum)
+
+
+def _format_markdown(rows: list[dict], method_enum: ComparisonMethod) -> str:
+    if method_enum == ComparisonMethod.HAZARD_RATIO_COX:
+        lines = [
+            "| Group | N_group | N_rest | HR | log2(HR) | p_value | q_value |",
+            "|-------|---------|--------|----|----------|---------|---------|",
+        ]
+        for r in rows:
+            hr = f"{r['hazard_ratio']:.3f}" if r["hazard_ratio"] is not None else "NA"
+            log2hr = f"{r['log2_hr']:.3f}" if r["log2_hr"] is not None else "NA"
+            raw_p = r["p_value"]
+            p_str = f"<{P_MIN:.0e}" if raw_p == 0.0 else f"{raw_p:.3e}"
+            q_str = f"{r['q_value']:.3e}"
+            lines.append(
+                f"| {r['group']} | {r['n_group']} | {r['n_rest']} | "
+                f"{hr} | {log2hr} | {p_str} | {q_str} |"
+            )
+    else:
+        lines = [
+            "| Group | N_group | N_rest | p_value | q_value |",
+            "|-------|---------|--------|---------|---------|",
+        ]
+        for r in rows:
+            raw_p = r["p_value"]
+            p_str = f"<{P_MIN:.0e}" if raw_p == 0.0 else f"{raw_p:.3e}"
+            q_str = f"{r['q_value']:.3e}"
+            lines.append(
+                f"| {r['group']} | {r['n_group']} | {r['n_rest']} | "
+                f"{p_str} | {q_str} |"
+            )
+    return "\n".join(lines)
