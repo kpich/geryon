@@ -70,6 +70,29 @@ Step 3b (optional but recommended for gene/mutation columns): Use
    timeline_treatment.AGENT, etc. Skip if you already have a specific
    hypothesis in mind.
 
+Step 3c (optional, for complex derived cohorts): If you need a concept not
+   expressible as a simple filter (e.g. treatment regimens, first-line therapy),
+   use create_derived_view_tool() to define it in SQL. The resulting view is
+   usable everywhere a table name is accepted. Always include PATIENT_ID.
+   Example — patients whose first systemic agent was platinum-based:
+     create_derived_view_tool(
+       name="first_line_platinum",
+       sql="WITH ranked AS (
+              SELECT PATIENT_ID,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY PATIENT_ID ORDER BY START_DATE_DAYS
+                     ) AS rn
+              FROM timeline_treatment
+              WHERE AGENT IN ('Carboplatin', 'Cisplatin')
+            )
+            SELECT PATIENT_ID FROM ranked WHERE rn = 1"
+     )
+   Then use it as a filter table in the hypothesis spec:
+     {"table": "derived_first_line_platinum", "column": "PATIENT_ID",
+      "operator": "!=", "value": null}
+   (Any condition that selects all rows works — the view is already scoped
+   to the patients you want.)
+
 Step 4: Generate hypotheses using ONLY columns AND values
    you verified in Steps 2-3
 

@@ -1,4 +1,7 @@
-"""Tests for format_previous_hypotheses."""
+"""Tests for format_previous_hypotheses and AutonomousWorkflow helpers."""
+
+import json
+from unittest.mock import MagicMock
 
 import pandas as pd  # type: ignore
 
@@ -447,3 +450,50 @@ def test_effective_rating_falls_back_to_critic():
     result = format_previous_hypotheses(labeled, []).text
     assert "[novelty=2, trust=2]" in result
     assert "[critic]" in result
+
+
+def test_replay_derived_views_on_init(tmp_path):
+    """Views in derived_views.json are recreated in the db on startup."""
+    from geryon.workflow.autonomous import AutonomousWorkflow
+
+    views_json = tmp_path / "derived_views.json"
+    views_json.write_text(
+        json.dumps(
+            {
+                "derived_foo": "SELECT 1 AS PATIENT_ID",
+                "derived_bar": "SELECT 2 AS PATIENT_ID",
+            }
+        )
+    )
+
+    wf = object.__new__(AutonomousWorkflow)
+    wf._derived_views_path = views_json
+    wf.db = MagicMock()
+
+    wf._replay_derived_views()
+
+    assert wf.db.create_view.call_count == 2
+    wf.db.create_view.assert_any_call("derived_foo", "SELECT 1 AS PATIENT_ID")
+    wf.db.create_view.assert_any_call("derived_bar", "SELECT 2 AS PATIENT_ID")
+
+
+def test_save_derived_view_writes_json(tmp_path):
+    """_save_derived_view persists the view definition to derived_views.json."""
+    from geryon.workflow.autonomous import AutonomousWorkflow
+
+    views_path = tmp_path / "derived_views.json"
+
+    wf = object.__new__(AutonomousWorkflow)
+    wf._derived_views_path = views_path
+
+    wf._save_derived_view("derived_regimens", "SELECT PATIENT_ID FROM foo")
+
+    assert views_path.exists()
+    data = json.loads(views_path.read_text())
+    assert data["derived_regimens"] == "SELECT PATIENT_ID FROM foo"
+
+    # Second call merges, not overwrites
+    wf._save_derived_view("derived_other", "SELECT PATIENT_ID FROM bar")
+    data = json.loads(views_path.read_text())
+    assert "derived_regimens" in data
+    assert "derived_other" in data

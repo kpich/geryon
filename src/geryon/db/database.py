@@ -79,6 +79,11 @@ class Database:
         """Look up precomputed column profile for a table."""
         return self.profiles.get(table_name)
 
+    def create_view(self, name: str, sql: str) -> None:
+        """Register an in-session DuckDB view."""
+        with self._lock:
+            self.conn.execute(f'CREATE OR REPLACE VIEW "{name}" AS ({sql})')
+
     def execute(self, sql: str) -> pd.DataFrame:
         """
         Execute SQL query and return results as DataFrame.
