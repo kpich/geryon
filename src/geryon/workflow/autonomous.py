@@ -1,7 +1,9 @@
 """Autonomous workflow using LangGraph for tool-based exploration."""
 
+import contextlib
 from datetime import UTC, datetime
 import json
+from pathlib import Path
 import re
 from typing import Annotated, Literal, TypedDict
 import uuid
@@ -20,6 +22,7 @@ from geryon.llm.generator import HypothesisProposal
 from geryon.llm.narrator import ResultNarrator
 from geryon.llm.provider import create_provider
 from geryon.tools.database import describe_table, list_tables, query_data
+from geryon.tools.derived import create_derived_view
 from geryon.tools.volcano import scan_groupby
 from geryon.workflow.session import Session, SessionConfig
 
@@ -48,6 +51,8 @@ class AutonomousWorkflow:
         self.session = Session(config)
 
         self.db = Database(config.parquet_dir)
+        self._derived_views_path = Path(config.storage_dir) / "derived_views.json"
+        self._replay_derived_views()
         self.executor = HypothesisExecutor(self.db)
         provider_kwargs: dict = {"model": config.model}
         if config.provider_type == "aws_bedrock":
@@ -150,12 +155,61 @@ class AutonomousWorkflow:
             print(f"[TOOL] scan_groupby_tool done, {len(result)} chars")
             return result
 
+        @tool
+        def create_derived_view_tool(name: str, sql: str) -> str:
+            """Create a persistent SQL view for complex derived concepts not expressible
+            as simple column filters — e.g. treatment regimens, drug sequencing, or any
+            multi-step join/aggregation.
+
+            The view is registered as 'derived_{name}', saved to disk, and automatically
+            restored in future sessions. Available immediately to query_data_tool,
+            scan_groupby_tool, and as a filter table in hypotheses.
+
+            IMPORTANT: Always include PATIENT_ID in the SELECT so the view can be used
+            in cohort filters.
+
+            Args:
+                name: Short identifier (auto-prefixed with 'derived_')
+                sql: SELECT or WITH (CTE) query defining the view
+            """
+            print(f"[TOOL] create_derived_view_tool({name!r}) called")
+            result = create_derived_view(self.db, name, sql)
+            if not result.startswith("ERROR"):
+                safe_name = name if name.startswith("derived_") else f"derived_{name}"
+                self._save_derived_view(safe_name, sql)
+            print(f"[TOOL] create_derived_view_tool done: {result[:80]}")
+            return result
+
         return [
             list_tables_tool,
             describe_table_tool,
             query_data_tool,
             scan_groupby_tool,
+            create_derived_view_tool,
         ]
+
+    def _replay_derived_views(self) -> None:
+        """Recreate any derived views saved from prior sessions."""
+        if not self._derived_views_path.exists():
+            return
+        try:
+            defs: dict[str, str] = json.loads(self._derived_views_path.read_text())
+            for name, sql in defs.items():
+                try:
+                    self.db.create_view(name, sql)
+                except Exception as e:
+                    print(f"  ⚠ Could not replay derived view '{name}': {e}")
+        except Exception as e:
+            print(f"  ⚠ Could not load derived_views.json: {e}")
+
+    def _save_derived_view(self, name: str, sql: str) -> None:
+        """Append or update a derived view definition on disk."""
+        defs: dict[str, str] = {}
+        if self._derived_views_path.exists():
+            with contextlib.suppress(Exception):
+                defs = json.loads(self._derived_views_path.read_text())
+        defs[name] = sql
+        self._derived_views_path.write_text(json.dumps(defs, indent=2))
 
     def _create_llm(self):
         """Create LangChain model from provider config."""

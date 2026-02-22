@@ -70,6 +70,11 @@ Step 3b (optional but recommended for gene/mutation columns): Use
    timeline_treatment.AGENT, etc. Skip if you already have a specific
    hypothesis in mind.
 
+Step 3c (optional, for complex derived cohorts): If you need a concept not
+   expressible as a simple filter (e.g. treatment regimens, first-line therapy),
+   use create_derived_view_tool() to define it in SQL. The resulting view is
+   usable everywhere a table name is accepted. Always include PATIENT_ID.
+
 Step 4: Generate hypotheses using ONLY columns AND values
    you verified in Steps 2-3
 
