@@ -57,6 +57,19 @@ Step 3: If you need to verify specific filter values beyond what describe_table
    this step — but DO query if the column is high-cardinality or the value
    you need wasn't in the top values shown.
 
+Step 3b (optional but recommended for gene/mutation columns): Use
+   scan_groupby_tool() to quickly find the strongest signals across all
+   values of a categorical column before committing to specific hypotheses.
+   Example: scan_groupby_tool(
+     group_table="mutations_extended",
+     group_column="Hugo_Symbol",
+     outcome_spec='{"outcome_type": "overall_survival"}'
+   )
+   Returns a ranked table with hazard ratios, p-values, and FDR q-values.
+   Good for: mutations_extended.Hugo_Symbol, clinical_patient.CANCER_TYPE,
+   timeline_treatment.AGENT, etc. Skip if you already have a specific
+   hypothesis in mind.
+
 Step 4: Generate hypotheses using ONLY columns AND values
    you verified in Steps 2-3
 
