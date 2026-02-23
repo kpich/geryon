@@ -73,10 +73,14 @@ def _compare_one(
         if len(cohort_a_df) < min_group_size:
             return None
         try:
+            # Drop entry_time for the scan: left-truncated Cox is O(n × D) vs
+            # O(n log n), which makes each fit ~100-1000× slower at large n. For
+            # screening we accept slightly biased HR estimates in exchange for tractable
+            # runtime.
+            scan_a = cohort_a_df.drop(columns=["entry_time"], errors="ignore")
+            scan_b = cohort_b_df.drop(columns=["entry_time"], errors="ignore")
             tc = time.perf_counter()
-            stats = get_method_implementation(method_enum).calculate(
-                cohort_a_df, cohort_b_df
-            )
+            stats = get_method_implementation(method_enum).calculate(scan_a, scan_b)
             elapsed = time.perf_counter() - tc
             if elapsed > 1.0:
                 print(
