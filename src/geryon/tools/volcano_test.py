@@ -1,12 +1,13 @@
 """Unit tests for volcano scan tool."""
 
+import json
 from unittest.mock import Mock
 
 import pandas as pd
 
 from geryon.lang.outcomes import OverallSurvival, TimeToNextTreatment
 from geryon.lang.results import ComparisonResult
-from geryon.tools.volcano import _parse_outcome, scan_groupby
+from geryon.tools.volcano import _cache_key, _parse_outcome, scan_groupby
 
 
 def _make_result(
@@ -176,6 +177,91 @@ def test_scan_groupby_applies_fdr_correction():
     )
 
     assert "q_value" in result
+
+
+# ---------------------------------------------------------------------------
+# test_parse_outcome_overall_survival
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# test_cache_hit_skips_executor
+# ---------------------------------------------------------------------------
+
+
+def test_cache_hit_skips_executor(tmp_path):
+    """A pre-populated cache entry causes executor to be skipped entirely."""
+    outcome_spec = '{"outcome_type": "overall_survival"}'
+    cached = [
+        {
+            "group": "CACHED_GENE",
+            "n_group": 20,
+            "n_rest": 80,
+            "hazard_ratio": 2.0,
+            "p_value": 0.001,
+        }
+    ]
+    key = _cache_key(
+        "mutations_extended", "Hugo_Symbol", outcome_spec, "hazard_ratio_cox", 10, 200
+    )
+    cache_dir = tmp_path / "volcano_cache"
+    cache_dir.mkdir()
+    (cache_dir / f"{key}.json").write_text(json.dumps(cached))
+
+    mock_db = Mock()
+    mock_executor = Mock()
+
+    result = scan_groupby(
+        mock_db,
+        mock_executor,
+        group_table="mutations_extended",
+        group_column="Hugo_Symbol",
+        outcome_spec=outcome_spec,
+        cache_dir=tmp_path,
+    )
+
+    assert mock_executor.compare_ids.call_count == 0
+    assert "CACHED_GENE" in result
+
+
+# ---------------------------------------------------------------------------
+# test_cache_miss_populates_cache
+# ---------------------------------------------------------------------------
+
+
+def test_cache_miss_populates_cache(tmp_path):
+    """A scan miss writes results to the cache file."""
+    groups = {
+        "A": [f"PA{i}" for i in range(15)],
+        "B": [f"PB{i}" for i in range(15)],
+    }
+    mock_db = Mock()
+    mock_db.execute.side_effect = [_make_batch_df(groups), _all_ids_df(groups)]
+
+    mock_executor = Mock()
+    mock_executor.compare_ids.side_effect = [
+        _make_result(p_value=0.01),
+        _make_result(p_value=0.04),
+    ]
+
+    outcome_spec = '{"outcome_type": "overall_survival"}'
+    scan_groupby(
+        mock_db,
+        mock_executor,
+        group_table="clinical_patient",
+        group_column="CANCER_TYPE",
+        outcome_spec=outcome_spec,
+        cache_dir=tmp_path,
+    )
+
+    key = _cache_key(
+        "clinical_patient", "CANCER_TYPE", outcome_spec, "hazard_ratio_cox", 10, 200
+    )
+    cache_file = tmp_path / "volcano_cache" / f"{key}.json"
+    assert cache_file.exists()
+    data = json.loads(cache_file.read_text())
+    assert isinstance(data, list)
+    assert len(data) == 2
 
 
 # ---------------------------------------------------------------------------
