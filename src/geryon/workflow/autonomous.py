@@ -151,6 +151,7 @@ class AutonomousWorkflow:
                 method=method,
                 min_group_size=min_group_size,
                 top_n=top_n,
+                cache_dir=self.db.parquet_dir,
             )
             print(f"[TOOL] scan_groupby_tool done, {len(result)} chars")
             return result
