@@ -1,7 +1,7 @@
 """Unit tests for volcano scan tool."""
 
 import json
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pandas as pd
 
@@ -287,3 +287,55 @@ def test_parse_outcome_ttnt_with_agent():
     )
     assert isinstance(outcome, TimeToNextTreatment)
     assert outcome.agent == "Sotorasib"
+
+
+# ---------------------------------------------------------------------------
+# test_bulk_load_fast_path_skips_db_queries
+# ---------------------------------------------------------------------------
+
+
+def test_bulk_load_fast_path_skips_db_queries():
+    """When bulk outcome data is pre-loaded, executor.compare_ids is never called."""
+    groups = {
+        "GENE_A": [f"PA{i}" for i in range(15)],
+        "GENE_B": [f"PB{i}" for i in range(15)],
+    }
+    all_patients = groups["GENE_A"] + groups["GENE_B"]
+
+    # Raw columns as returned by load_all_data's SQL query (pre _process_os_df).
+    bulk_df = pd.DataFrame(
+        {
+            "PATIENT_ID": all_patients,
+            "os_months": [24.0] * 30,
+            "event": ["1"] * 30,
+            "dx_days": [-180.0] * 30,
+        }
+    )
+
+    mock_db = Mock()
+    mock_db.execute.side_effect = [
+        _make_batch_df(groups),  # batch grp→PATIENT_ID query
+        _all_ids_df(groups),  # all_ids query
+        bulk_df,  # load_all_data bulk query
+    ]
+
+    mock_executor = Mock()
+
+    # Patch the method implementation so this test is purely about fast-path wiring,
+    # not about Cox convergence (which has its own tests in cox_test.py).
+    mock_stats = {"hazard_ratio": 2.0, "p_value": 0.01}
+    with patch("geryon.tools.volcano.get_method_implementation") as mock_gmi:
+        mock_gmi.return_value.calculate.return_value = mock_stats
+
+        result = scan_groupby(
+            mock_db,
+            mock_executor,
+            group_table="clinical_patient",
+            group_column="CANCER_TYPE",
+            outcome_spec='{"outcome_type": "overall_survival"}',
+            min_group_size=10,
+        )
+
+    mock_executor.compare_ids.assert_not_called()
+    assert "|" in result  # produced a markdown table, not an error message
+    assert "GENE_A" in result or "GENE_B" in result

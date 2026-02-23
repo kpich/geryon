@@ -10,12 +10,17 @@ import os
 from pathlib import Path
 import sys
 
+import pandas as pd
 from pydantic import TypeAdapter
 from scipy.stats import false_discovery_control  # type: ignore[import-untyped]
 
 from geryon.db import Database
 from geryon.engine.executor import HypothesisExecutor
-from geryon.engine.registry import TABLE_PATIENT_ID_JOINS
+from geryon.engine.registry import (
+    TABLE_PATIENT_ID_JOINS,
+    get_method_implementation,
+    get_outcome_handler,
+)
 from geryon.lang.methods import ComparisonMethod
 from geryon.lang.spec import Outcome
 
@@ -57,22 +62,47 @@ def _compare_one(
     method_enum: ComparisonMethod,
     executor: HypothesisExecutor,
     min_group_size: int,
+    all_outcome_data: pd.DataFrame | None = None,
 ) -> dict | None:
-    rest_ids = list(all_ids - group_ids)
-    result = executor.compare_ids(list(group_ids), rest_ids, outcome, method_enum)
-    if (
-        not result.success
-        or result.cohort_a_size < min_group_size
-        or result.p_value is None
-    ):
-        return None
-    return {
-        "group": grp,
-        "n_group": result.cohort_a_size,
-        "n_rest": result.cohort_b_size,
-        "hazard_ratio": result.hazard_ratio,
-        "p_value": result.p_value,
-    }
+    if all_outcome_data is not None:
+        cohort_a_df = all_outcome_data[all_outcome_data["PATIENT_ID"].isin(group_ids)]
+        cohort_b_df = all_outcome_data[
+            all_outcome_data["PATIENT_ID"].isin(all_ids - group_ids)
+        ]
+        if len(cohort_a_df) < min_group_size:
+            return None
+        try:
+            stats = get_method_implementation(method_enum).calculate(
+                cohort_a_df, cohort_b_df
+            )
+            p_value = stats.get("p_value")
+            if p_value is None:
+                return None
+            return {
+                "group": grp,
+                "n_group": len(cohort_a_df),
+                "n_rest": len(cohort_b_df),
+                "hazard_ratio": stats.get("hazard_ratio"),
+                "p_value": p_value,
+            }
+        except Exception:
+            return None
+    else:
+        rest_ids = list(all_ids - group_ids)
+        result = executor.compare_ids(list(group_ids), rest_ids, outcome, method_enum)
+        if (
+            not result.success
+            or result.cohort_a_size < min_group_size
+            or result.p_value is None
+        ):
+            return None
+        return {
+            "group": grp,
+            "n_group": result.cohort_a_size,
+            "n_rest": result.cohort_b_size,
+            "hazard_ratio": result.hazard_ratio,
+            "p_value": result.p_value,
+        }
 
 
 def scan_groupby(
@@ -144,6 +174,15 @@ def scan_groupby(
             ].tolist()
         )
 
+        # Pre-load outcome data for all patients in one query; falls back to per-group
+        # queries (slow path) if the handler doesn't support bulk loading or the query
+        # fails (e.g., table missing, schema mismatch).
+        outcome_handler = get_outcome_handler(outcome)
+        all_outcome_data: pd.DataFrame | None = None
+        if hasattr(outcome_handler, "load_all_data"):
+            with contextlib.suppress(Exception):
+                all_outcome_data = outcome_handler.load_all_data(outcome, db)
+
         # Pre-filter groups below min_group_size, then run comparisons in parallel
         candidates = [
             (grp, grp_to_ids[grp])
@@ -165,6 +204,7 @@ def scan_groupby(
                         method_enum,
                         executor,
                         min_group_size,
+                        all_outcome_data,
                     )
                     for grp, ids in candidates
                 ]
