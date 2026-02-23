@@ -77,11 +77,15 @@ class OverallSurvivalHandler:
     def load_all_data(self, outcome: OverallSurvival, db: Database) -> pd.DataFrame:
         """Load OS data for ALL patients in a single query."""
         sql = f"""
-            WITH dx AS (
-                SELECT "PATIENT_ID", MAX("START_DATE") AS dx_days
-                FROM "timeline_diagnosis"
-                WHERE "START_DATE" < 0
-                GROUP BY "PATIENT_ID"
+            WITH cp AS (
+                SELECT "PATIENT_ID" FROM "{outcome.table}"
+            ),
+            dx AS (
+                SELECT t."PATIENT_ID", MAX(t."START_DATE") AS dx_days
+                FROM "timeline_diagnosis" t
+                INNER JOIN cp ON t."PATIENT_ID" = cp."PATIENT_ID"
+                WHERE t."START_DATE" < 0
+                GROUP BY t."PATIENT_ID"
             )
             SELECT
                 p."PATIENT_ID",

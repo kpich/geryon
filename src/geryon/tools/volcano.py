@@ -9,6 +9,7 @@ import math
 import os
 from pathlib import Path
 import sys
+import time
 
 import pandas as pd
 from pydantic import TypeAdapter
@@ -72,9 +73,17 @@ def _compare_one(
         if len(cohort_a_df) < min_group_size:
             return None
         try:
+            tc = time.perf_counter()
             stats = get_method_implementation(method_enum).calculate(
                 cohort_a_df, cohort_b_df
             )
+            elapsed = time.perf_counter() - tc
+            if elapsed > 1.0:
+                print(
+                    f"[volcano] slow Cox for {grp}: {elapsed:.1f}s, "
+                    f"n={len(cohort_a_df)+len(cohort_b_df)}",
+                    file=sys.stderr,
+                )
             p_value = stats.get("p_value")
             if p_value is None:
                 return None
@@ -155,7 +164,12 @@ def scan_groupby(
                 f'WHERE "{group_column}" IS NOT NULL'
             )
 
+        t0 = time.perf_counter()
         df = db.execute(sql)
+        print(
+            f"[volcano] batch query: {time.perf_counter()-t0:.1f}s, {len(df)} rows",
+            file=sys.stderr,
+        )
         if df.empty:
             return "No data found for the specified table/column."
 
@@ -168,10 +182,16 @@ def scan_groupby(
         top_groups = [grp for grp, _ in counts.most_common(max_groups)]
 
         # Base population: all patients (complement denominator)
+        t1 = time.perf_counter()
         all_ids = frozenset(
             db.execute('SELECT "PATIENT_ID" FROM "clinical_patient"')[
                 "PATIENT_ID"
             ].tolist()
+        )
+        print(
+            f"[volcano] all_ids query: "
+            f"{time.perf_counter()-t1:.1f}s, {len(all_ids)} ids",
+            file=sys.stderr,
         )
 
         # Pre-load outcome data for all patients in one query; falls back to per-group
@@ -179,9 +199,22 @@ def scan_groupby(
         # fails (e.g., table missing, schema mismatch).
         outcome_handler = get_outcome_handler(outcome)
         all_outcome_data: pd.DataFrame | None = None
+        t2 = time.perf_counter()
         if hasattr(outcome_handler, "load_all_data"):
             with contextlib.suppress(Exception):
                 all_outcome_data = outcome_handler.load_all_data(outcome, db)
+        if all_outcome_data is not None:
+            print(
+                f"[volcano] load_all_data: {time.perf_counter()-t2:.1f}s, "
+                f"{len(all_outcome_data)} rows (fast path)",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"[volcano] load_all_data: "
+                f"{time.perf_counter()-t2:.1f}s FAILED → slow path",
+                file=sys.stderr,
+            )
 
         # Pre-filter groups below min_group_size, then run comparisons in parallel
         candidates = [
@@ -192,7 +225,8 @@ def scan_groupby(
 
         successful = []
         if candidates:
-            n_workers = min(len(candidates), os.cpu_count() or 4)
+            n_workers = min(len(candidates), min(os.cpu_count() or 4, 4))
+            t3 = time.perf_counter()
             with ThreadPoolExecutor(max_workers=n_workers) as pool:
                 futures = [
                     pool.submit(
@@ -209,6 +243,11 @@ def scan_groupby(
                     for grp, ids in candidates
                 ]
                 successful = [r for f in futures if (r := f.result()) is not None]
+            print(
+                f"[volcano] comparisons: {time.perf_counter()-t3:.1f}s, "
+                f"{len(successful)} successful",
+                file=sys.stderr,
+            )
 
         # Cache write
         if cache_file is not None:
