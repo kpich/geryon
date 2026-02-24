@@ -19,22 +19,42 @@ prioritize:
 If a well-known association fails to replicate, flag it — that is valuable.
 But spend most proposals on genuinely exploratory comparisons.
 
+HYPOTHESIS DIVERSITY:
+
+Do not spend more than one-third of your proposals on simple "gene X mutant vs
+wild-type" overall survival comparisons — those are a starting point, not the
+goal. Prioritize:
+
+1. Treatment-response hypotheses: does gene X / feature Y predict response to
+   a specific drug? Use survival_from_treatment or time_to_next_treatment
+   outcomes and restrict cohorts to patients who received that drug.
+
+2. Controlled subgroup analyses: gene associations within a single cancer type,
+   stage, MSI status, or treatment class — not pan-cancer.
+
+3. Co-mutation and pathway effects: e.g. KRAS + STK11 co-mutant vs KRAS single
+   mutant; use multi-filter cohorts.
+
+4. Non-mutational clinical features: age, stage, histology, treatment sequence.
+
 HYPOTHESIS REFINEMENT:
 
-When you see a previous hypothesis with uncontrolled=2 or
-uncontrolled=3, consider proposing a refined version that controls
-for the noted confounder. Common controls include: restricting both
-cohorts to a single cancer type, age range, disease stage (e.g.,
-Stage 4 only), or treatment class (e.g., immunotherapy only).
-If a "Suggested fix:" line appears in the critic notes, follow it.
+Check the PREVIOUSLY RATED HYPOTHESES section below. For each hypothesis with
+uncontrolled=3, you MUST submit a refined version that controls for the
+confounder noted. For uncontrolled=2, strongly consider a refinement.
+
+The most common fixes:
+- Restrict both cohorts to one cancer type (if pan-cancer)
+- Add MSI_TYPE = 'MSS' or 'MSI-H' to isolate a homogeneous population
+- Restrict to a single treatment class (e.g. immunotherapy only)
+- Add a stage filter (Stage 4 only) to avoid mix of curative/palliative
 
 If an "AVAILABLE CONFOUNDER CONTROLS" block appears below, it lists
 verified column names and values from this database — use those
 exact strings as filter values.
 
 To mark a proposal as a refinement, set "refines_hypothesis" to
-the 8-character ID shown in [brackets] next to the parent. This
-is OPTIONAL — only use it when genuinely building on a prior result.
+the 8-character ID shown in [brackets] next to the parent.
 
 Example:
   Previous: [a3f1c9e2] KRAS mut vs WT [uncontrolled=3] — confounded by age
@@ -68,6 +88,21 @@ Step 3b (optional but recommended for gene/mutation columns): Use
    Good for: mutations_extended.Hugo_Symbol, clinical_patient.CANCER_TYPE,
    timeline_treatment.AGENT, etc. Skip if you already have a specific
    hypothesis in mind.
+
+Step 3b-ii: To find treatment-response hypotheses, scan how a gene associates
+   with outcomes within a specific treatment context:
+   scan_groupby_tool(
+     group_table="gene_matrix",
+     group_column="ERCC2",    # or any gene of interest
+     outcome_spec='{"outcome_type": "survival_from_treatment", "agent": "Cisplatin"}'
+   )
+   Or scan across treatment agents to find which drugs show the largest
+   survival differences:
+   scan_groupby_tool(
+     group_table="timeline_treatment",
+     group_column="AGENT",
+     outcome_spec='{"outcome_type": "overall_survival"}'
+   )
 
 Step 3c (optional, for complex derived cohorts): If you need a concept not
    expressible as a simple filter (e.g. treatment regimens, first-line therapy),
@@ -122,6 +157,22 @@ geryon_spec_json format:
   ]},
   "outcome": {"outcome_type": "overall_survival", "time_column": "OS_MONTHS",
                "event_column": "OS_STATUS", "table": "clinical_patient"},
+  "method": "hazard_ratio_cox"}}
+
+Treatment-response example — ERCC2 mut predicting platinum response in bladder:
+{"version": 1, "query": {"operation": "compare_cohorts",
+  "cohort_a": {"operation": "select_cohort", "filters": [
+    {"table": "clinical_patient", "column": "CANCER_TYPE", "operator": "==", "value": "Bladder Cancer"},
+    {"table": "gene_matrix", "column": "ERCC2", "operator": "==", "value": 1},
+    {"table": "timeline_treatment", "column": "AGENT", "operator": "==", "value": "Cisplatin"}
+  ]},
+  "cohort_b": {"operation": "select_cohort", "filters": [
+    {"table": "clinical_patient", "column": "CANCER_TYPE", "operator": "==", "value": "Bladder Cancer"},
+    {"table": "gene_matrix", "column": "ERCC2", "operator": "==", "value": 0},
+    {"table": "timeline_treatment", "column": "AGENT", "operator": "==", "value": "Cisplatin"}
+  ]},
+  "outcome": {"outcome_type": "survival_from_treatment", "agent": "Cisplatin",
+               "table": "timeline_treatment"},
   "method": "hazard_ratio_cox"}}
 
 ADDITIONAL OUTCOME EXAMPLES:

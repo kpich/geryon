@@ -111,11 +111,23 @@ def format_previous_hypotheses(
     """
     labeled_ids = {h.hypothesis_id for h in labeled}
 
-    rated = [h for h in labeled if not h.effective_rating.is_pending]
+    human_rated = [h for h in labeled if not h.effective_rating.is_pending]
 
-    unrated_session = [
-        h for h in session_previous if h.hypothesis_id not in labeled_ids
+    # Critic-rated session hypotheses go into the rated bucket (learn from feedback)
+    critic_rated = [
+        h
+        for h in session_previous
+        if h.hypothesis_id not in labeled_ids and not h.effective_rating.is_pending
     ]
+    truly_unrated = [
+        h
+        for h in session_previous
+        if h.hypothesis_id not in labeled_ids and h.effective_rating.is_pending
+    ]
+
+    # Human-rated first (higher signal), then critic-rated
+    rated = human_rated + critic_rated
+    unrated_session = truly_unrated
 
     rated_ids = [h.hypothesis_id for h in rated[:MAX_RATED]]
     unrated_session_ids = [h.hypothesis_id for h in unrated_session[:MAX_SESSION]]
