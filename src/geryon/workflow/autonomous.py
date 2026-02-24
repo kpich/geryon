@@ -3,6 +3,7 @@
 import contextlib
 import json
 from pathlib import Path
+import threading
 from typing import Annotated, TypedDict
 import uuid
 
@@ -50,6 +51,7 @@ class AutonomousWorkflow:
 
         self.db = Database(config.parquet_dir)
         self._derived_views_path = Path(config.storage_dir) / "derived_views.json"
+        self._views_lock = threading.Lock()
         self._replay_derived_views()
         self.executor = HypothesisExecutor(self.db)
         provider_kwargs: dict = {"model": config.model}
@@ -200,12 +202,14 @@ class AutonomousWorkflow:
 
     def _save_derived_view(self, name: str, sql: str) -> None:
         """Append or update a derived view definition on disk."""
-        defs: dict[str, str] = {}
-        if self._derived_views_path.exists():
-            with contextlib.suppress(Exception):
-                defs = json.loads(self._derived_views_path.read_text())
-        defs[name] = sql
-        self._derived_views_path.write_text(json.dumps(defs, indent=2))
+        lock = getattr(self, "_views_lock", None) or threading.Lock()
+        with lock:
+            defs: dict[str, str] = {}
+            if self._derived_views_path.exists():
+                with contextlib.suppress(Exception):
+                    defs = json.loads(self._derived_views_path.read_text())
+            defs[name] = sql
+            self._derived_views_path.write_text(json.dumps(defs, indent=2))
 
     def _create_llm(self):
         """Create LangChain model from provider config."""
@@ -400,17 +404,28 @@ class AutonomousWorkflow:
         user_message = HumanMessage(content=user_text)
 
         # Run LangGraph
+        submitted: list[LabeledHypothesis] = []
         try:
-            from langgraph.prebuilt import create_react_agent
+            from langgraph.prebuilt import ToolNode, create_react_agent
 
-            submitted: list[LabeledHypothesis] = []
             submit_tool = self._make_submit_tool(iteration or 0, submitted)
-            graph = create_react_agent(self.llm, self.tools + [submit_tool])
+            tool_node = ToolNode(self.tools + [submit_tool], handle_tool_errors=True)
+            graph = create_react_agent(self.llm, tool_node)
+
+            if self.llm_logger:
+                self.llm_logger._write(event="graph_invoke_start")
 
             result = graph.invoke(
                 {"messages": [system_message, user_message]},
                 config={"recursion_limit": 100},
             )
+
+            if self.llm_logger:
+                self.llm_logger._write(
+                    event="graph_invoke_end",
+                    n_messages=len(result["messages"]),
+                    n_submitted=len(submitted),
+                )
 
             if self.llm_logger:
                 self.llm_logger.log_raw_messages(result["messages"])
