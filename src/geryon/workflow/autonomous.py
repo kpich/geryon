@@ -407,7 +407,10 @@ class AutonomousWorkflow:
             submit_tool = self._make_submit_tool(iteration or 0, submitted)
             graph = create_react_agent(self.llm, self.tools + [submit_tool])
 
-            result = graph.invoke({"messages": [system_message, user_message]})
+            result = graph.invoke(
+                {"messages": [system_message, user_message]},
+                config={"recursion_limit": 100},
+            )
 
             if self.llm_logger:
                 self.llm_logger.log_raw_messages(result["messages"])
@@ -444,7 +447,11 @@ class AutonomousWorkflow:
             print("  Full traceback:")
             traceback.print_exc()
 
-            return []
+            if submitted:
+                print(
+                    f"  Returning {len(submitted)} hypotheses submitted before failure."
+                )
+            return submitted
 
     def run_full_session(self) -> list[LabeledHypothesis]:
         """Run full session with multiple iterations.
@@ -473,17 +480,25 @@ class AutonomousWorkflow:
                 continue
 
             if self.config.critic_cycles > 0:
-                from geryon.llm.critic import HypothesisCritic
+                try:
+                    from geryon.llm.critic import HypothesisCritic
 
-                critic = HypothesisCritic(self.provider, logger=self.llm_logger)
-                for cycle in range(self.config.critic_cycles):
-                    print(f"  Critic cycle {cycle + 1}/{self.config.critic_cycles}...")
-                    hypotheses = critic.rate(hypotheses)
+                    critic = HypothesisCritic(self.provider, logger=self.llm_logger)
+                    for cycle in range(self.config.critic_cycles):
+                        print(
+                            f"  Critic cycle {cycle + 1}/{self.config.critic_cycles}..."
+                        )
+                        hypotheses = critic.rate(hypotheses)
 
-                all_session = self.store.load()
-                hyp_by_id = {h.hypothesis_id: h for h in hypotheses}
-                updated = [hyp_by_id.get(h.hypothesis_id, h) for h in all_session]
-                self.store.save_all(updated)
+                    all_session = self.store.load()
+                    hyp_by_id = {h.hypothesis_id: h for h in hypotheses}
+                    updated = [hyp_by_id.get(h.hypothesis_id, h) for h in all_session]
+                    self.store.save_all(updated)
+                except Exception as e:
+                    print(
+                        f"  ⚠ Critic failed: {type(e).__name__}: {e}"
+                        " — continuing without ratings"
+                    )
 
             all_hypotheses.extend(hypotheses)
             print(f"✓ Iteration {i+1} complete: {len(hypotheses)} hypotheses")
