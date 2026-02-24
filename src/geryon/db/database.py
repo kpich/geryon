@@ -104,8 +104,9 @@ class Database:
 
     def list_tables(self) -> list[str]:
         """List all registered tables."""
-        result = self.conn.execute("SHOW TABLES")
-        return [row[0] for row in result.fetchall()]
+        with self._lock:
+            result = self.conn.execute("SHOW TABLES")
+            return [row[0] for row in result.fetchall()]
 
     def close(self) -> None:
         """Close database connection."""
