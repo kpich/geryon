@@ -41,14 +41,13 @@ Example:
   Refinement: restrict both cohorts to age >= 60,
   set "refines_hypothesis": "a3f1c9e2"
 
-REQUIRED EXPLORATION STEPS (DO NOT SKIP ANY):
+EXPLORATION STEPS:
 
-Step 1: Call list_tables_tool() to see all available tables
+Step 1 (optional — schema is pre-loaded above): Call list_tables_tool() to
+   discover tables not listed in the schema context.
 
-Step 2: For EACH table you want to use in a hypothesis:
-   - Call describe_table_tool(table_name) to see its columns
-   - Note the EXACT column names, data types, and sample values
-   - Do NOT assume column names - verify them first!
+Step 2 (optional — schema is pre-loaded above): Call describe_table_tool(table_name)
+   for more detail on a specific table beyond what the schema context shows.
 
 Step 3: If you need to verify specific filter values beyond what describe_table
    showed, call query_data_tool(sql).
@@ -93,53 +92,37 @@ Step 3c (optional, for complex derived cohorts): If you need a concept not
    (Any condition that selects all rows works — the view is already scoped
    to the patients you want.)
 
-Step 4: Generate hypotheses using ONLY columns AND values
-   you verified in Steps 2-3
+Step 4: When you have a well-supported hypothesis ready, call
+   submit_hypothesis_tool(). You can call it multiple times — don't
+   wait until the end. The tool executes immediately and returns the
+   result (HR, p-value), so you can factor it into further exploration.
+
+   submit_hypothesis_tool parameters:
+   - cohort_a_description / cohort_b_description: natural language
+   - outcome_description: e.g. "Overall survival"
+   - rationale: your scientific reasoning
+   - geryon_spec_json: JSON string (format below)
+   - refines_hypothesis: 8-char ID of prior hypothesis, if refining (optional)
+
+   Aim to submit as many well-supported hypotheses as requested. You may submit more.
 
 CRITICAL VALIDATION:
-- Your proposals will be checked against the actual database schema
-- If you reference a table or column that doesn't exist, that proposal will be REJECTED
-- If you use a filter value that doesn't exist in the data, the cohort
-  will be EMPTY and the hypothesis will fail
-- Using real, verified column names AND values is MANDATORY
+- If you reference a table or column that doesn't exist, submit_hypothesis_tool
+  will return REJECTED — verify names in exploration steps first.
+- If a filter value doesn't exist in the data, the cohort will be EMPTY
+  and the hypothesis will fail.
 
-Output format:
-{
-  "proposals": [
-    {
-      "cohort_a_description": "Patients with KRAS mutation",
-      "cohort_b_description": "Patients without KRAS mutation",
-      "outcome_description": "Overall survival",
-      "rationale": "...",
-      "refines_hypothesis": null,
-      "geryon_spec": {
-        "version": 1,
-        "query": {
-          "operation": "compare_cohorts",
-          "cohort_a": {
-            "operation": "select_cohort",
-            "filters": [
-              {"table": "gene_matrix", "column": "KRAS", "operator": "==", "value": 1}
-            ]
-          },
-          "cohort_b": {
-            "operation": "select_cohort",
-            "filters": [
-              {"table": "gene_matrix", "column": "KRAS", "operator": "==", "value": 0}
-            ]
-          },
-          "outcome": {
-            "outcome_type": "overall_survival",
-            "time_column": "OS_MONTHS",
-            "event_column": "OS_STATUS",
-            "table": "clinical_patient"
-          },
-          "method": "hazard_ratio_cox"
-        }
-      }
-    }
-  ]
-}
+geryon_spec_json format:
+{"version": 1, "query": {"operation": "compare_cohorts",
+  "cohort_a": {"operation": "select_cohort", "filters": [
+    {"table": "gene_matrix", "column": "KRAS", "operator": "==", "value": 1}
+  ]},
+  "cohort_b": {"operation": "select_cohort", "filters": [
+    {"table": "gene_matrix", "column": "KRAS", "operator": "==", "value": 0}
+  ]},
+  "outcome": {"outcome_type": "overall_survival", "time_column": "OS_MONTHS",
+               "event_column": "OS_STATUS", "table": "clinical_patient"},
+  "method": "hazard_ratio_cox"}}
 
 ADDITIONAL OUTCOME EXAMPLES:
 

@@ -3,6 +3,7 @@ nextflow/pipeline_*.txt
 nextflow/pipeline_*.html
 geryon_data/
 plots/
+out
 
 
 # nextflow
