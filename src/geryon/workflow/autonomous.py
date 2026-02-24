@@ -1,11 +1,9 @@
 """Autonomous workflow using LangGraph for tool-based exploration."""
 
 import contextlib
-from datetime import UTC, datetime
 import json
 from pathlib import Path
-import re
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, TypedDict
 import uuid
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -76,9 +74,6 @@ class AutonomousWorkflow:
 
         # Create LangChain LLM
         self.llm = self._create_llm()
-
-        # Build LangGraph workflow
-        self.graph = self._build_graph()
 
     def _create_tools(self):
         """Create LangChain tool wrappers for database exploration."""
@@ -268,38 +263,84 @@ class AutonomousWorkflow:
         else:
             raise ValueError(f"Unknown provider type: {self.config.provider_type}")
 
-    def _build_graph(self):
-        """Build LangGraph workflow using ReAct agent."""
-        from langgraph.prebuilt import create_react_agent
+    def _make_submit_tool(self, iteration: int, submitted: list):
+        """Create a submit_hypothesis_tool bound to this iteration's submitted list."""
 
-        # Use ReAct agent which handles reasoning better with local models
-        return create_react_agent(self.llm, self.tools)
+        @tool
+        def submit_hypothesis_tool(
+            cohort_a_description: str,
+            cohort_b_description: str,
+            outcome_description: str,
+            rationale: str,
+            geryon_spec_json: str,
+            refines_hypothesis: str | None = None,
+        ) -> str:
+            """Submit a hypothesis for immediate execution and storage.
 
-    def _agent_node(self, state: AgentState) -> dict:
-        """Agent node: calls LLM with tools."""
-        # Bind tools to LLM
-        llm_with_tools = self.llm.bind_tools(self.tools)
+            Call this when you have a well-supported hypothesis. You can call it
+            multiple times during exploration. The tool executes the comparison
+            immediately and returns the result so you can keep exploring.
 
-        # Invoke LLM
-        response = llm_with_tools.invoke(state["messages"])
+            geryon_spec_json: JSON string with the full GeryonHyp spec.
+            Returns: HR, p-value, and save confirmation, or an error message.
+            """
+            try:
+                spec_dict = json.loads(geryon_spec_json)
+                spec = GeryonHyp(**spec_dict)
+            except Exception as e:
+                return f"ERROR parsing spec: {e}"
 
-        # Return updated state
-        return {"messages": [response]}
+            errors = self._validate_geryon_spec(spec)
+            if errors:
+                return f"REJECTED: {'; '.join(errors)}"
 
-    def _should_continue(self, state: AgentState) -> Literal["continue", "end"]:
-        """Decide whether to continue or end."""
-        last_message = state["messages"][-1]
+            proposal = HypothesisProposal(
+                cohort_a_description=cohort_a_description,
+                cohort_b_description=cohort_b_description,
+                outcome_description=outcome_description,
+                rationale=rationale,
+                geryon_spec=spec,
+                refines_hypothesis=refines_hypothesis,
+            )
 
-        # If LLM made tool calls, continue to tools node
-        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            print(f"  → LLM requesting {len(last_message.tool_calls)} tool call(s):")
-            for tc in last_message.tool_calls:
-                print(f"    - {tc['name']}({list(tc.get('args', {}).keys())})")
-            return "continue"
+            try:
+                result = self.executor.execute(spec)
+                narrator = ResultNarrator(self.provider, logger=self.llm_logger)
+                narrative = narrator.narrate(
+                    spec=spec,
+                    result=result,
+                    proposal_rationale=rationale,
+                    idx=len(submitted) + 1,
+                )
+                labeled = LabeledHypothesis(
+                    hypothesis_id=str(uuid.uuid4()),
+                    session_id=self.session.session_id,
+                    proposal=proposal,
+                    spec=spec,
+                    result=result,
+                    execution_time_seconds=0.0,
+                    narrative=narrative,
+                    llm_model=f"{self.config.provider_type}/{self.config.model}",
+                    iteration=iteration,
+                )
+                self.store.save(labeled)
+                submitted.append(labeled)
+                if self.llm_logger:
+                    self.llm_logger.log_proposal(idx=len(submitted), proposal=proposal)
+                    self.llm_logger.log_execution(
+                        idx=len(submitted), result=result, time_s=0.0
+                    )
+            except Exception as e:
+                return f"ERROR executing hypothesis: {e}"
 
-        # Otherwise, end
-        print("  → LLM finished (no more tool calls)")
-        return "end"
+            hr = result.hazard_ratio
+            p = result.p_value
+            return (
+                f"✓ Saved [{labeled.hypothesis_id[:8]}]: "
+                f"HR={hr:.3f}, p={p:.3e}. {narrative.summary}"
+            )
+
+        return submit_hypothesis_tool
 
     def run_iteration(
         self, n_proposals: int | None = None, iteration: int | None = None
@@ -360,7 +401,13 @@ class AutonomousWorkflow:
 
         # Run LangGraph
         try:
-            result = self.graph.invoke({"messages": [system_message, user_message]})
+            from langgraph.prebuilt import create_react_agent
+
+            submitted: list[LabeledHypothesis] = []
+            submit_tool = self._make_submit_tool(iteration or 0, submitted)
+            graph = create_react_agent(self.llm, self.tools + [submit_tool])
+
+            result = graph.invoke({"messages": [system_message, user_message]})
 
             if self.llm_logger:
                 self.llm_logger.log_raw_messages(result["messages"])
@@ -378,117 +425,20 @@ class AutonomousWorkflow:
                             tool_name, tool_args, msg.content or ""
                         )
 
-            # Extract proposals from final message
-            final_message = result["messages"][-1]
-
-            # Check for truncation
-            response_meta = getattr(final_message, "response_metadata", {}) or {}
-            stop_reason = response_meta.get(
-                "stop_reason", response_meta.get("finish_reason", "")
+            print(
+                f"LLM completed after {len(result['messages'])} messages, "
+                f"{len(submitted)} hypotheses submitted"
             )
-            if stop_reason in ("max_tokens", "length"):
-                print(
-                    "\u26a0 LLM response was TRUNCATED (hit max_tokens limit). "
-                    "Proposals may be incomplete."
-                )
 
-            # Log the conversation for debugging
-            print(f"LLM completed after {len(result['messages'])} messages")
-            print(f"Final response type: {type(final_message).__name__}")
-            print("Final response preview (first 500 chars):")
-            print(f"  {str(final_message.content)[:500]}")
-            print()
+            if not submitted:
+                print("⚠ No hypotheses submitted in this iteration.")
 
-            proposals = self._extract_proposals(final_message.content)
-
-            if not proposals:
-                print("⚠ WARNING: No valid proposals extracted from LLM response")
-                print(f"  Raw response length: {len(final_message.content)} chars")
-                print("  Response content:")
-                print(f"  {final_message.content[:1000]}")
-                print("  Continuing to next iteration...")
-                return []
-
-            # Resolve short IDs to full UUIDs
-            short_to_full: dict[str, str] = {}
-            for hyp in labeled + session_previous:
-                sid = hyp.hypothesis_id[:8]
-                short_to_full[sid] = hyp.hypothesis_id
-            for proposal in proposals:
-                ref = proposal.refines_hypothesis
-                if ref:
-                    full_id = short_to_full.get(ref)
-                    if full_id:
-                        proposal.refines_hypothesis = full_id
-                    else:
-                        print(
-                            f"  ⚠ Could not resolve refines_hypothesis "
-                            f"'{ref}', clearing"
-                        )
-                        proposal.refines_hypothesis = None
-
-            print(f"Generated {len(proposals)} valid proposals. Executing all...")
-            print()
-
-            # Execute and narrate
-            labeled_hypotheses = []
-            narrator = ResultNarrator(self.provider, logger=self.llm_logger)
-
-            for i, proposal in enumerate(proposals, 1):
-                a_desc = proposal.cohort_a_description
-                b_desc = proposal.cohort_b_description
-                print(f"  [{i}/{len(proposals)}] Executing: {a_desc} vs {b_desc}")
-
-                if self.llm_logger:
-                    self.llm_logger.log_proposal(idx=i, proposal=proposal)
-
-                try:
-                    start_time = datetime.now(UTC)
-                    result = self.executor.execute(proposal.geryon_spec)
-                    execution_time = (datetime.now(UTC) - start_time).total_seconds()
-
-                    if self.llm_logger:
-                        self.llm_logger.log_execution(
-                            idx=i, result=result, time_s=execution_time
-                        )
-
-                    print(f"    Executed in {execution_time:.1f}s. Narrating...")
-
-                    narrative = narrator.narrate(
-                        spec=proposal.geryon_spec,
-                        result=result,
-                        proposal_rationale=proposal.rationale,
-                        idx=i,
-                    )
-
-                    labeled_hyp = LabeledHypothesis(
-                        hypothesis_id=str(uuid.uuid4()),
-                        session_id=self.session.session_id,
-                        proposal=proposal,
-                        spec=proposal.geryon_spec,
-                        result=result,
-                        execution_time_seconds=execution_time,
-                        narrative=narrative,
-                        llm_model=f"{self.config.provider_type}/{self.config.model}",
-                        iteration=iteration,
-                    )
-
-                    self.store.save(labeled_hyp)
-                    labeled_hypotheses.append(labeled_hyp)
-
-                    print(f"    Saved. Summary: {narrative.summary}")
-
-                except Exception as e:
-                    print(f"    ERROR: {e}")
-                    continue
-
-            return labeled_hypotheses
+            return submitted
 
         except Exception as e:
             print("⚠ WARNING: Hypothesis generation failed")
             print(f"  Error: {type(e).__name__}: {str(e)}")
 
-            # Show more details for debugging
             import traceback
 
             print("  Full traceback:")
@@ -548,70 +498,6 @@ class AutonomousWorkflow:
 
         print(f"Session complete. Generated {len(all_hypotheses)} hypotheses total.")
         return all_hypotheses
-
-    def _extract_proposals(self, content: str) -> list[HypothesisProposal]:
-        """Extract GeryonHyp proposals from LLM response.
-
-        Parameters
-        ----------
-        content : str
-            LLM response content (JSON or JSON wrapped in markdown)
-
-        Returns
-        -------
-        list[HypothesisProposal]
-            Extracted proposals
-        """
-        try:
-            # Try to find JSON in response (might be wrapped in markdown code block)
-            json_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                # Assume entire content is JSON
-                json_str = content
-
-            data = json.loads(json_str)
-
-            # Handle both single proposal and proposals array
-            proposals_data = data.get(
-                "proposals", [data] if "geryon_spec" in data else []
-            )
-
-            proposals = []
-            for i, item in enumerate(proposals_data, 1):
-                proposal = HypothesisProposal(
-                    cohort_a_description=item["cohort_a_description"],
-                    cohort_b_description=item["cohort_b_description"],
-                    outcome_description=item["outcome_description"],
-                    rationale=item["rationale"],
-                    geryon_spec=GeryonHyp(**item["geryon_spec"]),
-                    refines_hypothesis=item.get("refines_hypothesis"),
-                )
-
-                # Validate tables/columns exist before accepting
-                validation_errors = self._validate_geryon_spec(proposal.geryon_spec)
-                if validation_errors:
-                    print(f"  ⚠ REJECTED proposal {i}: {'; '.join(validation_errors)}")
-                    continue
-
-                proposals.append(proposal)
-
-            if not proposals and proposals_data:
-                print("  ⚠ All proposals were rejected due to validation errors")
-
-            return proposals
-
-        except Exception as e:
-            print("⚠ WARNING: Failed to extract proposals from LLM response")
-            print(f"  Error: {type(e).__name__}: {str(e)}")
-            print(f"  Response length: {len(content)} chars")
-            print("  Response preview (first 500 chars):")
-            print(f"  {content[:500]}")
-            if len(content) > 500:
-                print("  Response preview (last 500 chars):")
-                print(f"  {content[-500:]}")
-            return []
 
     def _validate_geryon_spec(self, spec: GeryonHyp) -> list[str]:
         """Validate that tables and columns in spec actually exist.

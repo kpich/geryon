@@ -205,8 +205,13 @@ def scan_groupby(
         all_outcome_data: pd.DataFrame | None = None
         t2 = time.perf_counter()
         if hasattr(outcome_handler, "load_all_data"):
-            with contextlib.suppress(Exception):
+            try:
                 all_outcome_data = outcome_handler.load_all_data(outcome, db)
+            except Exception as e:
+                print(
+                    f"[volcano] load_all_data EXCEPTION: {type(e).__name__}: {e}",
+                    file=sys.stderr,
+                )
         if all_outcome_data is not None:
             print(
                 f"[volcano] load_all_data: {time.perf_counter()-t2:.1f}s, "
@@ -229,7 +234,13 @@ def scan_groupby(
 
         successful = []
         if candidates:
-            n_workers = min(len(candidates), min(os.cpu_count() or 4, 4))
+            # Slow path hits db.execute() per gene — DuckDB connections are not
+            # thread-safe, so force serial execution to prevent heap corruption.
+            n_workers = (
+                min(len(candidates), min(os.cpu_count() or 4, 4))
+                if all_outcome_data is not None
+                else 1
+            )
             t3 = time.perf_counter()
             with ThreadPoolExecutor(max_workers=n_workers) as pool:
                 futures = [

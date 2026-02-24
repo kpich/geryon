@@ -14,7 +14,7 @@
     --aws-region us-east-2 \
     --max-iterations 10 \
     --num-proposals 3 \
-    --critic-cycles 1
+    --critic-cycles 1 2>&1 | tee out
 #    -v
 
 #    --model us.anthropic.claude-sonnet-4-5-20250929-v1:0 \
