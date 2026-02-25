@@ -143,7 +143,7 @@ def format_previous_hypotheses(
     if rated:
         lines.append("**PREVIOUSLY RATED HYPOTHESES (learn from this feedback):**")
         for hyp in rated[:MAX_RATED]:
-            sid = short_id(hyp.hypothesis_id)
+            sid = hyp.hypothesis_id
             desc = (
                 f"{hyp.proposal.cohort_a_description} vs "
                 f"{hyp.proposal.cohort_b_description}"
@@ -165,7 +165,7 @@ def format_previous_hypotheses(
     if unrated_session:
         lines.append("**PREVIOUSLY TESTED (avoid duplicates):**")
         for hyp in unrated_session[:MAX_SESSION]:
-            sid = short_id(hyp.hypothesis_id)
+            sid = hyp.hypothesis_id
             desc = (
                 f"{hyp.proposal.cohort_a_description} vs "
                 f"{hyp.proposal.cohort_b_description}"

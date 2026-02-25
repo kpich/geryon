@@ -36,10 +36,18 @@ DIMENSION_LABELS = {
 
 def compute_depths(hyps: list) -> dict[str, int]:
     """Compute refinement depth for each hypothesis via BFS."""
-    id_to_parent: dict[str, str | None] = {
+    id_to_parent_raw: dict[str, str | None] = {
         h.hypothesis_id: h.proposal.refines_hypothesis for h in hyps
     }
-    known_ids = set(id_to_parent)
+    known_ids = set(id_to_parent_raw)
+
+    # Resolve short IDs (8-char prefix) to full UUIDs for backward compat
+    short_to_full = {hid[:8]: hid for hid in known_ids}
+    id_to_parent: dict[str, str | None] = {}
+    for hid, parent in id_to_parent_raw.items():
+        if parent is not None and parent not in known_ids:
+            parent = short_to_full.get(parent, parent)
+        id_to_parent[hid] = parent
 
     depth: dict[str, int] = {}
 

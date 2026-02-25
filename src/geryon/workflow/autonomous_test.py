@@ -265,8 +265,8 @@ def test_numbering_is_continuous():
     assert "3. [s1] TP53 mut vs WT" in result
 
 
-def test_short_id_shown_in_context():
-    """8-char short ID appears in brackets in output."""
+def test_full_uuid_shown_in_context():
+    """Full UUID appears in brackets in output (LLM must see it for refines links)."""
     hyp_id = "a3f1c9e2-1234-5678-9abc-def012345678"
     labeled = [
         _make_hyp(
@@ -278,7 +278,7 @@ def test_short_id_shown_in_context():
     ]
     result = format_previous_hypotheses(labeled, []).text
 
-    assert "[a3f1c9e2]" in result
+    assert f"[{hyp_id}]" in result
     assert short_id(hyp_id) == "a3f1c9e2"
 
 
