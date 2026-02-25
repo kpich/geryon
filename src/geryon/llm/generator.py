@@ -1,6 +1,6 @@
 """Hypothesis proposal model."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from geryon.lang.spec import GeryonHyp
 
@@ -13,4 +13,8 @@ class HypothesisProposal(BaseModel):
     outcome_description: str
     rationale: str
     geryon_spec: GeryonHyp
-    refines_hypothesis: str | None = None
+    refines_hypothesis: str | None = Field(
+        default=None,
+        description="Full hypothesis_id UUID of the parent hypothesis this refines, if "
+        "any.",
+    )

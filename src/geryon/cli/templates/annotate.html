@@ -204,7 +204,11 @@ function esc(s) {
 }
 
 function scrollToHyp(hid) {
-  const el = document.getElementById("row-" + hid);
+  let el = document.getElementById("row-" + hid);
+  if (!el) {
+    // Short-ID fallback for data stored before full-UUID fix
+    el = document.querySelector('[id^="row-' + hid + '"]');
+  }
   if (el) {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.classList.add("highlight");
