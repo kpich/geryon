@@ -51,7 +51,7 @@ def main() -> None:
 
     hyps = load_hypotheses(args.data_dir)
 
-    fig, axes = plt.subplots(3, 1, figsize=(10, 12))
+    fig, axes = plt.subplots(3, 1, figsize=(10, 6))
     fig.suptitle("Rating Distributions Over Time", fontsize=14, y=1.01)
 
     rng = np.random.default_rng(42)

@@ -60,6 +60,10 @@ def write_cna_matrix_to_parquet(
     df.index.name = "PATIENT_ID"
     df = df.reset_index()
 
+    # Drop duplicate gene columns (keep first); duplicate Hugo_Symbol rows in the
+    # input become duplicate column names after transpose and break pd.to_numeric
+    df = df.loc[:, ~df.columns.duplicated(keep="first")]
+
     # Convert gene columns to float (now only 706 columns)
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors="coerce")

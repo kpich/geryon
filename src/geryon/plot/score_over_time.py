@@ -32,7 +32,7 @@ def main() -> None:
         if score is not None:
             pairs.append((idx, score))
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 2.5))
 
     rng = np.random.default_rng(42)
 

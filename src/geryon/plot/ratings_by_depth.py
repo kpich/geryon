@@ -104,7 +104,7 @@ def main() -> None:
 
     all_depths = sorted({depth[h.hypothesis_id] for h in rated})
 
-    fig, axes = plt.subplots(3, 1, figsize=(10, 12))
+    fig, axes = plt.subplots(3, 1, figsize=(10, 6))
     fig.suptitle("Rating Distributions by Refinement Depth", fontsize=14, y=1.01)
 
     for ax, dim in zip(axes, DIMENSIONS, strict=False):
