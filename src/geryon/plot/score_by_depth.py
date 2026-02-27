@@ -36,7 +36,7 @@ def main() -> None:
         d: [s for h, s in scored if depth[h.hypothesis_id] == d] for d in all_depths
     }
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 2.5))
 
     rng = np.random.default_rng(42)
 

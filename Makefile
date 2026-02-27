@@ -56,6 +56,10 @@ data:
 annotate:
 	uv run python -m geryon.cli.annotate
 
+.PHONY: report
+report:
+	uv run python -m geryon.cli.report
+
 .PHONY: workflow
 workflow:
 	./scripts/run.sh
