@@ -38,6 +38,11 @@ def main():
         help="Output file path "
         "(default: hypothesis_report_<YYYYMMDD_HHMMSS>.html in CWD)",
     )
+    parser.add_argument(
+        "--best-file",
+        default="geryon_data/best.json",
+        help="Path to best.json from label-best (default: geryon_data/best.json)",
+    )
 
     args = parser.parse_args()
 
@@ -65,6 +70,14 @@ def main():
         for k, v in RATING_DIMENSIONS.items()
     }
 
+    best_ids: list[str] = []
+    best_rationale = ""
+    best_path = Path(args.best_file)
+    if best_path.exists():
+        data = json.loads(best_path.read_text())
+        best_ids = data.get("hypothesis_ids", [])
+        best_rationale = data.get("rationale", "")
+
     hypotheses_json = json.dumps(hypotheses)
     dimensions_json = json.dumps(dimensions)
 
@@ -79,6 +92,8 @@ def main():
         dimensions_json=dimensions_json,
         stats=stats,
         generated_at=generated_at,
+        best_ids_json=json.dumps(best_ids),
+        best_rationale=best_rationale,
     )
 
     if args.out:

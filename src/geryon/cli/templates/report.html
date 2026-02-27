@@ -96,6 +96,19 @@
                  font-size: 12px; padding: 2px 8px; border-radius: 3px;
                  margin-right: 6px; margin-bottom: 4px; }
 
+  /* Section headings */
+  .section-heading { max-width: 900px; margin: 24px auto 12px; font-size: 18px;
+                     color: #1f2937; }
+  .section-rationale { max-width: 900px; margin: 0 auto 16px; font-size: 14px;
+                       color: #6b7280; font-style: italic; }
+
+  /* Highlight cards (always expanded) */
+  .hyp-row-highlight { background: #fffbeb; border: 1px solid #fde68a;
+                       border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.10);
+                       margin: 0 auto 8px; max-width: 900px; }
+  .hyp-row-highlight .hyp-detail { display: block; }
+  .hyp-row-highlight .row-toggle { display: none; }
+
   /* Footer */
   .report-footer { text-align: center; color: #9ca3af; font-size: 12px;
                    margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
@@ -105,12 +118,20 @@
 <body>
 <h1>Hypothesis Report</h1>
 <div id="stats">{{ stats.total }} total | {{ stats.human_labeled }} human-rated | {{ stats.critic_labeled }} critic-rated | {{ stats.pending }} pending</div>
+<div id="highlights-section" style="display:none">
+  <h2 class="section-heading">Highlights</h2>
+  <div class="section-rationale" id="highlights-rationale"></div>
+  <div id="highlights"></div>
+</div>
+<h2 class="section-heading" id="all-heading">All Hypotheses</h2>
 <div id="rows"></div>
 <div class="report-footer">Generated {{ generated_at }}</div>
 
 <script>
 const HYPOTHESES = {{ hypotheses_json | safe }};
 const DIMENSIONS = {{ dimensions_json | safe }};
+const BEST_IDS = {{ best_ids_json | safe }};
+const BEST_RATIONALE = {{ best_rationale | tojson }};
 
 function fmtVal(v, digits) {
   return v != null ? Number(v).toFixed(digits) : "N/A";
@@ -244,6 +265,107 @@ function toggleRow(hid) {
   if (row) row.classList.toggle("open");
 }
 
+function buildHypCard(h, idPrefix, alwaysExpanded) {
+  const hidShort = h.hypothesis_id.substring(0, 8);
+  const dateStr = h.created_at.substring(0, 10);
+  const desc = esc(h.cohort_a_description) + " vs " + esc(h.cohort_b_description);
+  const stat = keyStat(h);
+  const badge = badgeClass(h.status);
+  const label = badgeLabel(h.status);
+
+  let refinesLink = "";
+  if (h.refines_hypothesis_short) {
+    refinesLink = `<span class="row-refines" onclick="event.stopPropagation();scrollToHyp('${esc(h.refines_hypothesis)}')"
+      title="Refines ${esc(h.refines_hypothesis_short)}">&#8627; ${esc(h.refines_hypothesis_short)}</span>`;
+  }
+
+  let refinementField = "";
+  if (h.refines_hypothesis) {
+    refinementField = `<div class="field">
+      <div class="field-label">Refines</div>
+      <div class="field-value">
+        <a href="#" onclick="event.preventDefault();event.stopPropagation();scrollToHyp('${esc(h.refines_hypothesis)}')"
+           style="color:#8b5cf6">${esc(h.refines_hypothesis_short)}</a>
+      </div>
+    </div>`;
+  }
+
+  const rowClass = alwaysExpanded ? "hyp-row hyp-row-highlight open" : "hyp-row";
+  const toggleHandler = alwaysExpanded ? "" : `onclick="toggleRow('${h.hypothesis_id}')"`;
+  const toggleArrow = alwaysExpanded ? "" : `<span class="row-toggle">&#9656;</span>`;
+
+  const el = document.createElement("div");
+  el.className = rowClass;
+  el.id = idPrefix + h.hypothesis_id;
+  el.innerHTML = `
+    <div class="row-summary" ${toggleHandler}>
+      <span class="row-id">${hidShort}</span>
+      <span class="row-date">${dateStr}</span>
+      <span class="row-desc">${desc}</span>
+      ${refinesLink}
+      <span class="row-stat">${stat}</span>
+      ${ratingsSpans(h)}
+      <span class="row-badge ${badge}">${label}</span>
+      ${toggleArrow}
+    </div>
+    <div class="hyp-detail" onclick="event.stopPropagation()">
+      <div class="field">
+        <div class="field-label">Cohort A</div>
+        <div class="field-value">${esc(h.cohort_a_description)}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Cohort B</div>
+        <div class="field-value">${esc(h.cohort_b_description)}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Rationale</div>
+        <div class="field-value">${esc(h.rationale)}</div>
+      </div>
+      ${refinementField}
+      ${buildResultsTable(h)}
+      <div class="field">
+        <div class="field-label">Summary</div>
+        <div class="field-value">${esc(h.summary)}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Findings</div>
+        <div class="field-value">${esc(h.findings)}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Limitations</div>
+        <div class="field-value">${esc(Array.isArray(h.limitations) ? h.limitations.join("; ") : h.limitations)}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Clinical Relevance</div>
+        <div class="field-value">${esc(h.clinical_relevance)}</div>
+      </div>
+      <details style="margin-bottom:12px">
+        <summary style="cursor:pointer;font-size:13px;color:#666">Spec JSON</summary>
+        <pre class="spec">${esc(JSON.stringify(h.spec, null, 2))}</pre>
+      </details>
+      ${buildCriticSection(h)}
+      ${buildHumanSection(h)}
+    </div>
+  `;
+  return el;
+}
+
+function renderHighlights(hyps, bestIds) {
+  const section = document.getElementById("highlights-section");
+  const container = document.getElementById("highlights");
+  const rationale = document.getElementById("highlights-rationale");
+
+  const byId = Object.fromEntries(hyps.map(h => [h.hypothesis_id, h]));
+  const ordered = bestIds.map(id => byId[id]).filter(Boolean);
+
+  if (ordered.length === 0) return;
+
+  rationale.textContent = BEST_RATIONALE;
+  container.innerHTML = "";
+  ordered.forEach(h => container.appendChild(buildHypCard(h, "hl-row-", true)));
+  section.style.display = "";
+}
+
 function renderAll(hyps) {
   const container = document.getElementById("rows");
   container.innerHTML = "";
@@ -254,7 +376,6 @@ function renderAll(hyps) {
   }
 
   let lastSession = null;
-
   hyps.forEach((h) => {
     if (lastSession !== null && h.session_id !== lastSession) {
       const divider = document.createElement("div");
@@ -263,90 +384,16 @@ function renderAll(hyps) {
       container.appendChild(divider);
     }
     lastSession = h.session_id;
-
-    const row = document.createElement("div");
-    row.className = "hyp-row";
-    row.id = "row-" + h.hypothesis_id;
-
-    const hidShort = h.hypothesis_id.substring(0, 8);
-    const dateStr = h.created_at.substring(0, 10);
-    const desc = esc(h.cohort_a_description) + " vs " + esc(h.cohort_b_description);
-    const stat = keyStat(h);
-    const badge = badgeClass(h.status);
-    const label = badgeLabel(h.status);
-
-    let refinesLink = "";
-    if (h.refines_hypothesis_short) {
-      refinesLink = `<span class="row-refines" onclick="event.stopPropagation();scrollToHyp('${esc(h.refines_hypothesis)}')"
-        title="Refines ${esc(h.refines_hypothesis_short)}">&#8627; ${esc(h.refines_hypothesis_short)}</span>`;
-    }
-
-    let refinementField = "";
-    if (h.refines_hypothesis) {
-      refinementField = `<div class="field">
-        <div class="field-label">Refines</div>
-        <div class="field-value">
-          <a href="#" onclick="event.preventDefault();event.stopPropagation();scrollToHyp('${esc(h.refines_hypothesis)}')"
-             style="color:#8b5cf6">${esc(h.refines_hypothesis_short)}</a>
-        </div>
-      </div>`;
-    }
-
-    row.innerHTML = `
-      <div class="row-summary" onclick="toggleRow('${h.hypothesis_id}')">
-        <span class="row-id">${hidShort}</span>
-        <span class="row-date">${dateStr}</span>
-        <span class="row-desc">${desc}</span>
-        ${refinesLink}
-        <span class="row-stat">${stat}</span>
-        ${ratingsSpans(h)}
-        <span class="row-badge ${badge}">${label}</span>
-        <span class="row-toggle">&#9656;</span>
-      </div>
-      <div class="hyp-detail" onclick="event.stopPropagation()">
-        <div class="field">
-          <div class="field-label">Cohort A</div>
-          <div class="field-value">${esc(h.cohort_a_description)}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Cohort B</div>
-          <div class="field-value">${esc(h.cohort_b_description)}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Rationale</div>
-          <div class="field-value">${esc(h.rationale)}</div>
-        </div>
-        ${refinementField}
-        ${buildResultsTable(h)}
-        <div class="field">
-          <div class="field-label">Summary</div>
-          <div class="field-value">${esc(h.summary)}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Findings</div>
-          <div class="field-value">${esc(h.findings)}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Limitations</div>
-          <div class="field-value">${esc(Array.isArray(h.limitations) ? h.limitations.join("; ") : h.limitations)}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Clinical Relevance</div>
-          <div class="field-value">${esc(h.clinical_relevance)}</div>
-        </div>
-        <details style="margin-bottom:12px">
-          <summary style="cursor:pointer;font-size:13px;color:#666">Spec JSON</summary>
-          <pre class="spec">${esc(JSON.stringify(h.spec, null, 2))}</pre>
-        </details>
-        ${buildCriticSection(h)}
-        ${buildHumanSection(h)}
-      </div>
-    `;
-    container.appendChild(row);
+    container.appendChild(buildHypCard(h, "row-", false));
   });
 }
 
 renderAll(HYPOTHESES);
+if (BEST_IDS.length > 0) {
+  renderHighlights(HYPOTHESES, BEST_IDS);
+} else {
+  document.getElementById("all-heading").style.display = "none";
+}
 </script>
 </body>
 </html>
