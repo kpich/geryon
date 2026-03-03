@@ -22,9 +22,10 @@ scientific promise. "Promising" means: statistically credible, clinically
 meaningful (not just a trivially known association), and actionable — i.e., the
 finding suggests a real biological difference or treatment-relevant subgroup.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON with no prose before or after it. Use the full ID from
+the "ID:" field, not the short 8-character prefix from the heading:
 {{
-  "top_ids": ["<hypothesis_id>", ...],
+  "top_ids": ["<full hypothesis_id>", ...],
   "rationale": "1-3 sentence explanation of what made these stand out"
 }}"""
 
@@ -72,26 +73,30 @@ def _build_user_prompt(hyps: list[dict]) -> str:
 
 def _parse_response(content: str, hyps: list[dict], n: int) -> tuple[list[str], str]:
     """Return (top_ids, rationale), falling back to first N on parse failure."""
+    # Build prefix→full-id lookup so short IDs from the LLM still resolve
+    prefix_to_id = {h["hypothesis_id"][:8]: h["hypothesis_id"] for h in hyps}
+
     try:
         text = content.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            start = 0
-            end = len(lines)
-            for i, line in enumerate(lines):
+        # Find the JSON block even when preceded by prose
+        fence_start = text.find("```")
+        if fence_start != -1:
+            lines = text[fence_start:].split("\n")
+            inner_lines = []
+            for line in lines[1:]:  # skip opening fence
                 if line.strip().startswith("```"):
-                    if start == 0:
-                        start = i + 1
-                    else:
-                        end = i
-                        break
-            text = "\n".join(lines[start:end])
+                    break
+                inner_lines.append(line)
+            text = "\n".join(inner_lines)
 
         data = json.loads(text)
-        top_ids = data["top_ids"]
+        raw_ids = data["top_ids"]
+        top_ids = [prefix_to_id.get(rid, rid) for rid in raw_ids]
         rationale = data.get("rationale", "")
         return top_ids, rationale
-    except Exception:
+    except Exception as e:
+        print(f"[label_best] parse error: {e}")
+        print(f"[label_best] raw response:\n{content[:500]}")
         fallback_ids = [h["hypothesis_id"] for h in hyps[:n]]
         return fallback_ids, "parse error — first N selected"
 

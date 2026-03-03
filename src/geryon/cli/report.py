@@ -84,7 +84,7 @@ def main():
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     templates_dir = Path(__file__).parent / "templates"
-    env = Environment(FileSystemLoader(str(templates_dir)), autoescape=False)
+    env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=False)
     template = env.get_template("report.html")
 
     rendered = template.render(

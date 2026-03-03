@@ -62,7 +62,7 @@ report:
 
 .PHONY: label-best
 label-best:
-	uv run python -m geryon.cli.label_best
+	uv run python -m geryon.cli.label_best --aws-profile saml
 
 .PHONY: workflow
 workflow:
