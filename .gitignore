@@ -4,6 +4,7 @@ nextflow/pipeline_*.html
 geryon_data/
 plots/
 out
+hypothesis_report_*.html
 
 
 # nextflow

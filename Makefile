@@ -60,6 +60,10 @@ annotate:
 report:
 	uv run python -m geryon.cli.report
 
+.PHONY: label-best
+label-best:
+	uv run python -m geryon.cli.label_best --aws-profile saml
+
 .PHONY: workflow
 workflow:
 	./scripts/run.sh
