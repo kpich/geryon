@@ -47,6 +47,10 @@ class SessionConfig(BaseModel):
         default=0,
         description="Number of LLM critic cycles per iteration (0 = disabled)",
     )
+    rank_after_critic: bool = Field(
+        default=True,
+        description="Run LLM ranker after critic to synthesize top candidates",
+    )
 
     # Paths
     parquet_dir: Path = Field(..., description="Directory with parquet files")
