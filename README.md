@@ -1,9 +1,16 @@
 # Geryon
 
-LLM tool for hypothesis generation on cancer clinicogenomics data. Proposes hypotheses
-in a formal language, executes them statistically, and narrates the results.
+v much in dev/beta -- check back later hopefully.
 
-Work in progress — check back later.
+LLM tool for exploring cancer clinicogenomics data and generating hypotheses.
+Explore data,
+possibly generate derived views,
+propose hypotheses in a small formal language,
+execute,
+get effect size + pval,
+interpret,
+iterate.
+
 
 ## Setup
 
