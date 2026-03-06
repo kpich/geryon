@@ -71,6 +71,8 @@ class AutonomousWorkflow:
                 model=f"{config.provider_type}/{config.model}",
             )
 
+        self._ranking_context: str | None = None
+
         # Create LangChain-compatible tools
         self.tools = self._create_tools()
 
@@ -374,6 +376,8 @@ class AutonomousWorkflow:
         session_previous = prior + self.store.load()
         prev_ctx = self._format_previous_hypotheses(labeled, session_previous)
         previous_context = prev_ctx.text
+        if self._ranking_context:
+            previous_context = previous_context + "\n\n" + self._ranking_context
 
         if self.llm_logger and iteration is not None:
             self.llm_logger.log_iteration_start(
@@ -516,6 +520,42 @@ class AutonomousWorkflow:
                     )
 
             all_hypotheses.extend(hypotheses)
+
+            if self.config.rank_after_critic and self.config.critic_cycles > 0:
+                try:
+                    from geryon.llm.ranker import HypothesisRanker
+
+                    labeled_rated = [
+                        h
+                        for h in self.labeled_store.load_all()
+                        if not h.effective_rating.is_pending
+                    ]
+                    session_rated = [
+                        h for h in all_hypotheses if not h.effective_rating.is_pending
+                    ]
+                    seen: set[str] = set()
+                    pool: list[LabeledHypothesis] = []
+                    for h in labeled_rated + session_rated:
+                        if h.hypothesis_id not in seen:
+                            seen.add(h.hypothesis_id)
+                            pool.append(h)
+                    if pool:
+                        ranker = HypothesisRanker(self.provider, logger=self.llm_logger)
+                        rank_result = ranker.rank(pool)
+                        hyps_by_id = {h.hypothesis_id: h for h in pool}
+                        self._ranking_context = ranker.format_for_prompt(
+                            rank_result, hyps_by_id
+                        )
+                        print(
+                            f"  Ranker: {len(rank_result.top_general)} general, "
+                            f"{len(rank_result.top_refinement)} refinement candidates"
+                        )
+                except Exception as e:
+                    print(
+                        f"  ⚠ Ranker failed: {type(e).__name__}: {e}"
+                        " — continuing without ranking"
+                    )
+
             print(f"✓ Iteration {i+1} complete: {len(hypotheses)} hypotheses")
             print()
 
