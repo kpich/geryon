@@ -12,6 +12,17 @@ interpret,
 iterate.
 
 
+## Agent tools
+
+| Tool | What it does |
+|------|-------------|
+| `list_tables` | List available tables in the DB |
+| `describe_table` | Schema + sample values for a table |
+| `query_data` | Run a SELECT (max 100 rows) |
+| `scan_groupby` | Scan all values of a categorical column vs outcome; returns top N hits ranked by significance with effect sizes (volcano plot data) |
+| `create_derived_view` | Persist a SQL view for derived concepts (e.g. treatment sequences) |
+| `submit_hypothesis` | Submit a hypothesis for statistical execution + storage |
+
 ## Setup
 
 ```bash
