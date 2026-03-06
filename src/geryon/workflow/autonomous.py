@@ -72,6 +72,7 @@ class AutonomousWorkflow:
             )
 
         self._ranking_context: str | None = None
+        self._ranking_top_ids: set[str] = set()
 
         # Create LangChain-compatible tools
         self.tools = self._create_tools()
@@ -524,6 +525,7 @@ class AutonomousWorkflow:
             if self.config.rank_after_critic and self.config.critic_cycles > 0:
                 try:
                     from geryon.llm.ranker import HypothesisRanker
+                    from geryon.workflow.context import MAX_RATED
 
                     labeled_rated = [
                         h
@@ -533,15 +535,24 @@ class AutonomousWorkflow:
                     session_rated = [
                         h for h in all_hypotheses if not h.effective_rating.is_pending
                     ]
+                    # human-rated first, critic-rated second; most recent first per tier
                     seen: set[str] = set()
                     pool: list[LabeledHypothesis] = []
-                    for h in labeled_rated + session_rated:
+                    for h in list(reversed(labeled_rated)) + list(
+                        reversed(session_rated)
+                    ):
                         if h.hypothesis_id not in seen:
                             seen.add(h.hypothesis_id)
                             pool.append(h)
+                    pool = pool[:MAX_RATED]
                     if pool:
                         ranker = HypothesisRanker(self.provider, logger=self.llm_logger)
-                        rank_result = ranker.rank(pool)
+                        rank_result = ranker.rank(
+                            pool, priority_ids=self._ranking_top_ids
+                        )
+                        self._ranking_top_ids = set(
+                            rank_result.top_general + rank_result.top_refinement
+                        )
                         hyps_by_id = {h.hypothesis_id: h for h in pool}
                         self._ranking_context = ranker.format_for_prompt(
                             rank_result, hyps_by_id

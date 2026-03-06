@@ -53,12 +53,16 @@ class HypothesisRanker:
         self.provider = provider
         self.logger = logger
 
-    def rank(self, hypotheses: list[LabeledHypothesis]) -> RankerResult:
+    def rank(
+        self,
+        hypotheses: list[LabeledHypothesis],
+        priority_ids: set[str] | None = None,
+    ) -> RankerResult:
         """Rank hypotheses. Returns RankerResult with selected IDs and synthesis."""
         if not hypotheses:
             return RankerResult(synthesis="No hypotheses to rank.")
 
-        user_prompt = self._build_user_prompt(hypotheses)
+        user_prompt = self._build_user_prompt(hypotheses, priority_ids)
         messages = [
             ChatMessage(role="system", content=RANKER_SYSTEM_PROMPT),
             ChatMessage(role="user", content=user_prompt),
@@ -79,8 +83,15 @@ class HypothesisRanker:
 
         return result
 
-    def _build_user_prompt(self, hypotheses: list[LabeledHypothesis]) -> str:
-        sections: list[str] = []
+    def _build_user_prompt(
+        self,
+        hypotheses: list[LabeledHypothesis],
+        priority_ids: set[str] | None = None,
+    ) -> str:
+        priority_ids = priority_ids or set()
+        priority_blocks: list[str] = []
+        compact_lines: list[str] = []
+
         for hyp in hypotheses:
             r = hyp.result
             stats = (
@@ -103,21 +114,27 @@ class HypothesisRanker:
             if rating.is_duplicate:
                 rating_str += ", is_duplicate=true"
 
-            section = (
-                f"## Hypothesis {hyp.hypothesis_id[:8]}\n"
-                f"ID: {hyp.hypothesis_id}\n"
-                f"**Cohort A**: {hyp.proposal.cohort_a_description}\n"
-                f"**Cohort B**: {hyp.proposal.cohort_b_description}\n"
-                f"**Rationale**: {hyp.proposal.rationale}\n"
-                f"**Stats**: {stats}\n"
-                f"**Ratings**: [{rating_str}]\n"
-                f"**Notes**: {hyp.notes or '(none)'}\n"
-                f"**Summary**: {hyp.narrative.summary}\n"
-                f"**Findings**: {hyp.narrative.findings}\n"
-                f"**Limitations**: {', '.join(hyp.narrative.limitations)}"
-            )
-            sections.append(section)
+            short_id = hyp.hypothesis_id[:8]
+            notes = hyp.notes or "(none)"
 
+            if hyp.hypothesis_id in priority_ids:
+                block = (
+                    f"## Hypothesis {short_id}\n"
+                    f"ID: {hyp.hypothesis_id}\n"
+                    f"A: {hyp.proposal.cohort_a_description} | "
+                    f"B: {hyp.proposal.cohort_b_description}\n"
+                    f"Stats: {stats} | Ratings: [{rating_str}]\n"
+                    f"Notes: {notes} | Summary: {hyp.narrative.summary}"
+                )
+                priority_blocks.append(block)
+            else:
+                line = (
+                    f"[{short_id}] {hyp.proposal.cohort_a_description} vs "
+                    f"{hyp.proposal.cohort_b_description} [{rating_str}] | {notes}"
+                )
+                compact_lines.append(line)
+
+        sections: list[str] = priority_blocks + compact_lines
         return (
             "Synthesize the following rated hypotheses. Return JSON.\n\n"
             + "\n\n".join(sections)

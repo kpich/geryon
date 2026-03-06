@@ -208,11 +208,22 @@ def test_format_for_prompt_missing_id():
 
 
 def test_build_user_prompt_includes_ratings():
-    hyp = _make_hyp("h1", novelty=3, uncontrolled=2, trustworthiness=1)
+    priority_id = "aaaaaaaa-0000-0000-0000-000000000001"
+    compact_id = "bbbbbbbb-0000-0000-0000-000000000002"
+    priority_hyp = _make_hyp(priority_id, novelty=3, uncontrolled=2, trustworthiness=1)
+    compact_hyp = _make_hyp(compact_id, cohort_a="Ctrl A", cohort_b="Ctrl B")
     ranker = HypothesisRanker(Mock())
-    prompt = ranker._build_user_prompt([hyp])
+    prompt = ranker._build_user_prompt(
+        [priority_hyp, compact_hyp],
+        priority_ids={priority_id},
+    )
+    # priority block: multi-line with header and stats
+    assert "## Hypothesis aaaaaaaa" in prompt
     assert "novelty=3" in prompt
     assert "uncontrolled=2" in prompt
     assert "trust=1" in prompt
-    assert "h1" in prompt
     assert "HR=0.720" in prompt
+    # compact one-liner: no ## header
+    assert "bbbbbbbb" in prompt
+    assert "## Hypothesis bbbbbbbb" not in prompt
+    assert "Ctrl A vs Ctrl B" in prompt
