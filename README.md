@@ -35,7 +35,7 @@ make dev   # uv sync --all-extras + pre-commit install
 ## ETL
 
 For now just requires cbioportal timeline files to be local. see `nextflow/etl.nf` for
-params giving file locatinos.
+params giving file locations.
 
 ```bash
 make etl   # Nextflow pipeline: TSV → parquet + .profile.json per table
