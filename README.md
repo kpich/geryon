@@ -11,6 +11,9 @@ get effect size + pval,
 interpret,
 iterate.
 
+For now it autonomously generates observations something like the following:
+
+<img src="assets/example_report.png" width="700" alt="example hypothesis report">
 
 ## Agent tools
 
@@ -60,6 +63,7 @@ Labels are saved to `geryon_data/labeled/`.
 ```bash
 make etl        # Nextflow pipeline: TSV → parquet + .profile.json per table
 make etl-clean  # remove Nextflow working files
+make plot       # Nextflow pipeline: generate plots from parquet data
 ```
 
 ## Development
