@@ -36,10 +36,6 @@ etl-clean:
 plot:
 	./scripts/plot.sh
 
-.PHONY: plot-clean
-plot-clean:
-	rm -rf plots/
-
 .PHONY: data
 data:
 	uv run --extra viewer python scripts/view_data.py

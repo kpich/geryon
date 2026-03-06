@@ -11,6 +11,7 @@ get effect size + pval,
 interpret,
 iterate.
 
+![example hypothesis report](assets/example_report.png)
 
 ## Agent tools
 
@@ -60,6 +61,7 @@ Labels are saved to `geryon_data/labeled/`.
 ```bash
 make etl        # Nextflow pipeline: TSV → parquet + .profile.json per table
 make etl-clean  # remove Nextflow working files
+make plot       # Nextflow pipeline: generate plots from parquet data
 ```
 
 ## Development
