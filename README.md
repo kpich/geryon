@@ -11,7 +11,7 @@ get effect size + pval,
 interpret,
 iterate.
 
-For now, generates observations like the following:
+For now it autonomously generates observations something like the following:
 
 <img src="assets/example_report.png" width="700" alt="example hypothesis report">
 
