@@ -113,8 +113,7 @@ def test_select_cohort_with_single_filter_compiles_correctly():
     )
     sql = compile_select_cohort(query)
     assert sql == (
-        'SELECT * FROM "clinical_patient" '
-        "WHERE \"CANCER_TYPE\" = 'Lung Adenocarcinoma'"
+        'SELECT * FROM "clinical_patient" WHERE "CANCER_TYPE" = \'Lung Adenocarcinoma\''
     )
 
 
@@ -179,8 +178,7 @@ def test_compile_select_cohort_ids_via_join_generates_join_sql():
     assert 'FROM "mutations_extended"' in sql
     assert 'JOIN "clinical_sample"' in sql
     assert (
-        'ON "mutations_extended"."Tumor_Sample_Barcode"'
-        ' = "clinical_sample"."SAMPLE_ID"'
+        'ON "mutations_extended"."Tumor_Sample_Barcode" = "clinical_sample"."SAMPLE_ID"'
     ) in sql
     assert "\"Hugo_Symbol\" = 'TP53'" in sql
 

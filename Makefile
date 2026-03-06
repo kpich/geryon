@@ -22,7 +22,7 @@ mypy:
 
 .PHONY: format
 format:
-	uv run --extra dev ruff format src/
+	uv run --extra dev ruff format src/ tests/
 
 .PHONY: etl
 etl:

@@ -85,7 +85,7 @@ def _compare_one(
             if elapsed > 1.0:
                 print(
                     f"[volcano] slow Cox for {grp}: {elapsed:.1f}s, "
-                    f"n={len(cohort_a_df)+len(cohort_b_df)}",
+                    f"n={len(cohort_a_df) + len(cohort_b_df)}",
                     file=sys.stderr,
                 )
             p_value = stats.get("p_value")
@@ -171,7 +171,7 @@ def scan_groupby(
         t0 = time.perf_counter()
         df = db.execute(sql)
         print(
-            f"[volcano] batch query: {time.perf_counter()-t0:.1f}s, {len(df)} rows",
+            f"[volcano] batch query: {time.perf_counter() - t0:.1f}s, {len(df)} rows",
             file=sys.stderr,
         )
         if df.empty:
@@ -194,7 +194,7 @@ def scan_groupby(
         )
         print(
             f"[volcano] all_ids query: "
-            f"{time.perf_counter()-t1:.1f}s, {len(all_ids)} ids",
+            f"{time.perf_counter() - t1:.1f}s, {len(all_ids)} ids",
             file=sys.stderr,
         )
 
@@ -214,14 +214,14 @@ def scan_groupby(
                 )
         if all_outcome_data is not None:
             print(
-                f"[volcano] load_all_data: {time.perf_counter()-t2:.1f}s, "
+                f"[volcano] load_all_data: {time.perf_counter() - t2:.1f}s, "
                 f"{len(all_outcome_data)} rows (fast path)",
                 file=sys.stderr,
             )
         else:
             print(
                 f"[volcano] load_all_data: "
-                f"{time.perf_counter()-t2:.1f}s FAILED → slow path",
+                f"{time.perf_counter() - t2:.1f}s FAILED → slow path",
                 file=sys.stderr,
             )
 
@@ -259,7 +259,7 @@ def scan_groupby(
                 ]
                 successful = [r for f in futures if (r := f.result()) is not None]
             print(
-                f"[volcano] comparisons: {time.perf_counter()-t3:.1f}s, "
+                f"[volcano] comparisons: {time.perf_counter() - t3:.1f}s, "
                 f"{len(successful)} successful",
                 file=sys.stderr,
             )
@@ -322,7 +322,6 @@ def _format_markdown(rows: list[dict], method_enum: ComparisonMethod) -> str:
             p_str = f"<{P_MIN:.0e}" if raw_p == 0.0 else f"{raw_p:.3e}"
             q_str = f"{r['q_value']:.3e}"
             lines.append(
-                f"| {r['group']} | {r['n_group']} | {r['n_rest']} | "
-                f"{p_str} | {q_str} |"
+                f"| {r['group']} | {r['n_group']} | {r['n_rest']} | {p_str} | {q_str} |"
             )
     return "\n".join(lines)
