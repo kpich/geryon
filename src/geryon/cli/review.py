@@ -67,9 +67,7 @@ class HypothesisReviewer:
         print(f"Rationale: {hyp.proposal.rationale}")
         print()
         print("Results:")
-        print(
-            f"  N_A = {hyp.result.cohort_a_size}, " f"N_B = {hyp.result.cohort_b_size}"
-        )
+        print(f"  N_A = {hyp.result.cohort_a_size}, N_B = {hyp.result.cohort_b_size}")
         if hyp.result.p_value is not None:
             print(f"  p-value = {hyp.result.p_value}")
         if hyp.result.hazard_ratio is not None:

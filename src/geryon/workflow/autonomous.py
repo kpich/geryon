@@ -489,13 +489,13 @@ class AutonomousWorkflow:
         print()
 
         for i in range(self.config.max_iterations):
-            print(f"=== Iteration {i+1}/{self.config.max_iterations} ===")
+            print(f"=== Iteration {i + 1}/{self.config.max_iterations} ===")
 
             hypotheses = self.run_iteration(iteration=i + 1)
 
             # Check if we got any hypotheses this iteration
             if not hypotheses:
-                print(f"⚠ No hypotheses generated in iteration {i+1}, continuing...")
+                print(f"⚠ No hypotheses generated in iteration {i + 1}, continuing...")
                 print()
                 continue
 
@@ -567,7 +567,7 @@ class AutonomousWorkflow:
                         " — continuing without ranking"
                     )
 
-            print(f"✓ Iteration {i+1} complete: {len(hypotheses)} hypotheses")
+            print(f"✓ Iteration {i + 1} complete: {len(hypotheses)} hypotheses")
             print()
 
         if self.llm_logger:

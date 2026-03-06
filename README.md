@@ -32,39 +32,39 @@ For now it autonomously generates observations something like the following:
 make dev   # uv sync --all-extras + pre-commit install
 ```
 
+## ETL
+
+For now just requires cbioportal timeline files to be local. see `nextflow/etl.nf` for
+params giving file locations.
+
+```bash
+make etl   # Nextflow pipeline: TSV → parquet + .profile.json per table
+```
+
 Data (parquet files) goes in `~/data/geryon_data/`. The workflow auto-detects
 the latest subdirectory.
 
-## Use
+## Run
 
 ```bash
-make run                                                # aws_bedrock, default model + settings
-./scripts/run.sh --provider anthropic --model claude-sonnet-4-6
-./scripts/run.sh --provider openai    --model gpt-4o
-./scripts/run.sh --max-iterations 5 --num-proposals 3 --critic-cycles 1
+make run   # aws_bedrock, default model + settings
 ```
 
-Providers: `aws_bedrock` (default), `anthropic`, `openai`.
+Providers: `aws_bedrock` (default), `anthropic`, `openai`. See `scripts/run.sh` for params to override.
 AWS Bedrock setup: [notebook](https://github.com/clinical-data-mining/llm_examples/blob/main/notebooks/04.Setting_Up_ClaudeCode_with_AWS_Bedrock.ipynb).
 
 Sessions are written to `geryon_data/sessions/`.
 
 ```bash
-make data      # manually examine raw ETL/derived data (harlequin viewer)
-make viewer    # browse + human-annotate hypotheses (http://localhost:8765)
-make report    # generate static HTML report from session
+make data        # manually examine raw ETL/derived data (harlequin viewer)
+make viewer      # browse + human-annotate hypotheses (http://localhost:8765)
+make report      # generate static HTML report from session
+make plot        # generate plots from parquet data
 make label-best  # auto-label best hypotheses via LLM
 ```
 
-Labels are saved to `geryon_data/labeled/`.
-
-## ETL
-
-```bash
-make etl        # Nextflow pipeline: TSV → parquet + .profile.json per table
-make etl-clean  # remove Nextflow working files
-make plot       # Nextflow pipeline: generate plots from parquet data
-```
+Human labels added via `make viewer` (not necessary for system to run) are stored in
+`geryon_data/labeled/`.
 
 ## Development
 
