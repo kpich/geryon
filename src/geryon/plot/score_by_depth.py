@@ -33,7 +33,8 @@ def main() -> None:
 
     all_depths = sorted({depth[h.hypothesis_id] for h, _ in scored})
     groups = {
-        d: [s for h, s in scored if depth[h.hypothesis_id] == d] for d in all_depths
+        d: [s for h, s in scored if depth[h.hypothesis_id] == d and s is not None]
+        for d in all_depths
     }
 
     fig, ax = plt.subplots(figsize=(8, 2.5))
