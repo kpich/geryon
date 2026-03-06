@@ -13,7 +13,7 @@ iterate.
 
 For now, generates observations like the following:
 
-![example hypothesis report](assets/example_report.png)
+<img src="assets/example_report.png" width="700" alt="example hypothesis report">
 
 ## Agent tools
 
