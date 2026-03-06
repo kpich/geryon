@@ -63,7 +63,8 @@ make plot        # generate plots from parquet data
 make label-best  # auto-label best hypotheses via LLM
 ```
 
-Human labels added via `make viewer` are stored in `geryon_data/labeled/`.
+Human labels added via `make viewer` (not necessary for system to run) are stored in
+`geryon_data/labeled/`.
 
 ## Development
 
