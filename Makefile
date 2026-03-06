@@ -28,10 +28,6 @@ format:
 etl:
 	./scripts/etl.sh
 
-.PHONY: etl-clean
-etl-clean:
-	rm -rf nextflow/.nextflow* nextflow/work nextflow/pipeline_*
-
 .PHONY: plot
 plot:
 	./scripts/plot.sh
