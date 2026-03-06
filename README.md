@@ -21,7 +21,7 @@ make dev   # uv sync --all-extras + pre-commit install
 Data (parquet files) goes in `~/data/geryon_data/`. The workflow auto-detects
 the latest subdirectory.
 
-## Running
+## Use
 
 ```bash
 make run                                                # aws_bedrock, default model + settings
@@ -35,10 +35,11 @@ AWS Bedrock setup: [notebook](https://github.com/clinical-data-mining/llm_exampl
 
 Sessions are written to `geryon_data/sessions/`.
 
-## Annotating
-
 ```bash
-make annotate   # opens http://localhost:8765
+make data      # manually examine raw ETL/derived data (harlequin viewer)
+make viewer    # browse + human-annotate hypotheses (http://localhost:8765)
+make report    # generate static HTML report from session
+make label-best  # auto-label best hypotheses via LLM
 ```
 
 Labels are saved to `geryon_data/labeled/`.
@@ -53,12 +54,9 @@ make etl-clean  # remove Nextflow working files
 ## Development
 
 ```bash
-make test      # unit tests (src/)
-make int-test  # integration tests (tests/)
-make lint
+make test      # unit + integration tests
 make mypy
 make format
-make data      # interactive parquet viewer (harlequin)
 make backup    # push geryon_data to its git remote
 make restore   # clone geryon_data from remote
 ```

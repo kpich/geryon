@@ -9,11 +9,7 @@ install:
 
 .PHONY: test
 test:
-	uv run pytest src/
-
-.PHONY: int-test
-int-test:
-	uv run pytest tests/
+	uv run pytest src/ tests/
 
 .PHONY: clean
 clean:
@@ -23,10 +19,6 @@ clean:
 .PHONY: mypy
 mypy:
 	uv run --extra dev mypy --check-untyped-defs src/geryon
-
-.PHONY: lint
-lint:
-	uv run --extra dev ruff check src/
 
 .PHONY: format
 format:
@@ -52,8 +44,8 @@ plot-clean:
 data:
 	uv run --extra viewer python scripts/view_data.py
 
-.PHONY: annotate
-annotate:
+.PHONY: viewer
+viewer:
 	uv run python -m geryon.cli.annotate
 
 .PHONY: report
