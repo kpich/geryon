@@ -1,7 +1,16 @@
 # Geryon
 
-LLM tool for hypothesis generation on cancer genomics data. Proposes hypotheses
-in a formal language, executes them statistically, and narrates the results.
+v much in dev/beta -- check back later hopefully.
+
+LLM tool for exploring cancer clinicogenomics data and generating hypotheses.
+Explore data,
+possibly generate derived views,
+propose hypotheses in a small formal language,
+execute,
+get effect size + pval,
+interpret,
+iterate.
+
 
 ## Setup
 
@@ -15,7 +24,7 @@ the latest subdirectory.
 ## Running
 
 ```bash
-make workflow                                           # aws_bedrock, default model
+make run                                                # aws_bedrock, default model + settings
 ./scripts/run.sh --provider anthropic --model claude-sonnet-4-6
 ./scripts/run.sh --provider openai    --model gpt-4o
 ./scripts/run.sh --max-iterations 5 --num-proposals 3 --critic-cycles 1

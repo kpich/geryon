@@ -64,9 +64,16 @@ report:
 label-best:
 	uv run python -m geryon.cli.label_best --aws-profile saml
 
-.PHONY: workflow
-workflow:
-	./scripts/run.sh
+.PHONY: run
+run:
+	./scripts/run.sh \
+		--provider aws_bedrock \
+		--model us.anthropic.claude-opus-4-5-20251101-v1:0 \
+		--aws-profile saml \
+		--aws-region us-east-2 \
+		--max-iterations 10 \
+		--num-proposals 3 \
+		--critic-cycles 1 2>&1 | tee out
 
 GERYON_DATA_DIR := geryon_data
 GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git
