@@ -11,6 +11,8 @@ get effect size + pval,
 interpret,
 iterate.
 
+For now, generates observations like the following:
+
 ![example hypothesis report](assets/example_report.png)
 
 ## Agent tools
