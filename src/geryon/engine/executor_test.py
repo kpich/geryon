@@ -194,6 +194,114 @@ def test_get_cohort_ids_single_table_unchanged():
     assert mock_db.execute.call_count == 1
 
 
+def test_load_train_ids_returns_none_without_split_table():
+    """_load_train_ids returns None when patient_split is not registered."""
+    mock_db = MagicMock()
+    mock_db.list_tables.return_value = ["clinical_patient"]
+
+    executor = HypothesisExecutor(mock_db)
+
+    assert executor._train_ids is None
+
+
+def test_load_train_ids_returns_frozenset_from_split_table(tmp_path: Path):
+    """_load_train_ids returns frozenset of train IDs when split file exists."""
+    clinical_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003"],
+            "TREATMENT": ["A", "B", "A"],
+            "OS_MONTHS": [10.0, 8.0, 12.0],
+            "OS_STATUS": [1, 0, 1],
+        }
+    )
+    (tmp_path / "data_clinical_patient.parquet").write_bytes(
+        clinical_df.to_parquet(index=False)
+    )
+
+    split_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003"],
+            "split": ["train", "validation", "train"],
+        }
+    )
+    (tmp_path / "patient_split.parquet").write_bytes(split_df.to_parquet(index=False))
+
+    with Database(tmp_path) as db:
+        executor = HypothesisExecutor(db)
+
+    assert executor._train_ids == frozenset(["P001", "P003"])
+
+
+def test_get_cohort_ids_filters_to_train_patients(tmp_path: Path):
+    """_get_cohort_ids excludes validation patients when split exists."""
+    clinical_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003", "P004"],
+            "TREATMENT": ["A", "A", "A", "A"],
+            "OS_MONTHS": [10.0, 8.0, 12.0, 9.0],
+            "OS_STATUS": [1, 0, 1, 1],
+        }
+    )
+    (tmp_path / "data_clinical_patient.parquet").write_bytes(
+        clinical_df.to_parquet(index=False)
+    )
+
+    split_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003", "P004"],
+            "split": ["train", "validation", "train", "validation"],
+        }
+    )
+    (tmp_path / "patient_split.parquet").write_bytes(split_df.to_parquet(index=False))
+
+    with Database(tmp_path) as db:
+        executor = HypothesisExecutor(db)
+        cohort = SelectCohort(
+            filters=[
+                CohortFilter(
+                    table="clinical_patient",
+                    column="TREATMENT",
+                    operator="==",
+                    value="A",
+                )
+            ]
+        )
+        ids = executor._get_cohort_ids(cohort)
+
+    assert ids == ["P001", "P003"]
+
+
+def test_get_cohort_ids_no_filtering_without_split(tmp_path: Path):
+    """_get_cohort_ids returns all matching patients when no split file exists."""
+    clinical_df = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P001", "P002", "P003"],
+            "TREATMENT": ["A", "A", "B"],
+            "OS_MONTHS": [10.0, 8.0, 12.0],
+            "OS_STATUS": [1, 0, 1],
+        }
+    )
+    (tmp_path / "data_clinical_patient.parquet").write_bytes(
+        clinical_df.to_parquet(index=False)
+    )
+
+    with Database(tmp_path) as db:
+        executor = HypothesisExecutor(db)
+        cohort = SelectCohort(
+            filters=[
+                CohortFilter(
+                    table="clinical_patient",
+                    column="TREATMENT",
+                    operator="==",
+                    value="A",
+                )
+            ]
+        )
+        ids = executor._get_cohort_ids(cohort)
+
+    assert ids == ["P001", "P002"]
+
+
 def test_get_cohort_ids_multi_table_intersects():
     """Multi-table filters resolve each table independently and intersect."""
     mock_db = MagicMock()

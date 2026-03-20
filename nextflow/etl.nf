@@ -16,6 +16,7 @@ nextflow.enable.dsl = 2
 params.data_root = '/Users/pichottk/data/msk-impact/msk_solid_heme'
 params.output_base = "${System.getProperty('user.home')}/data/geryon_data"
 params.file_pattern = '*.txt'
+params.holdout_seed = 42
 
 // ============================================================================
 // Processes
@@ -36,6 +37,25 @@ process extractTSV {
         --input ${tsv_file} \
         --output ${tsv_file.baseName}.parquet \
         --log-level INFO
+    """
+}
+
+process createPatientSplit {
+    publishDir "${params.output_base}/${workflow.start.format('yyyy-MM-dd')}",
+               mode: 'copy', overwrite: false
+
+    input:
+    path parquet
+
+    output:
+    path "patient_split.parquet"
+
+    script:
+    """
+    python -m geryon.etl.create_patient_split \
+        --input ${parquet} \
+        --output patient_split.parquet \
+        --seed ${params.holdout_seed}
     """
 }
 
@@ -68,6 +88,12 @@ workflow {
 
     // Extract and transform
     parquet_files = extractTSV(tsv_files)
+
+    // Generate train/validation patient split
+    clinical_parquet = parquet_files
+        .filter { parquet, profile -> parquet.name == 'data_clinical_patient.parquet' }
+        .map { parquet, profile -> parquet }
+    createPatientSplit(clinical_parquet)
 
     // Publish to timestamped directory
     publishResults(parquet_files)
