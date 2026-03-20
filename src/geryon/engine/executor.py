@@ -43,8 +43,17 @@ class HypothesisExecutor:
     """Executes Geryon hypotheses against a database."""
 
     def __init__(self, db: Database):
-        """Initialize executor with database connection."""
         self.db = db
+        self._train_ids = self._load_train_ids()
+
+    def _load_train_ids(self) -> frozenset[str] | None:
+        """Return train patient IDs from split file, or None if no split exists."""
+        if "patient_split" not in self.db.list_tables():
+            return None
+        df = self.db.execute(
+            'SELECT "PATIENT_ID" FROM "patient_split" WHERE "split" = \'train\''
+        )
+        return frozenset(df["PATIENT_ID"].tolist())
 
     def execute(self, spec: GeryonHyp) -> ComparisonResult:
         """Execute hypothesis and return comparison results."""
@@ -71,7 +80,10 @@ class HypothesisExecutor:
             filters_by_table.setdefault(f.table, []).append(f)
 
         if len(filters_by_table) == 1:
-            return self._resolve_single_table(cohort.filters)
+            ids = self._resolve_single_table(cohort.filters)
+            if self._train_ids is not None:
+                ids = [pid for pid in ids if pid in self._train_ids]
+            return ids
 
         patient_id_sets: list[set[str]] = []
         for _, filters in filters_by_table.items():
@@ -81,7 +93,10 @@ class HypothesisExecutor:
         result = patient_id_sets[0]
         for s in patient_id_sets[1:]:
             result &= s
-        return sorted(result)
+        ids = sorted(result)
+        if self._train_ids is not None:
+            ids = [pid for pid in ids if pid in self._train_ids]
+        return ids
 
     def _resolve_single_table(self, filters: list[CohortFilter]) -> list[str]:
         """Resolve PATIENT_IDs from filters on a single table."""
