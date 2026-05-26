@@ -12,6 +12,7 @@ import uuid
 
 from geryon.labeling.models import LabeledHypothesis
 from geryon.workflow import SessionConfig
+from geryon.workflow.autonomous import AutonomousWorkflow
 
 
 def get_latest_etl_output(base_dir: Path) -> Path:
@@ -146,8 +147,6 @@ def run_workflow(
 
     print("Initializing autonomous workflow...")
     print()
-
-    from geryon.workflow.autonomous import AutonomousWorkflow
 
     workflow = AutonomousWorkflow(config)
 
