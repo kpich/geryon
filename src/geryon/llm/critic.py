@@ -5,7 +5,7 @@ import json
 
 from pydantic import BaseModel
 
-from geryon.labeling.labels import RATING_DIMENSIONS
+from geryon.labeling.labels import RATING_DIMENSIONS, HypothesisRating
 from geryon.labeling.models import LabeledHypothesis
 from geryon.llm.conversation_logger import SessionTracer
 from geryon.llm.providers.base import ChatMessage, LLMProvider
@@ -107,8 +107,6 @@ class HypothesisCritic:
             cr = rating_by_id.get(hyp.hypothesis_id)
             if cr is None:
                 continue
-            from geryon.labeling.labels import HypothesisRating
-
             hyp.rating = HypothesisRating(
                 novelty=cr.novelty,
                 uncontrolled=cr.uncontrolled,

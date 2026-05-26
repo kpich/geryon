@@ -4,11 +4,17 @@ import contextlib
 import json
 from pathlib import Path
 import threading
+import traceback
 from typing import Annotated, TypedDict
 import uuid
 
+from botocore.config import Config as BotoConfig
+from langchain_anthropic import ChatAnthropic
+from langchain_aws import ChatBedrock
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import ToolNode, create_react_agent
 
 from geryon.db import Database
 from geryon.engine import HypothesisExecutor
@@ -17,12 +23,21 @@ from geryon.labeling.models import LabeledHypothesis
 from geryon.labeling.storage import HypothesisStore
 from geryon.lang.spec import GeryonHyp
 from geryon.llm.conversation_logger import SessionTracer
+from geryon.llm.critic import HypothesisCritic
 from geryon.llm.generator import HypothesisProposal
 from geryon.llm.narrator import ResultNarrator
+from geryon.llm.prompts import PROPOSAL_SYSTEM_PROMPT
 from geryon.llm.provider import create_provider
+from geryon.llm.ranker import HypothesisRanker
+from geryon.llm.schema_context import load_schema_context
 from geryon.tools.database import describe_table, list_tables, query_data
 from geryon.tools.derived import create_derived_view
 from geryon.tools.volcano import scan_groupby
+from geryon.workflow.context import (
+    MAX_CONTEXT_HYPOTHESES,
+    format_previous_hypotheses,
+    load_prior_hypotheses,
+)
 from geryon.workflow.session import Session, SessionConfig
 
 
@@ -217,8 +232,6 @@ class AutonomousWorkflow:
     def _create_llm(self):
         """Create LangChain model from provider config."""
         if self.config.provider_type == "openai":
-            from langchain_openai import ChatOpenAI
-
             kwargs = {
                 "model": self.config.model,
                 "temperature": 0.8,
@@ -231,8 +244,6 @@ class AutonomousWorkflow:
 
             return ChatOpenAI(**kwargs)  # type: ignore[arg-type]
         elif self.config.provider_type == "anthropic":
-            from langchain_anthropic import ChatAnthropic
-
             kwargs = {
                 "model_name": self.config.model,
                 "temperature": 0.8,
@@ -245,9 +256,6 @@ class AutonomousWorkflow:
 
             return ChatAnthropic(**kwargs)  # type: ignore[arg-type]
         elif self.config.provider_type == "aws_bedrock":
-            from botocore.config import Config as BotoConfig
-            from langchain_aws import ChatBedrock
-
             boto_config = BotoConfig(
                 read_timeout=300,
                 connect_timeout=30,
@@ -371,8 +379,6 @@ class AutonomousWorkflow:
 
         # Load labeled hypotheses (from prior annotation) and same-session hypotheses
         labeled = self.labeled_store.load_all()
-        from geryon.workflow.context import load_prior_hypotheses
-
         prior = load_prior_hypotheses(self.config.output_dir, self.config.session_id)
         session_previous = prior + self.store.load()
         prev_ctx = self._format_previous_hypotheses(labeled, session_previous)
@@ -391,10 +397,6 @@ class AutonomousWorkflow:
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
         print()
 
-        # Build messages: static system prompt + dynamic user message
-        from geryon.llm.prompts import PROPOSAL_SYSTEM_PROMPT
-        from geryon.llm.schema_context import load_schema_context
-
         schema_ctx = load_schema_context(self.config.parquet_dir, self.db)
         system_content = PROPOSAL_SYSTEM_PROMPT
         if schema_ctx:
@@ -410,8 +412,6 @@ class AutonomousWorkflow:
         # Run LangGraph
         submitted: list[LabeledHypothesis] = []
         try:
-            from langgraph.prebuilt import ToolNode, create_react_agent
-
             submit_tool = self._make_submit_tool(iteration or 0, submitted)
             tool_node = ToolNode(self.tools + [submit_tool], handle_tool_errors=True)
             graph = create_react_agent(self.llm, tool_node)
@@ -461,8 +461,6 @@ class AutonomousWorkflow:
             print("⚠ WARNING: Hypothesis generation failed")
             print(f"  Error: {type(e).__name__}: {str(e)}")
 
-            import traceback
-
             print("  Full traceback:")
             traceback.print_exc()
 
@@ -500,8 +498,6 @@ class AutonomousWorkflow:
 
             if self.config.critic_cycles > 0:
                 try:
-                    from geryon.llm.critic import HypothesisCritic
-
                     critic = HypothesisCritic(self.provider, logger=self.llm_logger)
                     for cycle in range(self.config.critic_cycles):
                         print(
@@ -523,11 +519,6 @@ class AutonomousWorkflow:
 
             if self.config.rank_after_critic and self.config.critic_cycles > 0:
                 try:
-                    from geryon.llm.ranker import HypothesisRanker
-                    from geryon.workflow.context import (
-                        MAX_CONTEXT_HYPOTHESES as MAX_RATED,
-                    )
-
                     labeled_rated = [
                         h
                         for h in self.labeled_store.load_all()
@@ -545,7 +536,7 @@ class AutonomousWorkflow:
                         if h.hypothesis_id not in seen:
                             seen.add(h.hypothesis_id)
                             pool.append(h)
-                    pool = pool[:MAX_RATED]
+                    pool = pool[:MAX_CONTEXT_HYPOTHESES]
                     if pool:
                         ranker = HypothesisRanker(self.provider, logger=self.llm_logger)
                         rank_result = ranker.rank(
@@ -671,8 +662,6 @@ class AutonomousWorkflow:
         session_previous: list[LabeledHypothesis],
     ):
         """Format labeled and same-session hypotheses for LLM context."""
-        from geryon.workflow.context import format_previous_hypotheses
-
         return format_previous_hypotheses(labeled, session_previous)
 
     @staticmethod

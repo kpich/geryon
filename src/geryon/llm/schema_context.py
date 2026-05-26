@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -80,8 +81,6 @@ def write_schema_context(parquet_dir: Path, db: Database) -> None:
 
 
 if __name__ == "__main__":
-    import argparse
-
     from geryon.workflow.runner import get_latest_etl_output
 
     parser = argparse.ArgumentParser(

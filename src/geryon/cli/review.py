@@ -1,5 +1,6 @@
 """Interactive CLI for reviewing and labeling hypotheses."""
 
+import argparse
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -136,7 +137,6 @@ class HypothesisReviewer:
 
 def main():
     """CLI entry point."""
-    import argparse
 
     parser = argparse.ArgumentParser(description="Review and label hypotheses")
     parser.add_argument("--storage-dir", required=True, help="Storage directory")

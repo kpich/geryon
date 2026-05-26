@@ -5,6 +5,7 @@ hypotheses on multiple dimensions instead of typing label strings
 at a terminal prompt.
 """
 
+import argparse
 from datetime import UTC, datetime
 from pathlib import Path
 import webbrowser
@@ -216,7 +217,6 @@ def create_app(output_dir: Path, labeled_store: LabeledStore) -> Flask:
 
 def main():
     """CLI entry point."""
-    import argparse
 
     parser = argparse.ArgumentParser(description="Browser-based hypothesis annotator")
     parser.add_argument(
