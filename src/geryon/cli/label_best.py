@@ -4,6 +4,7 @@ Sends all hypotheses to an LLM ranker and asks it to select the most
 scientifically promising ones for follow-up.
 """
 
+import argparse
 from datetime import datetime
 import json
 from pathlib import Path
@@ -102,8 +103,6 @@ def _parse_response(content: str, hyps: list[dict], n: int) -> tuple[list[str], 
 
 
 def main():
-    import argparse
-
     parser = argparse.ArgumentParser(
         description="Rank hypotheses by scientific promise and write best.json"
     )

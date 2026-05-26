@@ -1,12 +1,12 @@
 """List available hypothesis sessions for review."""
 
+import argparse
 import json
 from pathlib import Path
 
 
 def main():
     """CLI entry point."""
-    import argparse
 
     parser = argparse.ArgumentParser(description="List hypothesis sessions")
     parser.add_argument("--storage-dir", required=True, help="Storage directory")

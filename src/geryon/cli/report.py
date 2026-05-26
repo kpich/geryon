@@ -3,6 +3,7 @@
 Embeds all data as JSON in a <script> tag — no server required.
 """
 
+import argparse
 from datetime import datetime
 import json
 from pathlib import Path
@@ -15,8 +16,6 @@ from geryon.labeling.labels import RATING_DIMENSIONS
 
 
 def main():
-    import argparse
-
     parser = argparse.ArgumentParser(
         description="Generate a self-contained HTML hypothesis report"
     )
