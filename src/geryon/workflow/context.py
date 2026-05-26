@@ -6,8 +6,7 @@ from pathlib import Path
 from geryon.labeling.models import LabeledHypothesis
 from geryon.labeling.storage import HypothesisStore
 
-MAX_RATED = 50
-MAX_SESSION = 20
+MAX_CONTEXT_HYPOTHESES = 200
 
 
 @dataclass
@@ -15,8 +14,7 @@ class PreviousHypothesesContext:
     """Formatted context and metadata about previous hypotheses."""
 
     text: str
-    rated_ids: list[str] = field(default_factory=list)
-    unrated_session_ids: list[str] = field(default_factory=list)
+    ids: list[str] = field(default_factory=list)
 
 
 def short_id(hypothesis_id: str) -> str:
@@ -36,17 +34,7 @@ def _format_rating_tag(hyp: LabeledHypothesis) -> str:
         parts.append(f"trust={rating.trustworthiness}")
     if rating.is_duplicate is True:
         parts.append("dup")
-    return "[" + ", ".join(parts) + "]"
-
-
-def _source_label(hyp: LabeledHypothesis) -> str:
-    """Return 'human', 'critic', or 'auto' based on rating source."""
-    hr = hyp.human_rating
-    if hr is not None and not hr.is_pending:
-        return "human"
-    if hyp.labeled_by == "llm_critic":
-        return "critic"
-    return "auto"
+    return "[" + ", ".join(parts) + "]" if parts else ""
 
 
 def _format_refines_tag(hyp: LabeledHypothesis) -> str:
@@ -57,11 +45,35 @@ def _format_refines_tag(hyp: LabeledHypothesis) -> str:
     return ""
 
 
-def _format_summary_suffix(hyp: LabeledHypothesis) -> str:
-    """Build optional | summary suffix from narrative."""
-    if hyp.narrative and hyp.narrative.summary:
-        return f" | {hyp.narrative.summary}"
-    return ""
+def _format_entry(hyp: LabeledHypothesis) -> str:
+    """Build a compact single-line entry for the context block."""
+    sid = short_id(hyp.hypothesis_id)
+
+    ctx = hyp.narrative.context_summary if hyp.narrative else None
+    if ctx:
+        body = ctx
+    else:
+        desc = (
+            f"{hyp.proposal.cohort_a_description} vs "
+            f"{hyp.proposal.cohort_b_description}"
+        )
+        summary = (
+            hyp.narrative.summary if hyp.narrative and hyp.narrative.summary else ""
+        )
+        body = f"{desc}" + (f" | {summary}" if summary else "")
+
+    rating_tag = _format_rating_tag(hyp)
+    refines = _format_refines_tag(hyp)
+    notes = hyp.human_notes or hyp.notes
+
+    entry = f"[{sid}] {body}"
+    if rating_tag:
+        entry += f" {rating_tag}"
+    if refines:
+        entry += refines
+    if notes:
+        entry += f" — {notes}"
+    return entry
 
 
 def load_prior_hypotheses(
@@ -100,7 +112,7 @@ def format_previous_hypotheses(
     labeled: list[LabeledHypothesis],
     session_previous: list[LabeledHypothesis],
 ) -> PreviousHypothesesContext:
-    """Format labeled and same-session hypotheses for LLM context.
+    """Format all prior hypotheses as a compact flat list for LLM context.
 
     Parameters
     ----------
@@ -109,85 +121,41 @@ def format_previous_hypotheses(
     session_previous : list[LabeledHypothesis]
         Hypotheses generated earlier in this session (may overlap with labeled)
     """
-    labeled_ids = {h.hypothesis_id for h in labeled}
+    labeled_by_id = {h.hypothesis_id: h for h in labeled}
 
-    human_rated = [h for h in labeled if not h.effective_rating.is_pending]
+    # Merge: prefer labeled-store version (has human ratings) over session version
+    seen: set[str] = set()
+    merged: list[LabeledHypothesis] = []
+    for h in session_previous:
+        hid = h.hypothesis_id
+        if hid not in seen:
+            seen.add(hid)
+            merged.append(labeled_by_id.get(hid, h))
+    # Include any labeled hypotheses not already in session_previous
+    for h in labeled:
+        if h.hypothesis_id not in seen:
+            seen.add(h.hypothesis_id)
+            merged.append(h)
 
-    # Critic-rated session hypotheses go into the rated bucket (learn from feedback)
-    critic_rated = [
-        h
-        for h in session_previous
-        if h.hypothesis_id not in labeled_ids and not h.effective_rating.is_pending
+    if not merged:
+        return PreviousHypothesesContext(text="**No previous hypotheses yet.**")
+
+    # Newest first: session_previous is oldest-first (chronological JSONL order)
+    merged = list(reversed(merged))
+
+    cap = MAX_CONTEXT_HYPOTHESES
+    included = merged[:cap]
+    overflow = len(merged) - cap
+
+    lines: list[str] = [
+        "**PREVIOUSLY TESTED HYPOTHESES (avoid duplicates, learn from ratings):**"
     ]
-    truly_unrated = [
-        h
-        for h in session_previous
-        if h.hypothesis_id not in labeled_ids and h.effective_rating.is_pending
-    ]
-
-    # Human-rated first (higher signal), then critic-rated
-    rated = human_rated + critic_rated
-    unrated_session = truly_unrated
-
-    rated_ids = [h.hypothesis_id for h in rated[:MAX_RATED]]
-    unrated_session_ids = [h.hypothesis_id for h in unrated_session[:MAX_SESSION]]
-
-    if not rated and not unrated_session:
-        return PreviousHypothesesContext(
-            text="**No previous hypotheses yet.**",
-        )
-
-    lines: list[str] = []
-    idx = 1
-
-    if rated:
-        lines.append("**PREVIOUSLY RATED HYPOTHESES (learn from this feedback):**")
-        for hyp in rated[:MAX_RATED]:
-            sid = hyp.hypothesis_id
-            desc = (
-                f"{hyp.proposal.cohort_a_description} vs "
-                f"{hyp.proposal.cohort_b_description}"
-            )
-            tag = _format_rating_tag(hyp)
-            refines = _format_refines_tag(hyp)
-            summary = _format_summary_suffix(hyp)
-            src = _source_label(hyp)
-            entry = f"{idx}. [{sid}] {desc} {tag} [{src}]{refines}"
-            notes = hyp.human_notes or hyp.notes
-            if notes:
-                entry += f" — {notes}"
-            entry += summary
-            lines.append(entry)
-            idx += 1
-        if len(rated) > MAX_RATED:
-            lines.append(f"... and {len(rated) - MAX_RATED} more rated hypotheses")
-
-    if unrated_session:
-        lines.append("**PREVIOUSLY TESTED (avoid duplicates):**")
-        for hyp in unrated_session[:MAX_SESSION]:
-            sid = hyp.hypothesis_id
-            desc = (
-                f"{hyp.proposal.cohort_a_description} vs "
-                f"{hyp.proposal.cohort_b_description}"
-            )
-            refines = _format_refines_tag(hyp)
-            summary = _format_summary_suffix(hyp)
-            entry = f"{idx}. [{sid}] {desc}"
-            if not hyp.effective_rating.is_pending:
-                tag = _format_rating_tag(hyp)
-                src = _source_label(hyp)
-                entry += f" {tag} [{src}]"
-                notes = hyp.human_notes or hyp.notes
-                if notes:
-                    entry += f" — {notes}"
-            entry += refines + summary
-            lines.append(entry)
-            idx += 1
-        if len(unrated_session) > MAX_SESSION:
-            lines.append(f"... and {len(unrated_session) - MAX_SESSION} more")
+    for idx, hyp in enumerate(included, 1):
+        lines.append(f"{idx}. {_format_entry(hyp)}")
+    if overflow > 0:
+        lines.append(f"... and {overflow} more")
 
     return PreviousHypothesesContext(
         text="\n".join(lines),
-        rated_ids=rated_ids,
-        unrated_session_ids=unrated_session_ids,
+        ids=[h.hypothesis_id for h in included],
     )

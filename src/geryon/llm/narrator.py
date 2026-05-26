@@ -18,6 +18,7 @@ class HypothesisNarrative(BaseModel):
     findings: str
     limitations: list[str]
     clinical_relevance: str
+    context_summary: str | None = None
 
 
 class ResultNarrator:

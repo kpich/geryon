@@ -246,9 +246,17 @@ Return JSON:
   "summary": "...",
   "findings": "...",
   "limitations": ["...", "..."],
-  "clinical_relevance": "..."
+  "clinical_relevance": "...",
+  "context_summary": "..."
 }}
 ```
+
+`context_summary`: 1-2 sentences capturing what was compared, the key statistical
+finding, and the main caveat — written to be injected into future LLM prompts so the
+model can avoid re-exploring the same space. Be specific: include the cohort contrast,
+the outcome, the direction and magnitude of effect, and the most important limitation.
+Example: "KRAS mut vs WT in Bladder Cancer on Cisplatin (OS): HR=0.71 p=0.003,
+mutants survive longer; likely confounded by stage distribution, N small."
 
 # GUIDELINES
 

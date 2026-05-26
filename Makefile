@@ -52,12 +52,13 @@ label-best:
 run:
 	./scripts/run.sh \
 		--provider aws_bedrock \
-		--model us.anthropic.claude-opus-4-5-20251101-v1:0 \
+		--model us.anthropic.claude-opus-4-6-v1 \
 		--aws-profile saml \
 		--aws-region us-east-2 \
 		--max-iterations 10 \
 		--num-proposals 3 \
 		--critic-cycles 1 2>&1 | tee out
+		#--model us.anthropic.claude-opus-4-5-20251101-v1:0
 
 GERYON_DATA_DIR := geryon_data
 GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git

@@ -34,15 +34,13 @@ class SessionTracer:
         self,
         iteration: int,
         previous_ids: list[str],
-        n_rated: int,
-        n_unrated_session: int,
+        n_context: int,
     ) -> None:
         self._write(
             event="iteration_start",
             iteration=iteration,
             previous_hypothesis_ids=previous_ids,
-            n_rated=n_rated,
-            n_unrated_session=n_unrated_session,
+            n_context=n_context,
         )
 
     def log_tool_call(self, tool_name: str, args: dict, result: str) -> None:
