@@ -28,6 +28,7 @@ def _make_hyp(
     rating: HypothesisRating | None = None,
     notes: str | None = None,
     summary: str = "Test",
+    context_summary: str | None = None,
     refines_hypothesis: str | None = None,
 ) -> LabeledHypothesis:
     spec = GeryonHyp(
@@ -80,6 +81,7 @@ def _make_hyp(
             findings="Test",
             limitations=["Lim"],
             clinical_relevance="Rel",
+            context_summary=context_summary,
         ),
         llm_model="test-model",
         rating=rating or HypothesisRating(),
@@ -90,11 +92,19 @@ def _make_hyp(
 def test_empty_inputs():
     ctx = format_previous_hypotheses([], [])
     assert ctx.text == "**No previous hypotheses yet.**"
-    assert ctx.rated_ids == []
-    assert ctx.unrated_session_ids == []
+    assert ctx.ids == []
 
 
-def test_rated_only():
+def test_single_hypothesis_appears():
+    labeled = [_make_hyp("h1", a_desc="KRAS mut", b_desc="WT")]
+    ctx = format_previous_hypotheses(labeled, [])
+    assert "PREVIOUSLY TESTED HYPOTHESES" in ctx.text
+    assert "[h1]" in ctx.text
+    assert "KRAS mut vs WT" in ctx.text
+    assert ctx.ids == ["h1"]
+
+
+def test_rated_hypothesis_shows_tag():
     labeled = [
         _make_hyp(
             "h1",
@@ -102,6 +112,13 @@ def test_rated_only():
             b_desc="WT",
             rating=HypothesisRating(novelty=3, trustworthiness=3),
         ),
+    ]
+    ctx = format_previous_hypotheses(labeled, [])
+    assert "[novelty=3, trust=3]" in ctx.text
+
+
+def test_notes_shown():
+    labeled = [
         _make_hyp(
             "h2",
             a_desc="Lung",
@@ -111,56 +128,28 @@ def test_rated_only():
         ),
     ]
     ctx = format_previous_hypotheses(labeled, [])
-    result = ctx.text
-
-    assert "PREVIOUSLY RATED" in result
-    assert "[h1] KRAS mut vs WT [novelty=3, trust=3] [auto]" in result
-    assert (
-        "[h2] Lung vs Non-lung [uncontrolled=3, dup] [auto] — used wrong column | Test"
-        in result
-    )
-    assert "PREVIOUSLY TESTED" not in result
-    assert ctx.rated_ids == ["h1", "h2"]
-    assert ctx.unrated_session_ids == []
+    assert "— used wrong column" in ctx.text
+    assert "[uncontrolled=3, dup]" in ctx.text
 
 
-def test_session_only():
+def test_pending_rated_still_included():
+    """Pending-rated hypotheses appear in the unified list (no longer excluded)."""
+    labeled = [_make_hyp("h1", a_desc="KRAS mut", b_desc="WT")]
+    ctx = format_previous_hypotheses(labeled, [])
+    assert "[h1]" in ctx.text
+    assert ctx.ids == ["h1"]
+
+
+def test_session_hypothesis_appears():
     session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
     ctx = format_previous_hypotheses([], session)
-    result = ctx.text
-
-    assert "PREVIOUSLY TESTED" in result
-    assert "[s1] TP53 mut vs WT" in result
-    assert "PREVIOUSLY RATED" not in result
-    assert ctx.rated_ids == []
-    assert ctx.unrated_session_ids == ["s1"]
-
-
-def test_both_sections():
-    labeled = [
-        _make_hyp(
-            "h1",
-            a_desc="KRAS mut",
-            b_desc="WT",
-            rating=HypothesisRating(novelty=1),
-        ),
-    ]
-    session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
-    ctx = format_previous_hypotheses(labeled, session)
-    result = ctx.text
-
-    assert "PREVIOUSLY RATED" in result
-    assert "PREVIOUSLY TESTED" in result
-    lines = result.split("\n")
-    rated_idx = next(i for i, line in enumerate(lines) if "RATED" in line)
-    session_idx = next(i for i, line in enumerate(lines) if "PREVIOUSLY TESTED" in line)
-    assert rated_idx < session_idx
-    assert ctx.rated_ids == ["h1"]
-    assert ctx.unrated_session_ids == ["s1"]
+    assert "PREVIOUSLY TESTED HYPOTHESES" in ctx.text
+    assert "[s1] TP53 mut vs WT" in ctx.text
+    assert ctx.ids == ["s1"]
 
 
 def test_deduplication():
-    """Session hypothesis already in labeled set is excluded from session section."""
+    """Session hypothesis already in labeled set uses labeled-store version."""
     labeled = [
         _make_hyp(
             "h1",
@@ -174,23 +163,13 @@ def test_deduplication():
         _make_hyp("s2", a_desc="TP53 mut", b_desc="WT"),
     ]
     ctx = format_previous_hypotheses(labeled, session)
-    result = ctx.text
 
-    assert result.count("KRAS mut vs WT") == 1
-    assert "TP53 mut vs WT" in result
-
-
-def test_pending_labeled_excluded_from_rated_section():
-    """Labeled hypotheses with pending rating are not shown in the rated section."""
-    labeled = [
-        _make_hyp("h1", a_desc="KRAS mut", b_desc="WT"),
-    ]
-    ctx = format_previous_hypotheses(labeled, [])
-
-    assert ctx.text == "**No previous hypotheses yet.**"
+    assert ctx.text.count("KRAS mut vs WT") == 1
+    assert "TP53 mut vs WT" in ctx.text
+    assert "[novelty=2]" in ctx.text
 
 
-def test_truncation_rated():
+def test_truncation():
     labeled = [
         _make_hyp(
             f"h{i:07d}",
@@ -198,125 +177,72 @@ def test_truncation_rated():
             b_desc="WT",
             rating=HypothesisRating(novelty=1),
         )
-        for i in range(60)
+        for i in range(210)
     ]
     ctx = format_previous_hypotheses(labeled, [])
-    result = ctx.text
 
-    assert "... and 10 more rated hypotheses" in result
-    assert "Gene49" in result
-    assert "Gene50" not in result
-    assert len(ctx.rated_ids) == 50
+    assert "... and 10 more" in ctx.text
+    assert len(ctx.ids) == 200
 
 
-def test_truncation_session():
-    session = [
-        _make_hyp(f"s{i:07d}", a_desc=f"Gene{i} mut", b_desc="WT") for i in range(25)
-    ]
-    ctx = format_previous_hypotheses([], session)
-    result = ctx.text
-
-    assert "... and 5 more" in result
-    assert "Gene19" in result
-    assert "Gene20" not in result
-    assert len(ctx.unrated_session_ids) == 20
-
-
-def test_session_hypothesis_with_critic_rating_shows_tag():
-    """Session hypothesis with critic rating shows tag and [critic] source."""
-    session = [
-        _make_hyp(
-            "s1",
-            a_desc="EGFR mut",
-            b_desc="WT",
-            rating=HypothesisRating(novelty=3, trustworthiness=2),
-            notes="interesting",
-        ),
-    ]
-    session[0].labeled_by = "llm_critic"
-    result = format_previous_hypotheses([], session).text
-
-    assert "EGFR mut vs WT" in result
-    assert "[novelty=3, trust=2]" in result
-    assert "[critic]" in result
-    assert "interesting" in result
-
-
-def test_numbering_is_continuous():
-    labeled = [
-        _make_hyp(
-            "h1",
-            a_desc="KRAS mut",
-            b_desc="WT",
-            rating=HypothesisRating(novelty=2, trustworthiness=3),
-        ),
-        _make_hyp(
-            "h2",
-            a_desc="BRAF mut",
-            b_desc="WT",
-            rating=HypothesisRating(uncontrolled=2),
-        ),
-    ]
-    session = [_make_hyp("s1", a_desc="TP53 mut", b_desc="WT")]
-    result = format_previous_hypotheses(labeled, session).text
-
-    assert "1. [h1] KRAS mut vs WT [novelty=2, trust=3] [auto]" in result
-    assert "2. [h2] BRAF mut vs WT [uncontrolled=2] [auto]" in result
-    assert "3. [s1] TP53 mut vs WT" in result
-
-
-def test_full_uuid_shown_in_context():
-    """Full UUID appears in brackets in output (LLM must see it for refines links)."""
+def test_short_id_in_brackets():
     hyp_id = "a3f1c9e2-1234-5678-9abc-def012345678"
-    labeled = [
-        _make_hyp(
-            hyp_id,
-            a_desc="KRAS mut",
-            b_desc="WT",
-            rating=HypothesisRating(novelty=2),
-        ),
-    ]
+    labeled = [_make_hyp(hyp_id, a_desc="KRAS mut", b_desc="WT")]
     result = format_previous_hypotheses(labeled, []).text
-
-    assert f"[{hyp_id}]" in result
+    assert "[a3f1c9e2]" in result
     assert short_id(hyp_id) == "a3f1c9e2"
 
 
-def test_narrative_summary_shown_in_context():
-    """Narrative summary appears as | suffix."""
+def test_context_summary_used_when_present():
+    """context_summary replaces cohort desc + narrative summary when available."""
+    labeled = [
+        _make_hyp(
+            "h1",
+            a_desc="KRAS mut bladder on Cisplatin",
+            b_desc="WT bladder on Cisplatin",
+            summary="HR=0.71 p=0.003",
+            context_summary=(
+                "KRAS mut vs WT in Bladder on Cisplatin (OS): HR=0.71 p=0.003,"
+                " mutants survive longer; confounded by stage."
+            ),
+        ),
+    ]
+    result = format_previous_hypotheses(labeled, []).text
+    assert "KRAS mut vs WT in Bladder on Cisplatin" in result
+    assert "KRAS mut bladder on Cisplatin vs" not in result
+
+
+def test_narrative_summary_fallback_when_no_context_summary():
+    """Falls back to cohort desc + narrative summary when context_summary absent."""
     labeled = [
         _make_hyp(
             "h1",
             a_desc="KRAS mut",
             b_desc="WT",
-            rating=HypothesisRating(novelty=2),
             summary="HR=0.72 suggesting protective effect",
         ),
     ]
     result = format_previous_hypotheses(labeled, []).text
-
+    assert "KRAS mut vs WT" in result
     assert "| HR=0.72 suggesting protective effect" in result
 
 
-def test_refines_tag_shown_in_context():
-    """(refines xxxxxxxx) tag shown when refines_hypothesis is set."""
+def test_refines_tag_shown():
     parent_id = "a3f1c9e2-1234-5678-9abc-def012345678"
     labeled = [
         _make_hyp(
             "b7d4e1f0-aaaa-bbbb-cccc-ddddeeeefffff",
             a_desc="KRAS mut age>=60",
             b_desc="WT age>=60",
-            rating=HypothesisRating(novelty=3, trustworthiness=3),
+            rating=HypothesisRating(novelty=3),
             refines_hypothesis=parent_id,
         ),
     ]
     result = format_previous_hypotheses(labeled, []).text
-
     assert "(refines a3f1c9e2)" in result
 
 
 def test_refines_hypothesis_defaults_to_none():
-    """HypothesisProposal without refines_hypothesis defaults to None."""
     spec = GeryonHyp(
         query=CompareCohorts(
             cohort_a=SelectCohort(
@@ -353,34 +279,78 @@ def test_refines_hypothesis_defaults_to_none():
     assert proposal.refines_hypothesis is None
 
 
-def test_summary_shown_in_session_section():
-    """Narrative summary shown for unrated session hypotheses too."""
-    session = [
-        _make_hyp("s1", a_desc="KRAS mut", b_desc="WT", summary="No difference"),
-    ]
-    result = format_previous_hypotheses([], session).text
+def test_human_notes_shown():
+    hyp = _make_hyp(
+        "h1",
+        a_desc="KRAS mut",
+        b_desc="WT",
+        rating=HypothesisRating(novelty=3),
+    )
+    hyp.human_notes = "interesting follow-up needed"
+    result = format_previous_hypotheses([hyp], []).text
+    assert "interesting follow-up needed" in result
 
-    assert "| No difference" in result
 
-
-def test_refines_tag_in_session_section():
-    """(refines ...) tag shown in session section."""
-    parent_id = "deadbeef-1234-5678-9abc-def012345678"
+def test_critic_rated_session_hypothesis_shows_tag():
     session = [
         _make_hyp(
-            "c0ffee00-aaaa-bbbb-cccc-ddddeeeefffff",
-            a_desc="KRAS mut, NSCLC",
-            b_desc="WT, NSCLC",
-            refines_hypothesis=parent_id,
+            "s1",
+            a_desc="EGFR mut",
+            b_desc="WT",
+            rating=HypothesisRating(novelty=3, trustworthiness=2),
+            notes="interesting",
         ),
     ]
+    session[0].labeled_by = "llm_critic"
     result = format_previous_hypotheses([], session).text
+    assert "EGFR mut vs WT" in result
+    assert "[novelty=3, trust=2]" in result
+    assert "interesting" in result
 
-    assert "(refines deadbeef)" in result
+
+def test_newest_first_ordering():
+    """Entries are reversed so newest hypotheses appear first."""
+    session = [
+        _make_hyp("old", a_desc="Old hyp", b_desc="WT"),
+        _make_hyp("new", a_desc="New hyp", b_desc="WT"),
+    ]
+    result = format_previous_hypotheses([], session).text
+    old_pos = result.index("[old]")
+    new_pos = result.index("[new]")
+    assert new_pos < old_pos
+
+
+def test_human_rating_preferred_over_critic():
+    hyp = _make_hyp(
+        "h1",
+        a_desc="KRAS mut",
+        b_desc="WT",
+        rating=HypothesisRating(novelty=1, trustworthiness=1),
+    )
+    hyp.labeled_by = "llm_critic"
+    hyp.human_rating = HypothesisRating(novelty=3, trustworthiness=3)
+
+    assert hyp.effective_rating.novelty == 3
+    result = format_previous_hypotheses([hyp], []).text
+    assert "[novelty=3, trust=3]" in result
+
+
+def test_effective_rating_falls_back_to_critic():
+    hyp = _make_hyp(
+        "h1",
+        a_desc="KRAS mut",
+        b_desc="WT",
+        rating=HypothesisRating(novelty=2, trustworthiness=2),
+    )
+    hyp.labeled_by = "llm_critic"
+    assert hyp.effective_rating.novelty == 2
+    assert hyp.human_rating is None
+
+    result = format_previous_hypotheses([hyp], []).text
+    assert "[novelty=2, trust=2]" in result
 
 
 def test_prior_session_hypotheses_loaded(tmp_path):
-    """Prior session hypotheses are loaded and included in context."""
     from geryon.labeling.storage import HypothesisStore
 
     prior_dir = tmp_path / "2024-01-01" / "prior-session-id"
@@ -399,7 +369,6 @@ def test_prior_session_hypotheses_loaded(tmp_path):
 
 
 def test_prior_hypotheses_excludes_current_session(tmp_path):
-    """Hypotheses from the current session are not returned by load_prior_hypotheses."""
     from geryon.labeling.storage import HypothesisStore
 
     session_dir = tmp_path / "2024-01-01" / "my-session"
@@ -409,51 +378,10 @@ def test_prior_hypotheses_excludes_current_session(tmp_path):
     store.save(hyp)
 
     result = load_prior_hypotheses(tmp_path, "my-session")
-
     assert len(result) == 0
 
 
-def test_human_rating_preferred_over_critic():
-    """effective_rating returns human values when both human and critic are set."""
-    hyp = _make_hyp(
-        "h1",
-        a_desc="KRAS mut",
-        b_desc="WT",
-        rating=HypothesisRating(novelty=1, trustworthiness=1),
-    )
-    hyp.labeled_by = "llm_critic"
-    hyp.human_rating = HypothesisRating(novelty=3, trustworthiness=3)
-
-    assert hyp.effective_rating.novelty == 3
-    assert hyp.effective_rating.trustworthiness == 3
-
-    labeled = [hyp]
-    result = format_previous_hypotheses(labeled, []).text
-    assert "[novelty=3, trust=3]" in result
-    assert "[human]" in result
-
-
-def test_effective_rating_falls_back_to_critic():
-    """effective_rating falls back to rating when human_rating is None."""
-    hyp = _make_hyp(
-        "h1",
-        a_desc="KRAS mut",
-        b_desc="WT",
-        rating=HypothesisRating(novelty=2, trustworthiness=2),
-    )
-    hyp.labeled_by = "llm_critic"
-
-    assert hyp.effective_rating.novelty == 2
-    assert hyp.human_rating is None
-
-    labeled = [hyp]
-    result = format_previous_hypotheses(labeled, []).text
-    assert "[novelty=2, trust=2]" in result
-    assert "[critic]" in result
-
-
 def test_replay_derived_views_on_init(tmp_path):
-    """Views in derived_views.json are recreated in the db on startup."""
     from geryon.workflow.autonomous import AutonomousWorkflow
 
     views_json = tmp_path / "derived_views.json"
@@ -478,7 +406,6 @@ def test_replay_derived_views_on_init(tmp_path):
 
 
 def test_save_derived_view_writes_json(tmp_path):
-    """_save_derived_view persists the view definition to derived_views.json."""
     from geryon.workflow.autonomous import AutonomousWorkflow
 
     views_path = tmp_path / "derived_views.json"
@@ -492,7 +419,6 @@ def test_save_derived_view_writes_json(tmp_path):
     data = json.loads(views_path.read_text())
     assert data["derived_regimens"] == "SELECT PATIENT_ID FROM foo"
 
-    # Second call merges, not overwrites
     wf._save_derived_view("derived_other", "SELECT PATIENT_ID FROM bar")
     data = json.loads(views_path.read_text())
     assert "derived_regimens" in data

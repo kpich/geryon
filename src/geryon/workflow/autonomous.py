@@ -383,9 +383,8 @@ class AutonomousWorkflow:
         if self.llm_logger and iteration is not None:
             self.llm_logger.log_iteration_start(
                 iteration=iteration,
-                previous_ids=prev_ctx.rated_ids + prev_ctx.unrated_session_ids,
-                n_rated=len(prev_ctx.rated_ids),
-                n_unrated_session=len(prev_ctx.unrated_session_ids),
+                previous_ids=prev_ctx.ids,
+                n_context=len(prev_ctx.ids),
             )
 
         print(f"Generating {n_proposals} hypothesis(es)...")
@@ -525,7 +524,9 @@ class AutonomousWorkflow:
             if self.config.rank_after_critic and self.config.critic_cycles > 0:
                 try:
                     from geryon.llm.ranker import HypothesisRanker
-                    from geryon.workflow.context import MAX_RATED
+                    from geryon.workflow.context import (
+                        MAX_CONTEXT_HYPOTHESES as MAX_RATED,
+                    )
 
                     labeled_rated = [
                         h
