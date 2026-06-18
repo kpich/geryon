@@ -47,6 +47,27 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], "Messages in conversation"]
 
 
+def _sum_message_usage(messages: list) -> tuple[int, int, int, int]:
+    """Sum real token usage across all AIMessages in a ReAct conversation.
+
+    Each LLM round-trip (proposal step or tool call) produces an AIMessage with
+    LangChain's standardized usage_metadata. Returns
+    (input_tokens, output_tokens, total_tokens, n_llm_calls).
+    """
+    inp = out = tot = calls = 0
+    for msg in messages:
+        usage = getattr(msg, "usage_metadata", None)
+        if not usage:
+            continue
+        i = int(usage.get("input_tokens", 0) or 0)
+        o = int(usage.get("output_tokens", 0) or 0)
+        inp += i
+        out += o
+        tot += int(usage.get("total_tokens", 0) or 0) or (i + o)
+        calls += 1
+    return inp, out, tot, calls
+
+
 class AutonomousWorkflow:
     """LangGraph-based autonomous hypothesis generation.
 
@@ -431,6 +452,16 @@ class AutonomousWorkflow:
                     event="graph_invoke_end",
                     n_messages=len(result["messages"]),
                     n_submitted=len(submitted),
+                )
+
+            if self.llm_logger:
+                inp, out, tot, calls = _sum_message_usage(result["messages"])
+                self.llm_logger.log_generation_usage(
+                    iteration=iteration or 0,
+                    input_tokens=inp,
+                    output_tokens=out,
+                    total_tokens=tot,
+                    n_llm_calls=calls,
                 )
 
             if self.llm_logger:

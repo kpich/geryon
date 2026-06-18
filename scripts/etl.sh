@@ -11,6 +11,11 @@
 
 set -euo pipefail
 
+# STOPGAP: force Nextflow's legacy (v1) language parser. etl.nf still uses old
+# syntax (e.g. top-level `workflow.onComplete { ... }`) that the strict parser
+# in Nextflow 26+ rejects. Remove once etl.nf is migrated to the new syntax.
+export NXF_SYNTAX_PARSER=v1
+
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
