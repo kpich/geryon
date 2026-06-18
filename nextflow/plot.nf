@@ -1,8 +1,9 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl = 2
 
-params.data_dir   = "${projectDir}/../geryon_data"
-params.output_dir = "${projectDir}/../plots"
+params.data_dir    = "${projectDir}/../geryon_data"
+params.output_dir  = "${projectDir}/../plots"
+params.parquet_dir = ""  // required for pvalComparison; skipped if empty
 
 process ratingsOverTime {
     errorStrategy 'terminate'
@@ -64,9 +65,86 @@ process scoreOverTime {
     """
 }
 
+process executeAgainstVal {
+    errorStrategy 'terminate'
+
+    output:
+    path "val_results.csv"
+
+    script:
+    """
+    uv run python -m geryon.eval.batch \
+        --data-dir ${params.data_dir} \
+        --parquet-dir ${params.parquet_dir} \
+        --output val_results.csv
+    """
+}
+
+process pvalComparison {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    input:
+    path val_results
+
+    output:
+    path "pval_comparison.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.pval_comparison \
+        --input ${val_results} \
+        --output pval_comparison.pdf
+    """
+}
+
+process qvalComparison {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    input:
+    path val_results
+
+    output:
+    path "qval_comparison.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.qval_comparison \
+        --input ${val_results} \
+        --output qval_comparison.pdf
+    """
+}
+
+process topValHypotheses {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    input:
+    path val_results
+
+    output:
+    path "top_val_hypotheses.txt"
+
+    script:
+    """
+    uv run python -m geryon.plot.top_val_hyps \
+        --input ${val_results} \
+        --data-dir ${params.data_dir} \
+        --output top_val_hypotheses.txt
+    """
+}
+
 workflow {
     ratingsOverTime()
     ratingsByDepth()
     scoreByDepth()
     scoreOverTime()
+
+    if (params.parquet_dir) {
+        val_csv = executeAgainstVal().first()
+        pvalComparison(val_csv)
+        qvalComparison(val_csv)
+        topValHypotheses(val_csv)
+    }
 }
