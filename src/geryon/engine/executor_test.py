@@ -7,7 +7,7 @@ import pandas as pd  # type: ignore
 import pytest
 
 from geryon.db import Database
-from geryon.engine import HypothesisExecutor
+from geryon.engine import HypothesisExecutor, load_split_ids
 from geryon.lang import (
     CohortFilter,
     CompareCohorts,
@@ -194,30 +194,19 @@ def test_get_cohort_ids_single_table_unchanged():
     assert mock_db.execute.call_count == 1
 
 
-def test_load_train_ids_returns_none_without_split_table():
-    """_load_train_ids returns None when patient_split is not registered."""
+def test_load_split_ids_returns_none_without_split_table():
+    """load_split_ids returns None when patient_split table is absent."""
     mock_db = MagicMock()
     mock_db.list_tables.return_value = ["clinical_patient"]
 
-    executor = HypothesisExecutor(mock_db)
-
-    assert executor._train_ids is None
+    assert load_split_ids(mock_db, "train") is None
 
 
-def test_load_train_ids_returns_frozenset_from_split_table(tmp_path: Path):
-    """_load_train_ids returns frozenset of train IDs when split file exists."""
-    clinical_df = pd.DataFrame(
-        {
-            "PATIENT_ID": ["P001", "P002", "P003"],
-            "TREATMENT": ["A", "B", "A"],
-            "OS_MONTHS": [10.0, 8.0, 12.0],
-            "OS_STATUS": [1, 0, 1],
-        }
-    )
+def test_load_split_ids_returns_frozenset_for_named_split(tmp_path: Path):
+    """load_split_ids returns frozenset of IDs for the requested split name."""
     (tmp_path / "data_clinical_patient.parquet").write_bytes(
-        clinical_df.to_parquet(index=False)
+        pd.DataFrame({"PATIENT_ID": ["P001", "P002", "P003"]}).to_parquet(index=False)
     )
-
     split_df = pd.DataFrame(
         {
             "PATIENT_ID": ["P001", "P002", "P003"],
@@ -227,35 +216,24 @@ def test_load_train_ids_returns_frozenset_from_split_table(tmp_path: Path):
     (tmp_path / "patient_split.parquet").write_bytes(split_df.to_parquet(index=False))
 
     with Database(tmp_path) as db:
-        executor = HypothesisExecutor(db)
+        assert load_split_ids(db, "train") == frozenset(["P001", "P003"])
+        assert load_split_ids(db, "validation") == frozenset(["P002"])
 
-    assert executor._train_ids == frozenset(["P001", "P003"])
 
-
-def test_get_cohort_ids_filters_to_train_patients(tmp_path: Path):
-    """_get_cohort_ids excludes validation patients when split exists."""
+def test_get_cohort_ids_filters_to_supplied_patient_ids(tmp_path: Path):
+    """_get_cohort_ids restricts results to patient_ids passed at construction."""
     clinical_df = pd.DataFrame(
         {
             "PATIENT_ID": ["P001", "P002", "P003", "P004"],
             "TREATMENT": ["A", "A", "A", "A"],
-            "OS_MONTHS": [10.0, 8.0, 12.0, 9.0],
-            "OS_STATUS": [1, 0, 1, 1],
         }
     )
     (tmp_path / "data_clinical_patient.parquet").write_bytes(
         clinical_df.to_parquet(index=False)
     )
 
-    split_df = pd.DataFrame(
-        {
-            "PATIENT_ID": ["P001", "P002", "P003", "P004"],
-            "split": ["train", "validation", "train", "validation"],
-        }
-    )
-    (tmp_path / "patient_split.parquet").write_bytes(split_df.to_parquet(index=False))
-
     with Database(tmp_path) as db:
-        executor = HypothesisExecutor(db)
+        executor = HypothesisExecutor(db, patient_ids=frozenset(["P001", "P003"]))
         cohort = SelectCohort(
             filters=[
                 CohortFilter(

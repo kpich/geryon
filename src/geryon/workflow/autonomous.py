@@ -17,7 +17,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import ToolNode, create_react_agent
 
 from geryon.db import Database
-from geryon.engine import HypothesisExecutor
+from geryon.engine import HypothesisExecutor, load_split_ids
 from geryon.labeling.labeled_store import LabeledStore
 from geryon.labeling.models import LabeledHypothesis
 from geryon.labeling.storage import HypothesisStore
@@ -68,7 +68,9 @@ class AutonomousWorkflow:
         self._derived_views_path = Path(config.storage_dir) / "derived_views.json"
         self._views_lock = threading.Lock()
         self._replay_derived_views()
-        self.executor = HypothesisExecutor(self.db)
+        self.executor = HypothesisExecutor(
+            self.db, patient_ids=load_split_ids(self.db, "train")
+        )
         provider_kwargs: dict = {"model": config.model}
         if config.provider_type == "aws_bedrock":
             provider_kwargs["region"] = config.aws_region

@@ -39,21 +39,22 @@ _KNOWN_STAT_KEYS = frozenset(
 )
 
 
+def load_split_ids(db: Database, split: str) -> frozenset[str] | None:
+    """Return patient IDs for a named split, or None if no split table exists."""
+    if "patient_split" not in db.list_tables():
+        return None
+    df = db.execute(
+        f'SELECT "PATIENT_ID" FROM "patient_split" WHERE "split" = \'{split}\''
+    )
+    return frozenset(df["PATIENT_ID"].tolist())
+
+
 class HypothesisExecutor:
     """Executes Geryon hypotheses against a database."""
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, patient_ids: frozenset[str] | None = None):
         self.db = db
-        self._train_ids = self._load_train_ids()
-
-    def _load_train_ids(self) -> frozenset[str] | None:
-        """Return train patient IDs from split file, or None if no split exists."""
-        if "patient_split" not in self.db.list_tables():
-            return None
-        df = self.db.execute(
-            'SELECT "PATIENT_ID" FROM "patient_split" WHERE "split" = \'train\''
-        )
-        return frozenset(df["PATIENT_ID"].tolist())
+        self._patient_ids = patient_ids
 
     def execute(self, spec: GeryonHyp) -> ComparisonResult:
         """Execute hypothesis and return comparison results."""
@@ -81,8 +82,8 @@ class HypothesisExecutor:
 
         if len(filters_by_table) == 1:
             ids = self._resolve_single_table(cohort.filters)
-            if self._train_ids is not None:
-                ids = [pid for pid in ids if pid in self._train_ids]
+            if self._patient_ids is not None:
+                ids = [pid for pid in ids if pid in self._patient_ids]
             return ids
 
         patient_id_sets: list[set[str]] = []
@@ -94,8 +95,8 @@ class HypothesisExecutor:
         for s in patient_id_sets[1:]:
             result &= s
         ids = sorted(result)
-        if self._train_ids is not None:
-            ids = [pid for pid in ids if pid in self._train_ids]
+        if self._patient_ids is not None:
+            ids = [pid for pid in ids if pid in self._patient_ids]
         return ids
 
     def _resolve_single_table(self, filters: list[CohortFilter]) -> list[str]:
