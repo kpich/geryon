@@ -124,6 +124,25 @@ class SessionTracer:
                 raw_response=raw_response,
             )
 
+    def log_generation_usage(
+        self,
+        iteration: int,
+        input_tokens: int,
+        output_tokens: int,
+        total_tokens: int,
+        n_llm_calls: int,
+    ) -> None:
+        """Real token usage for one iteration's ReAct generation (proposals +
+        all tool-call round-trips), summed from LangChain message usage_metadata."""
+        self._write(
+            event="generation_usage",
+            iteration=iteration,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            n_llm_calls=n_llm_calls,
+        )
+
     def log_session_end(self, total: int, successful: int, failed: int) -> None:
         self._write(
             event="session_end",
