@@ -8,6 +8,8 @@ from geryon.llm.providers.openai import OpenAIProvider
 
 ProviderType = Literal["openai", "anthropic", "aws_bedrock"]
 
+DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-4-8"
+
 
 def create_provider(
     provider_type: ProviderType,
@@ -36,8 +38,7 @@ def create_provider(
 
     Examples
     --------
-    >>> provider = create_provider(
-        "aws_bedrock", model="us.anthropic.claude-opus-4-5-20251101-v1:0")
+    >>> provider = create_provider("aws_bedrock", model=DEFAULT_BEDROCK_MODEL)
     """
     if provider_type == "openai":
         return OpenAIProvider(**kwargs)

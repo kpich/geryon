@@ -11,6 +11,7 @@ from pathlib import Path
 import uuid
 
 from geryon.labeling.models import LabeledHypothesis
+from geryon.llm import DEFAULT_BEDROCK_MODEL
 from geryon.workflow import SessionConfig
 from geryon.workflow.autonomous import AutonomousWorkflow
 
@@ -76,7 +77,7 @@ def run_workflow(
     provider : str, optional
         LLM provider (default: aws_bedrock)
     model : str, optional
-        Model name (default: us.anthropic.claude-opus-4-5-20251101-v1:0)
+        Model name (default: see DEFAULT_BEDROCK_MODEL)
     base_url : str, optional
         Custom API endpoint (e.g., AWS-hosted inference server)
     api_key : str, optional
@@ -216,7 +217,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         default=None,
-        help="Model name (default: us.anthropic.claude-opus-4-5-20251101-v1:0)",
+        help=f"Model name (default: {DEFAULT_BEDROCK_MODEL})",
     )
     parser.add_argument(
         "--base-url",
