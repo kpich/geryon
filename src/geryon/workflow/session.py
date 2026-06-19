@@ -7,6 +7,8 @@ import uuid
 
 from pydantic import BaseModel, Field
 
+from geryon.llm import DEFAULT_BEDROCK_MODEL
+
 
 class SessionConfig(BaseModel):
     """Configuration for a hypothesis generation session."""
@@ -19,7 +21,7 @@ class SessionConfig(BaseModel):
         default="aws_bedrock", description="LLM provider type"
     )
     model: str = Field(
-        default="us.anthropic.claude-opus-4-5-20251101-v1:0",
+        default=DEFAULT_BEDROCK_MODEL,
         description="Model identifier",
     )
     base_url: str | None = Field(

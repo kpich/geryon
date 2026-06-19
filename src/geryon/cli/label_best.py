@@ -11,7 +11,7 @@ from pathlib import Path
 
 from geryon.cli.annotate import _load_all
 from geryon.labeling.labeled_store import LabeledStore
-from geryon.llm.provider import create_provider
+from geryon.llm.provider import DEFAULT_BEDROCK_MODEL, create_provider
 from geryon.llm.providers.base import ChatMessage
 
 RANKER_SYSTEM_PROMPT = """\
@@ -136,7 +136,7 @@ def main():
     )
     parser.add_argument(
         "--model",
-        default="us.anthropic.claude-opus-4-5-20251101-v1:0",
+        default=DEFAULT_BEDROCK_MODEL,
         help="Model ID",
     )
     parser.add_argument(
