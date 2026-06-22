@@ -150,6 +150,25 @@ process topValHypotheses {
     """
 }
 
+process synopticTimeline {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    input:
+    path val_results
+
+    output:
+    path "synoptic_timeline.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.synoptic_timeline \
+        --data-dir ${params.data_dir} \
+        --input ${val_results} \
+        --output synoptic_timeline.pdf
+    """
+}
+
 workflow {
     ratingsOverTime()
     ratingsByDepth()
@@ -162,5 +181,6 @@ workflow {
         pvalComparison(val_csv)
         qvalComparison(val_csv)
         topValHypotheses(val_csv)
+        synopticTimeline(val_csv)
     }
 }
