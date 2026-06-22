@@ -13,9 +13,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-# USD per token (Anthropic pricing). input_tokens does NOT include cache reads
-# (total_tokens == input + output + cache_read); it does include the cache-write
-# tokens, which carry a 1.25x write premium.
+# USD per token (Anthropic pricing). input_tokens, cache_read_tokens and
+# cache_creation_tokens are three DISJOINT buckets of the prompt: fresh input is
+# billed at 1x, cache reads at 0.1x, cache writes at 1.25x. (total_tokens only
+# sums input + output + cache_read, so it understates volume — don't use it.)
 _INPUT_PRICE = 5.00 / 1_000_000
 _OUTPUT_PRICE = 25.00 / 1_000_000
 _CACHE_READ_PRICE = 0.50 / 1_000_000
@@ -36,6 +37,7 @@ def load_generation_usage(data_dir: Path) -> list[dict]:
                 except json.JSONDecodeError:
                     continue
                 if rec.get("event") == "generation_usage":
+                    rec["_session"] = str(trace_file)
                     events.append(rec)
     events.sort(key=lambda r: r.get("ts", ""))
     return events
@@ -43,29 +45,35 @@ def load_generation_usage(data_dir: Path) -> list[dict]:
 
 def _event_cost(e: dict) -> float:
     """Actual USD cost of one generation_usage event."""
-    inp = e.get("input_tokens", 0)
-    out = e.get("output_tokens", 0)
-    cr = e.get("cache_read_tokens", 0)
-    cw = e.get("cache_creation_tokens", 0)
     return (
-        max(inp - cw, 0) * _INPUT_PRICE
-        + cw * _CACHE_WRITE_PRICE
-        + cr * _CACHE_READ_PRICE
-        + out * _OUTPUT_PRICE
+        e.get("input_tokens", 0) * _INPUT_PRICE
+        + e.get("cache_creation_tokens", 0) * _CACHE_WRITE_PRICE
+        + e.get("cache_read_tokens", 0) * _CACHE_READ_PRICE
+        + e.get("output_tokens", 0) * _OUTPUT_PRICE
+    )
+
+
+def _input_volume(e: dict) -> int:
+    """Full prompt volume of an event: the three disjoint input buckets."""
+    return (
+        e.get("input_tokens", 0)
+        + e.get("cache_read_tokens", 0)
+        + e.get("cache_creation_tokens", 0)
     )
 
 
 def _cache_fractions(events: list[dict]) -> tuple[float, float] | None:
-    """Calibrate (cache_read, cache_write) fractions of input volume from runs
-    that used caching. Returns None if no cached runs are present.
-
-    Input volume == input_tokens + cache_read_tokens (the full prompt sent each
-    call); cache_write is a subset of input_tokens.
+    """Calibrate (cache_read, cache_write) fractions of input volume from the
+    most recent cached session, so the estimate reflects current caching
+    behavior (e.g. tail caching) rather than an average over older regimes.
+    Returns None if no cached runs are present.
     """
     cached = [e for e in events if e.get("cache_read_tokens", 0) > 0]
     if not cached:
         return None
-    volume = sum(e["input_tokens"] + e["cache_read_tokens"] for e in cached)
+    latest_session = max(cached, key=lambda e: e.get("ts", ""))["_session"]
+    cached = [e for e in cached if e["_session"] == latest_session]
+    volume = sum(_input_volume(e) for e in cached)
     if volume <= 0:
         return None
     f_read = sum(e["cache_read_tokens"] for e in cached) / volume
@@ -82,7 +90,7 @@ def _estimated_cost(e: dict, fractions: tuple[float, float]) -> float:
     if e.get("cache_read_tokens", 0) > 0:
         return _event_cost(e)
     f_read, f_write = fractions
-    volume = e.get("input_tokens", 0)
+    volume = _input_volume(e)  # uncached run: == input_tokens (full prompt)
     out = e.get("output_tokens", 0)
     read = f_read * volume
     write = f_write * volume
@@ -109,15 +117,12 @@ def main() -> None:
 
     if events:
         x = np.arange(1, len(events) + 1)
-        inp = np.array([e.get("input_tokens", 0) for e in events], dtype=float)
         out = np.array([e.get("output_tokens", 0) for e in events], dtype=float)
-        cache_read = np.array(
-            [e.get("cache_read_tokens", 0) for e in events], dtype=float
-        )
+        # Full input volume per call: fresh + cache read + cache write.
+        volume = np.array([_input_volume(e) for e in events], dtype=float)
 
         cum_cost = np.cumsum([_event_cost(e) for e in events])
-        # True input volume processed per call includes the cache reads.
-        cum_inp = np.cumsum(inp + cache_read)
+        cum_inp = np.cumsum(volume)
         cum_out = np.cumsum(out)
 
         ax_cost.plot(x, cum_cost, color="#0072B2", linewidth=1.8, label="actual")
