@@ -65,6 +65,21 @@ process scoreOverTime {
     """
 }
 
+process costOverTime {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    output:
+    path "cost_over_time.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.cost_over_time \
+        --data-dir ${params.data_dir} \
+        --output cost_over_time.pdf
+    """
+}
+
 process executeAgainstVal {
     errorStrategy 'terminate'
 
@@ -140,6 +155,7 @@ workflow {
     ratingsByDepth()
     scoreByDepth()
     scoreOverTime()
+    costOverTime()
 
     if (params.parquet_dir) {
         val_csv = executeAgainstVal().first()

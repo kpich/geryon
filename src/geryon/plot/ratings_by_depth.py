@@ -20,12 +20,6 @@ COLORS: dict[str, dict[int, str]] = {
     "trustworthiness": {1: _BAD, 2: _NEUTRAL, 3: _GOOD},  # credible=good
 }
 
-DIRECTION: dict[str, str] = {
-    "novelty": "↑ higher = better",
-    "uncontrolled": "↓ lower = better",
-    "trustworthiness": "↑ higher = better",
-}
-
 DIMENSIONS = ["novelty", "uncontrolled", "trustworthiness"]
 DIMENSION_LABELS = {
     "novelty": "Novelty",
@@ -105,7 +99,6 @@ def main() -> None:
     all_depths = sorted({depth[h.hypothesis_id] for h in rated})
 
     fig, axes = plt.subplots(3, 1, figsize=(10, 6))
-    fig.suptitle("Rating Distributions by Refinement Depth", fontsize=14, y=1.01)
 
     for ax, dim in zip(axes, DIMENSIONS, strict=False):
         # Count ratings per depth level for this dimension
@@ -151,12 +144,11 @@ def main() -> None:
         ax.set_xlabel("Refinement depth (0 = original hypothesis)")
         ax.set_ylabel("Proportion")
         ax.set_ylim(0, 1.15)
-        ax.set_title(f"{DIMENSION_LABELS[dim]} ({DIRECTION[dim]})")
         ax.legend(title="Rating", loc="upper right")
         ax.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight")
+    plt.savefig(args.output, bbox_inches="tight", transparent=True)
 
 
 if __name__ == "__main__":

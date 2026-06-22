@@ -67,12 +67,11 @@ def main() -> None:
     ax.axhline(0, color="grey", linewidth=0.8, linestyle="--")
     ax.set_xlabel("Hypothesis sequence")
     ax.set_ylabel("Score  (novelty − uncontrolled + trustworthiness)")
-    ax.set_title(f"Hypothesis Score Over Time — N={len(pairs)} rated")
     ax.set_ylim(-2, 6)
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight")
+    plt.savefig(args.output, bbox_inches="tight", transparent=True)
 
 
 if __name__ == "__main__":

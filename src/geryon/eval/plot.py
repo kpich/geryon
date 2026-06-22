@@ -137,14 +137,13 @@ def plot_pval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     fig, ax, ax_top, ax_right = _make_marginal_fig(x, y)
     _plot_scatter_with_fits(ax, x, y)
 
-    ax_top.set_title(f"Train vs Val p-values (n={len(plot_df)})", fontsize=11)
     ax_top.set_ylabel("density", fontsize=8)
     ax_right.set_xlabel("density", fontsize=8, rotation=0, labelpad=4)
     ax.set_xlabel("train p-value")
     ax.set_ylabel("val p-value")
     ax.legend(fontsize=9)
 
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close(fig)
 
 
@@ -169,12 +168,11 @@ def plot_qval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     ax.axvline(0.05, color="tab:red", linestyle=":", linewidth=1, label="q=0.05")
     ax.axhline(0.05, color="tab:red", linestyle=":", linewidth=1)
 
-    ax_top.set_title(f"Train vs Val q-values (n={len(plot_df)})", fontsize=11)
     ax_top.set_ylabel("density", fontsize=8)
     ax_right.set_xlabel("density", fontsize=8, rotation=0, labelpad=4)
-    ax.set_xlabel("train q-value (BH)")
-    ax.set_ylabel("val q-value (BH)")
+    ax.set_xlabel("train q-value")
+    ax.set_ylabel("val q-value")
     ax.legend(fontsize=9)
 
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close(fig)

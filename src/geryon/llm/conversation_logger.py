@@ -131,15 +131,23 @@ class SessionTracer:
         output_tokens: int,
         total_tokens: int,
         n_llm_calls: int,
+        cache_read_tokens: int = 0,
+        cache_creation_tokens: int = 0,
     ) -> None:
         """Real token usage for one iteration's ReAct generation (proposals +
-        all tool-call round-trips), summed from LangChain message usage_metadata."""
+        all tool-call round-trips), summed from LangChain message usage_metadata.
+
+        cache_read_tokens / cache_creation_tokens are the cached portion of
+        input_tokens (input_tokens is the total input, not just the uncached part).
+        """
         self._write(
             event="generation_usage",
             iteration=iteration,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             total_tokens=total_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
             n_llm_calls=n_llm_calls,
         )
 
