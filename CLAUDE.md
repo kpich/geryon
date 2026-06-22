@@ -53,3 +53,12 @@ NEVER run commands that trigger external LLM API calls (Bedrock, OpenAI, Anthrop
 - Any script or command that calls the LLM providers in `geryon/llm/`
 
 These calls are billable and should only be triggered by the human operator. Stick to code edits, tests, and read-only exploration.
+
+## Safety — Never Perform Git Operations
+
+NEVER run git commands that change repository state, and never ask to. The human operator handles all git themselves. This includes (non-exhaustive):
+- `git commit`, `git add`, `git push`, `git pull`, `git merge`, `git rebase`, `git reset`, `git stash`, `git cherry-pick`
+- Creating, deleting, renaming, switching, or checking out branches (`git branch`, `git checkout`, `git switch`)
+- Creating tags, editing git config, or anything else that mutates the repo or its history
+
+Do not do any of this of your own volition, and do not ask whether you should — just leave git alone entirely. Read-only inspection (`git status`, `git log`, `git diff`, `git show`) is fine. If a task seems to need a commit, branch, or other git action, stop and let the human do it.

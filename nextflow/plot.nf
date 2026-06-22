@@ -65,6 +65,21 @@ process scoreOverTime {
     """
 }
 
+process costOverTime {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    output:
+    path "cost_over_time.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.cost_over_time \
+        --data-dir ${params.data_dir} \
+        --output cost_over_time.pdf
+    """
+}
+
 process executeAgainstVal {
     errorStrategy 'terminate'
 
@@ -135,16 +150,37 @@ process topValHypotheses {
     """
 }
 
+process synopticTimeline {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    input:
+    path val_results
+
+    output:
+    path "synoptic_timeline.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.synoptic_timeline \
+        --data-dir ${params.data_dir} \
+        --input ${val_results} \
+        --output synoptic_timeline.pdf
+    """
+}
+
 workflow {
     ratingsOverTime()
     ratingsByDepth()
     scoreByDepth()
     scoreOverTime()
+    costOverTime()
 
     if (params.parquet_dir) {
         val_csv = executeAgainstVal().first()
         pvalComparison(val_csv)
         qvalComparison(val_csv)
         topValHypotheses(val_csv)
+        synopticTimeline(val_csv)
     }
 }

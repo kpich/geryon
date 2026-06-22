@@ -70,13 +70,12 @@ def main() -> None:
     ax.axhline(0, color="grey", linewidth=0.8, linestyle="--")
     ax.set_xlabel("Refinement depth (0 = original hypothesis)")
     ax.set_ylabel("Score  (novelty − uncontrolled + trustworthiness)")
-    ax.set_title("Hypothesis Score by Refinement Depth")
     ax.set_xticks(all_depths)
     ax.set_ylim(-2, 6)
     ax.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight")
+    plt.savefig(args.output, bbox_inches="tight", transparent=True)
 
 
 if __name__ == "__main__":

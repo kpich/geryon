@@ -25,12 +25,6 @@ YTICK_LABELS: dict[str, dict[int, str]] = {
     "trustworthiness": {1: "1 (spurious)", 2: "2", 3: "3 (credible)"},
 }
 
-DIRECTION: dict[str, str] = {
-    "novelty": "↑ higher = better",
-    "uncontrolled": "↓ lower = better",
-    "trustworthiness": "↑ higher = better",
-}
-
 DIMENSIONS = ["novelty", "uncontrolled", "trustworthiness"]
 DIMENSION_LABELS = {
     "novelty": "Novelty",
@@ -52,7 +46,6 @@ def main() -> None:
     hyps = load_hypotheses(args.data_dir)
 
     fig, axes = plt.subplots(3, 1, figsize=(10, 6))
-    fig.suptitle("Rating Distributions Over Time", fontsize=14, y=1.01)
 
     rng = np.random.default_rng(42)
 
@@ -139,11 +132,10 @@ def main() -> None:
         ax.set_ylim(Y_LO, Y_HI)
         ax.set_xlabel("Hypothesis sequence")
         ax.set_ylabel(DIMENSION_LABELS[dim])
-        ax.set_title(f"{DIMENSION_LABELS[dim]} ({DIRECTION[dim]}) — N={n_rated} rated")
         ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight")
+    plt.savefig(args.output, bbox_inches="tight", transparent=True)
 
 
 if __name__ == "__main__":

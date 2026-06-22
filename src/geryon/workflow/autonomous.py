@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import threading
 import traceback
-from typing import Annotated, TypedDict
+from typing import Annotated, NamedTuple, TypedDict
 import uuid
 
 from botocore.config import Config as BotoConfig
@@ -22,6 +22,11 @@ from geryon.labeling.labeled_store import LabeledStore
 from geryon.labeling.models import LabeledHypothesis
 from geryon.labeling.storage import HypothesisStore
 from geryon.lang.spec import GeryonHyp
+from geryon.llm.caching import (
+    cached_text_content,
+    supports_cache_control,
+    tail_cache_pre_model_hook,
+)
 from geryon.llm.conversation_logger import SessionTracer
 from geryon.llm.critic import HypothesisCritic
 from geryon.llm.generator import HypothesisProposal
@@ -47,14 +52,27 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], "Messages in conversation"]
 
 
-def _sum_message_usage(messages: list) -> tuple[int, int, int, int]:
+# Max model->tools round-trips per iteration. Prior runs have used up to ~49.
+_MAX_REACT_CYCLES = 70
+
+
+class _GenerationUsage(NamedTuple):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cache_read_tokens: int
+    cache_creation_tokens: int
+    n_llm_calls: int
+
+
+def _sum_message_usage(messages: list) -> _GenerationUsage:
     """Sum real token usage across all AIMessages in a ReAct conversation.
 
     Each LLM round-trip (proposal step or tool call) produces an AIMessage with
-    LangChain's standardized usage_metadata. Returns
-    (input_tokens, output_tokens, total_tokens, n_llm_calls).
+    LangChain's standardized usage_metadata. ``input_tokens`` is the total input
+    (cache reads/writes are reported as components in ``input_token_details``).
     """
-    inp = out = tot = calls = 0
+    inp = out = tot = cache_read = cache_create = calls = 0
     for msg in messages:
         usage = getattr(msg, "usage_metadata", None)
         if not usage:
@@ -64,8 +82,11 @@ def _sum_message_usage(messages: list) -> tuple[int, int, int, int]:
         inp += i
         out += o
         tot += int(usage.get("total_tokens", 0) or 0) or (i + o)
+        details = usage.get("input_token_details") or {}
+        cache_read += int(details.get("cache_read", 0) or 0)
+        cache_create += int(details.get("cache_creation", 0) or 0)
         calls += 1
-    return inp, out, tot, calls
+    return _GenerationUsage(inp, out, tot, cache_read, cache_create, calls)
 
 
 class AutonomousWorkflow:
@@ -424,27 +445,49 @@ class AutonomousWorkflow:
         system_content = PROPOSAL_SYSTEM_PROMPT
         if schema_ctx:
             system_content = system_content + "\n\n" + schema_ctx
-        system_message = SystemMessage(content=system_content)
         user_text = (
             f"{previous_context}\n\n"
             f"Generate {n_proposals} hypothesis(es). "
             f"Follow the exploration steps described above before proposing."
         )
-        user_message = HumanMessage(content=user_text)
+
+        # Mark the stable prefix (system + previous-hyps block) for prompt caching
+        # so it is read from cache on every tool-call round-trip rather than
+        # re-billed as fresh input on each of the iteration's LLM calls.
+        caching = supports_cache_control(self.config.provider_type)
+        if caching:
+            system_message = SystemMessage(content=cached_text_content(system_content))
+            user_message = HumanMessage(content=cached_text_content(user_text))
+        else:
+            system_message = SystemMessage(content=system_content)
+            user_message = HumanMessage(content=user_text)
 
         # Run LangGraph
         submitted: list[LabeledHypothesis] = []
         try:
             submit_tool = self._make_submit_tool(iteration or 0, submitted)
             tool_node = ToolNode(self.tools + [submit_tool], handle_tool_errors=True)
-            graph = create_react_agent(self.llm, tool_node)
+            # Sliding breakpoint on the latest tool result caches the growing
+            # conversation tail, not just the static prefix.
+            graph = create_react_agent(
+                self.llm,
+                tool_node,
+                pre_model_hook=tail_cache_pre_model_hook if caching else None,
+            )
 
             if self.llm_logger:
                 self.llm_logger._write(event="graph_invoke_start")
 
+            # Budget in ReAct cycles, not raw super-steps: each cycle is
+            # model+tools (2 steps), plus the pre-model caching hook (1 more) when
+            # caching is on. The old flat limit of 100 left only ~50 cycles and
+            # broke once the hook inflated the step count.
+            steps_per_cycle = 3 if caching else 2
+            recursion_limit = _MAX_REACT_CYCLES * steps_per_cycle
+
             result = graph.invoke(
                 {"messages": [system_message, user_message]},
-                config={"recursion_limit": 100},
+                config={"recursion_limit": recursion_limit},
             )
 
             if self.llm_logger:
@@ -455,13 +498,15 @@ class AutonomousWorkflow:
                 )
 
             if self.llm_logger:
-                inp, out, tot, calls = _sum_message_usage(result["messages"])
+                u = _sum_message_usage(result["messages"])
                 self.llm_logger.log_generation_usage(
                     iteration=iteration or 0,
-                    input_tokens=inp,
-                    output_tokens=out,
-                    total_tokens=tot,
-                    n_llm_calls=calls,
+                    input_tokens=u.input_tokens,
+                    output_tokens=u.output_tokens,
+                    total_tokens=u.total_tokens,
+                    cache_read_tokens=u.cache_read_tokens,
+                    cache_creation_tokens=u.cache_creation_tokens,
+                    n_llm_calls=u.n_llm_calls,
                 )
 
             if self.llm_logger:

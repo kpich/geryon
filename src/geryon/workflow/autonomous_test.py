@@ -423,3 +423,34 @@ def test_save_derived_view_writes_json(tmp_path):
     data = json.loads(views_path.read_text())
     assert "derived_regimens" in data
     assert "derived_other" in data
+
+
+def test_sum_message_usage_with_cache_details():
+    from langchain_core.messages import AIMessage
+
+    from geryon.workflow.autonomous import _sum_message_usage
+
+    cached = AIMessage(
+        content="x",
+        usage_metadata={
+            "input_tokens": 1000,
+            "output_tokens": 50,
+            "total_tokens": 1050,
+            "input_token_details": {"cache_read": 800, "cache_creation": 100},
+        },
+    )
+    # old-style message without cache details and a non-usage message
+    legacy = AIMessage(
+        content="y",
+        usage_metadata={"input_tokens": 200, "output_tokens": 10, "total_tokens": 210},
+    )
+    no_usage = AIMessage(content="z")
+
+    u = _sum_message_usage([cached, legacy, no_usage])
+
+    assert u.input_tokens == 1200
+    assert u.output_tokens == 60
+    assert u.total_tokens == 1260
+    assert u.cache_read_tokens == 800
+    assert u.cache_creation_tokens == 100
+    assert u.n_llm_calls == 2
