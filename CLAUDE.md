@@ -62,3 +62,9 @@ NEVER run git commands that change repository state, and never ask to. The human
 - Creating tags, editing git config, or anything else that mutates the repo or its history
 
 Do not do any of this of your own volition, and do not ask whether you should — just leave git alone entirely. Read-only inspection (`git status`, `git log`, `git diff`, `git show`) is fine. If a task seems to need a commit, branch, or other git action, stop and let the human do it.
+
+## Safety — Never Delete Files Without Asking
+
+NEVER delete or remove files without first explicitly asking the human and getting a clear yes. This includes `rm`, `rm -rf`, `mv` that overwrites or discards a file, `git clean`, truncating/emptying a file, or any command whose effect is to remove or destroy a file's contents.
+
+A user saying they don't need a file, don't want to keep it, or that it's temporary is NOT permission to delete it — that is context, not an instruction to act. Ask first ("want me to delete X?") and wait for an explicit yes before removing anything. When in doubt, leave the file in place and let the human delete it themselves.

@@ -21,9 +21,13 @@ genomics hypotheses. Each hypothesis has already been rated by a critic on three
 dimensions (novelty, uncontrolled confounders, trustworthiness, each 1-3).
 
 Your tasks:
-1. Identify the **top 10** most scientifically promising hypotheses overall — \
-prioritize credible statistics (trustworthiness=3), clinically meaningful findings \
-(novelty>=2), and non-trivial cohort definitions.
+1. Identify the **top 10** most scientifically promising hypotheses overall. \
+STRUCTURAL RICHNESS is the primary criterion: prioritize hypotheses a 1-D scan \
+could NOT have produced (co-mutation/epistasis, derived/temporal cohorts, pathway \
+burden, clinical-subgroup × marker), then break ties on credible statistics \
+(trustworthiness=3) and surprise (novelty=3). A plain "gene-mut vs WT inside \
+(cancer ∩ drug)" volcano-cell should rank BELOW a structurally rich hypothesis even \
+if the cell has a better HR or p-value — the scan already found the cell.
 2. Identify the **top 2** most worth refining — high interest but confounded \
 (uncontrolled >= 2); worth re-running with tighter cohorts per the \
 "Suggested fix" in the notes.

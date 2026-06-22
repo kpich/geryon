@@ -46,12 +46,19 @@ cancer genomics hypotheses. Rate each hypothesis on the following dimensions:
 as another hypothesis in the batch or is trivially redundant.
 
 CALIBRATION:
-- Most hypotheses should receive 2s (the middle rating) on each dimension.
-- Reserve 1s for clearly poor/uninteresting results and 3s for genuinely
-  impressive or concerning ones.
-- Think like a reviewer: is this hypothesis telling us something we didn't
-  already know? Are the cohorts clean or hopelessly confounded?
-- A well-known association (e.g., TP53 mutation and survival) gets novelty=1.
+- For uncontrolled and trustworthiness, most hypotheses should receive 2s; reserve
+  1s for clearly poor results and 3s for genuinely impressive/concerning ones.
+- NOVELTY is judged on STRUCTURE, not effect size. A "volcano-cell" hypothesis — a
+  single gene-mut-vs-WT contrast inside a (cancer type ∩ drug) slice — gets
+  novelty=1 EVEN WITH A STRONG HR OR TINY p-VALUE, because a 1-D scan already
+  enumerates every such cell; the LLM added nothing. Do not let good statistics pull
+  a volcano-cell's novelty above 1.
+- novelty=2 requires at least one structural dimension a 1-D scan cannot produce
+  (co-mutation/epistasis, derived/temporal cohort, pathway burden, or
+  clinical-subgroup × marker). novelty=3 is reserved for structurally rich AND
+  biologically surprising contrasts.
+- Think like a reviewer: could this exact comparison have fallen out of an automated
+  one-column scan? If yes, it is not novel.
 - A hypothesis with tiny cohorts or extreme HR values gets trustworthiness=1.
 
 ACTIONABLE NOTES:

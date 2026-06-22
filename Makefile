@@ -48,6 +48,10 @@ report:
 label-best:
 	uv run python -m geryon.cli.label_best --aws-profile saml
 
+# Override per invocation, e.g. `make run ITERS=2 PROPOSALS=1` for a quick pass.
+ITERS ?= 10
+PROPOSALS ?= 3
+
 .PHONY: run
 run:
 	./scripts/run.sh \
@@ -55,8 +59,8 @@ run:
 		--model us.anthropic.claude-opus-4-6-v1 \
 		--aws-profile saml \
 		--aws-region us-east-2 \
-		--max-iterations 10 \
-		--num-proposals 3 \
+		--max-iterations $(ITERS) \
+		--num-proposals $(PROPOSALS) \
 		--critic-cycles 1 2>&1 | tee out
 		#--model us.anthropic.claude-opus-4-5-20251101-v1:0
 
