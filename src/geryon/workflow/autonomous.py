@@ -52,6 +52,10 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], "Messages in conversation"]
 
 
+# Max model->tools round-trips per iteration. Prior runs have used up to ~49.
+_MAX_REACT_CYCLES = 70
+
+
 class _GenerationUsage(NamedTuple):
     input_tokens: int
     output_tokens: int
@@ -474,9 +478,16 @@ class AutonomousWorkflow:
             if self.llm_logger:
                 self.llm_logger._write(event="graph_invoke_start")
 
+            # Budget in ReAct cycles, not raw super-steps: each cycle is
+            # model+tools (2 steps), plus the pre-model caching hook (1 more) when
+            # caching is on. The old flat limit of 100 left only ~50 cycles and
+            # broke once the hook inflated the step count.
+            steps_per_cycle = 3 if caching else 2
+            recursion_limit = _MAX_REACT_CYCLES * steps_per_cycle
+
             result = graph.invoke(
                 {"messages": [system_message, user_message]},
-                config={"recursion_limit": 100},
+                config={"recursion_limit": recursion_limit},
             )
 
             if self.llm_logger:
