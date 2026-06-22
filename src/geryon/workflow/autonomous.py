@@ -22,7 +22,11 @@ from geryon.labeling.labeled_store import LabeledStore
 from geryon.labeling.models import LabeledHypothesis
 from geryon.labeling.storage import HypothesisStore
 from geryon.lang.spec import GeryonHyp
-from geryon.llm.caching import cached_text_content, supports_cache_control
+from geryon.llm.caching import (
+    cached_text_content,
+    supports_cache_control,
+    tail_cache_pre_model_hook,
+)
 from geryon.llm.conversation_logger import SessionTracer
 from geryon.llm.critic import HypothesisCritic
 from geryon.llm.generator import HypothesisProposal
@@ -446,7 +450,8 @@ class AutonomousWorkflow:
         # Mark the stable prefix (system + previous-hyps block) for prompt caching
         # so it is read from cache on every tool-call round-trip rather than
         # re-billed as fresh input on each of the iteration's LLM calls.
-        if supports_cache_control(self.config.provider_type):
+        caching = supports_cache_control(self.config.provider_type)
+        if caching:
             system_message = SystemMessage(content=cached_text_content(system_content))
             user_message = HumanMessage(content=cached_text_content(user_text))
         else:
@@ -458,7 +463,13 @@ class AutonomousWorkflow:
         try:
             submit_tool = self._make_submit_tool(iteration or 0, submitted)
             tool_node = ToolNode(self.tools + [submit_tool], handle_tool_errors=True)
-            graph = create_react_agent(self.llm, tool_node)
+            # Sliding breakpoint on the latest tool result caches the growing
+            # conversation tail, not just the static prefix.
+            graph = create_react_agent(
+                self.llm,
+                tool_node,
+                pre_model_hook=tail_cache_pre_model_hook if caching else None,
+            )
 
             if self.llm_logger:
                 self.llm_logger._write(event="graph_invoke_start")

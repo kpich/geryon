@@ -1,8 +1,9 @@
 """Plot cumulative token usage and dollar cost over the run.
 
-Reads generation_usage events from each session's trace.jsonl. Caching is not
-enabled in the generation loop, so cost is exact:
-input * $5/1M + output * $25/1M.
+Reads generation_usage events from each session's trace.jsonl and prices them at
+Anthropic rates. For runs predating prompt caching (no cache fields), a dashed
+"estimated with caching" line shows what they would have cost, calibrated from
+the cache hit-rate observed in the runs that did use caching.
 """
 
 import argparse
@@ -12,9 +13,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-# USD per token (Anthropic pricing). input_tokens is the TOTAL input; the cached
-# portion (cache_read / cache_creation) is billed at its own rate and the
-# remainder at the full input rate.
+# USD per token (Anthropic pricing). input_tokens does NOT include cache reads
+# (total_tokens == input + output + cache_read); it does include the cache-write
+# tokens, which carry a 1.25x write premium.
 _INPUT_PRICE = 5.00 / 1_000_000
 _OUTPUT_PRICE = 25.00 / 1_000_000
 _CACHE_READ_PRICE = 0.50 / 1_000_000
@@ -40,6 +41,60 @@ def load_generation_usage(data_dir: Path) -> list[dict]:
     return events
 
 
+def _event_cost(e: dict) -> float:
+    """Actual USD cost of one generation_usage event."""
+    inp = e.get("input_tokens", 0)
+    out = e.get("output_tokens", 0)
+    cr = e.get("cache_read_tokens", 0)
+    cw = e.get("cache_creation_tokens", 0)
+    return (
+        max(inp - cw, 0) * _INPUT_PRICE
+        + cw * _CACHE_WRITE_PRICE
+        + cr * _CACHE_READ_PRICE
+        + out * _OUTPUT_PRICE
+    )
+
+
+def _cache_fractions(events: list[dict]) -> tuple[float, float] | None:
+    """Calibrate (cache_read, cache_write) fractions of input volume from runs
+    that used caching. Returns None if no cached runs are present.
+
+    Input volume == input_tokens + cache_read_tokens (the full prompt sent each
+    call); cache_write is a subset of input_tokens.
+    """
+    cached = [e for e in events if e.get("cache_read_tokens", 0) > 0]
+    if not cached:
+        return None
+    volume = sum(e["input_tokens"] + e["cache_read_tokens"] for e in cached)
+    if volume <= 0:
+        return None
+    f_read = sum(e["cache_read_tokens"] for e in cached) / volume
+    f_write = sum(e.get("cache_creation_tokens", 0) for e in cached) / volume
+    return f_read, f_write
+
+
+def _estimated_cost(e: dict, fractions: tuple[float, float]) -> float:
+    """Cost of an event as if it had been cached at the calibrated hit-rate.
+
+    Cached events keep their actual cost; uncached events (input_tokens is the
+    full prompt volume) have the observed fractions applied.
+    """
+    if e.get("cache_read_tokens", 0) > 0:
+        return _event_cost(e)
+    f_read, f_write = fractions
+    volume = e.get("input_tokens", 0)
+    out = e.get("output_tokens", 0)
+    read = f_read * volume
+    write = f_write * volume
+    fresh = max(volume - read - write, 0)
+    return (
+        fresh * _INPUT_PRICE
+        + write * _CACHE_WRITE_PRICE
+        + read * _CACHE_READ_PRICE
+        + out * _OUTPUT_PRICE
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Plot cumulative token usage and cost over the run"
@@ -59,37 +114,48 @@ def main() -> None:
         cache_read = np.array(
             [e.get("cache_read_tokens", 0) for e in events], dtype=float
         )
-        cache_write = np.array(
-            [e.get("cache_creation_tokens", 0) for e in events], dtype=float
-        )
 
-        # input_tokens is the total input; split out the cached components, which
-        # are billed at their own rates. Old runs have no cache fields (-> 0), so
-        # this reduces to input*$5 + output*$25.
-        uncached_inp = np.clip(inp - cache_read - cache_write, 0, None)
-        cost = (
-            uncached_inp * _INPUT_PRICE
-            + cache_read * _CACHE_READ_PRICE
-            + cache_write * _CACHE_WRITE_PRICE
-            + out * _OUTPUT_PRICE
-        )
-
-        cum_inp = np.cumsum(inp)
+        cum_cost = np.cumsum([_event_cost(e) for e in events])
+        # True input volume processed per call includes the cache reads.
+        cum_inp = np.cumsum(inp + cache_read)
         cum_out = np.cumsum(out)
-        cum_cost = np.cumsum(cost)
 
-        ax_cost.plot(x, cum_cost, color="#0072B2", linewidth=1.8)
+        ax_cost.plot(x, cum_cost, color="#0072B2", linewidth=1.8, label="actual")
         ax_cost.fill_between(x, cum_cost, color="#0072B2", alpha=0.15)
         ax_cost.text(
             0.98,
             0.05,
-            f"total: ${cum_cost[-1]:,.2f}",
+            f"actual: ${cum_cost[-1]:,.2f}",
             transform=ax_cost.transAxes,
             ha="right",
             va="bottom",
             fontsize=9,
             color="#0072B2",
         )
+
+        fractions = _cache_fractions(events)
+        any_uncached = any(e.get("cache_read_tokens", 0) == 0 for e in events)
+        if fractions is not None and any_uncached:
+            cum_est = np.cumsum([_estimated_cost(e, fractions) for e in events])
+            ax_cost.plot(
+                x,
+                cum_est,
+                color="#D55E00",
+                linewidth=1.5,
+                linestyle="--",
+                label=f"est. with caching (cache hit {fractions[0]:.0%})",
+            )
+            ax_cost.text(
+                0.98,
+                0.16,
+                f"est. with caching: ${cum_est[-1]:,.2f}",
+                transform=ax_cost.transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=9,
+                color="#D55E00",
+            )
+        ax_cost.legend(loc="upper left", fontsize=9)
 
         ax_tok.plot(x, cum_inp + cum_out, color="black", linewidth=1.8, label="total")
         ax_tok.plot(x, cum_inp, color="#0072B2", linewidth=1.3, label="input")
