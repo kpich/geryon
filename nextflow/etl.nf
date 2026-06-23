@@ -24,6 +24,8 @@ params.holdout_seed = 42
 
 process extractTSV {
     tag "${tsv_file.baseName}"
+    cpus 1
+    memory '2 GB'
 
     input:
     path tsv_file
