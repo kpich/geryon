@@ -150,6 +150,25 @@ process topValHypotheses {
     """
 }
 
+process qvalByTrust {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    input:
+    path val_results
+
+    output:
+    path "qval_by_trust.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.qval_by_trust \
+        --input ${val_results} \
+        --data-dir ${params.data_dir} \
+        --output qval_by_trust.pdf
+    """
+}
+
 process synopticTimeline {
     errorStrategy 'terminate'
     publishDir params.output_dir, mode: 'copy', overwrite: true
@@ -177,10 +196,11 @@ workflow {
     costOverTime()
 
     if (params.parquet_dir) {
-        val_csv = executeAgainstVal().first()
+        val_csv = executeAgainstVal()
         pvalComparison(val_csv)
         qvalComparison(val_csv)
         topValHypotheses(val_csv)
+        qvalByTrust(val_csv)
         synopticTimeline(val_csv)
     }
 }

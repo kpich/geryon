@@ -8,13 +8,15 @@ lines up as a horizontal band across every panel. Cost/tokens are metered per
 generation iteration, so they appear as staircases (the ~3 hypotheses from one
 iteration share that iteration's cumulative value):
 
-    hyp |  cost   | tokens  | ratings | q-value | lineage |
-      1 |  ...    |  ...    |  ...    |  ...    |  ...    |
-      2 |  ...    |  ...    |  ...    |  ...    |  ...    |
-      v |         |         |         |         |         |
+    hyp | tokens | cost | nov | unc | trust | q-value | lineage |
+      1 |  ...   | ...  | ... | ... |  ...  |   ...   |   ...   |
+      2 |  ...   | ...  | ... | ... |  ...  |   ...   |   ...   |
+      v |        |      |     |     |       |         |         |
 
-The lineage panel plots each hypothesis at (refinement depth, index) and links it
-to the parent it refines, so refinement chains read left-to-right.
+Counts (input/output tokens) and cost are thin context panels on the left; each
+rating dimension gets its own thin panel rather than being overlaid. The lineage
+panel plots each hypothesis at (refinement depth, index) and links it to the parent
+it refines, so refinement chains read left-to-right.
 """
 
 import argparse
@@ -57,12 +59,12 @@ _SIG_ALPHA = 0.9
 _NONSIG_ALPHA = 0.25
 
 
-def _legend_below(ax: plt.Axes, **kw) -> None:
+def _legend_below(ax: plt.Axes, **kw) -> plt.legend:
     """Place the legend below the panel so it never covers the data."""
-    ax.legend(
+    return ax.legend(
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.14),
-        fontsize=7,
+        bbox_to_anchor=(0.5, -0.10),
+        fontsize=9,
         framealpha=0.95,
         **kw,
     )
@@ -156,46 +158,78 @@ def _per_hypothesis(arr: np.ndarray, gidx: list[int | None]) -> np.ndarray:
     )
 
 
+def _plot_skip_nan(ax: plt.Axes, x, y, **kw) -> None:
+    """Plot a staircase with unmapped (NaN-x) hypotheses dropped, so the line stays
+    continuous instead of breaking into segments where an iteration is missing."""
+    x = np.asarray(x, dtype=float)
+    mask = ~np.isnan(x)
+    ax.plot(x[mask], np.asarray(y)[mask], **kw)
+
+
 def _plot_cost(ax: plt.Axes, y, without, with_c) -> None:
-    ax.plot(without, y, color=_VERMILLION, linewidth=_LW_COST, label="without caching")
+    _plot_skip_nan(
+        ax,
+        without,
+        y,
+        color=_VERMILLION,
+        linewidth=_LW_COST,
+        linestyle=":",
+        label="without caching",
+    )
     if with_c is not None:
-        ax.plot(with_c, y, color=_BLUE, linewidth=_LW_COST, label="with caching")
+        _plot_skip_nan(
+            ax, with_c, y, color=_BLUE, linewidth=_LW_COST, label="with caching"
+        )
     ax.set_xlabel("Cumulative cost (USD)")
     _legend_below(ax)
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, axis="x", alpha=0.3)
 
 
 def _plot_tokens(ax: plt.Axes, y, cum_in, cum_out) -> None:
-    ax.plot(cum_in, y, color=_BLUE, linewidth=_LW_COST)
-    ax.set_xlabel("Cumulative input", color=_BLUE)
-    ax.tick_params(axis="x", labelcolor=_BLUE)
+    # Input and output each get their own x-scale/color, but BOTH stacked at the
+    # bottom of the panel (an axis on top reads badly): output rides a twin whose
+    # spine/ticks are pushed down just beneath the input axis.
+    _plot_skip_nan(ax, cum_in, y, color=_BLUE, linewidth=_LW_COST)
+    ax.set_xlabel("Cumulative input tokens", color=_BLUE)
     ax.xaxis.set_major_formatter(FuncFormatter(_fmt_tokens))
-    ax.grid(True, alpha=0.3)
+    ax.tick_params(axis="x", colors=_BLUE)
 
-    ax_t = ax.twiny()  # second x-axis (top), shares the hypothesis y-axis
-    ax_t.plot(cum_out, y, color=_VERMILLION, linewidth=_LW_COST)
-    ax_t.set_xlabel("Cumulative output", color=_VERMILLION)
-    ax_t.tick_params(axis="x", labelcolor=_VERMILLION)
-    ax_t.xaxis.set_major_formatter(FuncFormatter(_fmt_tokens))
+    ax_out = ax.twiny()
+    ax_out.xaxis.set_ticks_position("bottom")
+    ax_out.xaxis.set_label_position("bottom")
+    ax_out.spines["bottom"].set_position(("axes", -0.10))
+    ax_out.spines["top"].set_visible(False)
+    _plot_skip_nan(ax_out, cum_out, y, color=_VERMILLION, linewidth=_LW_COST)
+    ax_out.set_xlabel("Cumulative output tokens", color=_VERMILLION)
+    ax_out.xaxis.set_major_formatter(FuncFormatter(_fmt_tokens))
+    ax_out.tick_params(axis="x", colors=_VERMILLION)
+
+    ax.grid(True, axis="x", alpha=0.3)
 
 
-def _plot_ratings(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
-    for dim, label, color, better_dir in _RATING_DIMS:
-        # Direction of "better" differs per dimension (uncontrolled is reversed),
-        # so it rides in the legend label rather than a single shared arrow.
-        legend_label = (
-            f"{label} (better →)" if better_dir > 0 else f"{label} (← better)"
-        )
-        pts = [
-            (y[i], getattr(h.effective_rating, dim))
-            for i, h in enumerate(hyps)
-            if getattr(h.effective_rating, dim) is not None
-        ]
-        if not pts:
-            continue
+def _plot_rating_dim(
+    ax: plt.Axes,
+    hyps: list,
+    y: np.ndarray,
+    dim: str,
+    label: str,
+    color: str,
+    better_dir: int,
+) -> None:
+    """One thin rating panel for a single dimension (scatter + rolling mean).
+
+    Direction of "better" differs per dimension (uncontrolled is reversed), so it
+    rides in the x-axis label as an arrow.
+    """
+    pts = [
+        (y[i], getattr(h.effective_rating, dim))
+        for i, h in enumerate(hyps)
+        if getattr(h.effective_rating, dim) is not None
+    ]
+    if pts:
         yy = np.array([p[0] for p in pts], dtype=float)
         rr = np.array([p[1] for p in pts], dtype=float)
-        ax.scatter(rr, yy, color=color, alpha=0.55, s=16, zorder=1)
+        ax.scatter(rr, yy, color=color, alpha=0.55, s=14, zorder=1)
 
         window = max(3, len(rr) // 5)
         if len(rr) >= window:
@@ -206,19 +240,23 @@ def _plot_ratings(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
                 yy[half : half + len(roll)],
                 color=color,
                 linewidth=_LW_DATA,
-                label=legend_label,
                 zorder=2,
             )
         else:
-            ax.plot(
-                rr, yy, color=color, linewidth=_LW_DATA, label=legend_label, zorder=2
-            )
+            ax.plot(rr, yy, color=color, linewidth=_LW_DATA, zorder=2)
 
-    ax.set_xlabel("Rating")
+    arrow = "better →" if better_dir > 0 else "← better"
+    ax.set_xlabel(f"{label}\n({arrow})", color=color)
     ax.set_xlim(0.7, 3.3)
     ax.set_xticks([1, 2, 3])
-    _legend_below(ax)
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, axis="x", alpha=0.3)
+
+
+def _q_legend_marker(marker: str, color: str, label: str) -> plt.Line2D:
+    """Solid-alpha proxy handle for the q-value legend (the real points fade)."""
+    return plt.Line2D(
+        [], [], marker=marker, color=color, alpha=_SIG_ALPHA, linestyle="", label=label
+    )
 
 
 def _sig_q_scatter(ax: plt.Axes, q, hy, color: str, label: str) -> None:
@@ -289,8 +327,17 @@ def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> N
     # Pin ticks to the q-scale so the gutter is visibly off-scale, not a q value.
     ax.set_xticks([0.0, 0.5, 1.0])
     ax.set_xlim(-0.02, _MISSING_GUTTER + 0.04 if not no_val.empty else 1.02)
-    _legend_below(ax)
-    ax.grid(True, alpha=0.3)
+    # Plotted points fade non-significant q-values (an array alpha), so build solid
+    # proxy handles for the legend — its swatches should read at full alpha.
+    handles = []
+    if not has_train.empty:
+        handles.append(_q_legend_marker("o", _AMBER, "train q"))
+    if not has_val.empty:
+        handles.append(_q_legend_marker("o", _BLUE, "val q"))
+    if not no_val.empty:
+        handles.append(_q_legend_marker("x", _VERMILLION, f"no val (n={len(no_val)})"))
+    _legend_below(ax, handles=handles)
+    ax.grid(True, axis="x", alpha=0.3)
 
 
 def _resolved_parents(hyps: list) -> dict[str, str | None]:
@@ -358,8 +405,42 @@ def _plot_lineage(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
     ax.set_xlabel("Refinement depth")
     ax.set_xlim(-0.4, max_d + 0.4)
     ax.set_xticks(range(max_d + 1))
-    _legend_below(ax)
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, axis="x", alpha=0.3)
+
+
+def _hypothesis_gridlines(fig: plt.Figure, axes: list[plt.Axes], n_hyp: int) -> None:
+    """Dashed horizontal reference lines at every 5th hypothesis (0, 5, 10, ...).
+
+    Rather than a per-panel y-grid (which stops at each panel's spines and leaves
+    the inter-panel gaps blank), the lines are drawn in figure coordinates so each
+    one runs continuously across the whole figure, panels and gaps alike. Must be
+    called after the shared y-axis limits/inversion are final, since the data→figure
+    mapping is read off the first panel.
+    """
+    ticks = np.arange(0, n_hyp + 1, 5)
+    for ax in axes:
+        ax.set_yticks(ticks)
+
+    fig.canvas.draw()  # finalize transforms before reading panel positions
+    ref = axes[0]
+    left = min(ax.get_position().x0 for ax in axes)
+    right = max(ax.get_position().x1 for ax in axes)
+    to_fig = fig.transFigure.inverted()
+    for t in ticks:
+        _, y_disp = ref.transData.transform((0, t))
+        y_fig = to_fig.transform((0, y_disp))[1]
+        fig.add_artist(
+            plt.Line2D(
+                [left, right],
+                [y_fig, y_fig],
+                transform=fig.transFigure,
+                color="gray",
+                linestyle="--",
+                linewidth=0.8,
+                alpha=0.4,
+                zorder=0,
+            )
+        )
 
 
 def main() -> None:
@@ -371,6 +452,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    plt.rcParams["font.family"] = "Arial"
+
     events = load_generation_usage(args.data_dir)
     hyps = load_hypotheses(args.data_dir)  # chronological (created_at)
     itmap = iteration_index(events)
@@ -380,9 +463,18 @@ def main() -> None:
     y = np.arange(1, len(hyps) + 1)
     gidx = [_hyp_iteration(h, itmap) for h in hyps]
 
-    fig, (ax_cost, ax_tok, ax_rate, ax_q, ax_tree) = plt.subplots(
-        1, 5, figsize=(18, 8), sharey=True
+    # Counts (thin) and cost (thin) lead on the left; the three rating dimensions
+    # are split into their own thin panels (no overlay); q-values and the lineage
+    # tree get the wider panels on the right.
+    fig, axes = plt.subplots(
+        1,
+        7,
+        figsize=(15, 8),
+        sharey=True,
+        gridspec_kw={"width_ratios": [0.4, 0.4, 0.5, 0.5, 0.5, 0.8, 0.7]},
     )
+    ax_tok, ax_cost, ax_nov, ax_unc, ax_trust, ax_q, ax_tree = axes
+    rating_axes = (ax_nov, ax_unc, ax_trust)
 
     if hyps and events:
         without, with_c, cum_in, cum_out = _iteration_cumulatives(events)
@@ -396,15 +488,21 @@ def main() -> None:
             ax_tok, y, _per_hypothesis(cum_in, gidx), _per_hypothesis(cum_out, gidx)
         )
     if hyps:
-        _plot_ratings(ax_rate, hyps, y)
+        for ax, (dim, label, color, better_dir) in zip(
+            rating_axes, _RATING_DIMS, strict=True
+        ):
+            _plot_rating_dim(ax, hyps, y, dim, label, color, better_dir)
         _plot_lineage(ax_tree, hyps, y)
     if args.input is not None and args.input.exists() and hyps:
         idx_by_id = {h.hypothesis_id: i + 1 for i, h in enumerate(hyps)}
         _plot_qvalues(ax_q, args.input, idx_by_id)
 
-    ax_cost.set_ylabel("Hypothesis")
-    if not ax_cost.yaxis_inverted():
-        ax_cost.invert_yaxis()  # hypothesis 1 at the top (shared across all panels)
+    ax_tok.set_ylabel("Hypothesis")
+    if not ax_tok.yaxis_inverted():
+        ax_tok.invert_yaxis()  # hypothesis 1 at the top (shared across all panels)
+
+    # Drawn last: figure-spanning gridlines read the final (inverted) y mapping.
+    _hypothesis_gridlines(fig, list(axes), len(hyps))
 
     plt.savefig(args.output, bbox_inches="tight", transparent=True)
 
