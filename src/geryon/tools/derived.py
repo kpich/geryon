@@ -1,5 +1,8 @@
 """Tool for creating persistent derived SQL views."""
 
+import json
+from pathlib import Path
+
 from geryon.db import Database
 
 DERIVED_PREFIX = "derived_"
@@ -29,3 +32,25 @@ def create_derived_view(db: Database, name: str, sql: str) -> str:
         return f"Created view '{safe_name}': {row_count:,} rows, columns: {col_str}"
     except Exception as e:
         return f"ERROR: {type(e).__name__}: {e}"
+
+
+def replay_derived_views(db: Database, views_path: Path) -> list[str]:
+    """Recreate the derived views saved in a derived_views.json file into db.
+
+    Views are replayed in file order so that a view depending on an earlier one
+    resolves (DuckDB binds view bodies at creation time). Returns the names that
+    failed to recreate; an unreadable file is reported as a single failure.
+    """
+    if not views_path.exists():
+        return []
+    try:
+        defs: dict[str, str] = json.loads(views_path.read_text())
+    except Exception:
+        return [str(views_path)]
+    failed = []
+    for name, sql in defs.items():
+        try:
+            db.create_view(name, sql)
+        except Exception:
+            failed.append(name)
+    return failed

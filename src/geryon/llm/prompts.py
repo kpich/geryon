@@ -19,35 +19,68 @@ prioritize:
 If a well-known association fails to replicate, flag it — that is valuable.
 But spend most proposals on genuinely exploratory comparisons.
 
-HYPOTHESIS DIVERSITY:
+WHAT COUNTS AS A LOW-VALUE HYPOTHESIS (AVOID THESE):
 
-Do not spend more than one-third of your proposals on simple "gene X mutant vs
-wild-type" overall survival comparisons — those are a starting point, not the
-goal. Prioritize:
+A single "gene X mutant vs wild-type" contrast inside a (cancer type ∩ drug)
+slice is a VOLCANO CELL. The scan_groupby tool already enumerates every such cell
+automatically and ranks them by significance. Submitting one adds essentially NO
+value over just running the scan — you are spending expensive reasoning to
+re-discover a point a 1-D scan would have handed you for free. Strong stats do
+NOT redeem a volcano cell; it is still a volcano cell.
 
-1. Treatment-response hypotheses: does gene X / feature Y predict response to
-   a specific drug? Use survival_from_treatment or time_to_next_treatment
-   outcomes and restrict cohorts to patients who received that drug.
+YOUR JOB is the hypotheses a 1-D scan CANNOT produce: combinations of dimensions,
+motivated by biology, that no single-column enumeration could reach.
 
-2. Controlled subgroup analyses: gene associations within a single cancer type,
-   stage, MSI status, or treatment class — not pan-cancer.
+STRUCTURAL RICHNESS (spend the large majority of proposals here):
 
-3. Co-mutation and pathway effects: e.g. KRAS + STK11 co-mutant vs KRAS single
-   mutant; use multi-filter cohorts.
+Each rich hypothesis adds at least one structural dimension beyond
+gene × cancer × drug. The four patterns, with spec sketches:
 
-4. Non-mutational clinical features: age, stage, histology, treatment sequence.
+1. Co-mutation / epistasis — does gene Y MODIFY gene X's effect? Split the
+   X-mutant population by Y status (both cohorts hold X fixed):
+     cohort_a filters: [CANCER_TYPE==T, gene_matrix.X==1, gene_matrix.Y==1]
+     cohort_b filters: [CANCER_TYPE==T, gene_matrix.X==1, gene_matrix.Y==0]
+   A 1-D scan cannot find this — it requires holding one gene fixed while
+   contrasting another.
+
+2. Derived / temporal cohorts — treatment sequence, first-line therapy, regimen,
+   or early-vs-late progression, built with create_derived_view_tool (see the
+   first-line-platinum example below). Not enumerable by any column scan.
+
+3. Pathway burden — ANY mutation across a gene set vs none. OR across genes is
+   NOT a plain ANDed filter, so define the pathway membership as a derived view
+   (e.g. a view selecting PATIENT_IDs with ≥1 mutation among DDR genes), then
+   contrast view-members vs non-members. Aggregates weak single-gene signals a
+   per-gene scan would miss.
+
+4. Clinical-subgroup × marker — a marker's effect restricted to a stage,
+   histology, age band, or MSI subgroup (cross-feature, beyond gene × drug).
+
+FACILE-SEED BUDGET:
+
+At most 1-2 plain single-gene-vs-WT proposals per iteration, and only as SEEDS
+(see scan_groupby below). Every other proposal MUST add ≥1 structural dimension
+from the list above, and its `rationale` MUST name which pattern it uses
+(e.g. "Pattern: co-mutation/epistasis — tests whether STK11 modifies KRAS").
 
 HYPOTHESIS REFINEMENT:
 
-Check the PREVIOUSLY RATED HYPOTHESES section below. For each hypothesis with
-uncontrolled=3, you MUST submit a refined version that controls for the
-confounder noted. For uncontrolled=2, strongly consider a refinement.
+Check the PREVIOUSLY RATED HYPOTHESES section below. Two kinds of refinement,
+both marked by setting "refines_hypothesis" to the parent's 8-char ID:
 
-The most common fixes:
-- Restrict both cohorts to one cancer type (if pan-cancer)
-- Add MSI_TYPE = 'MSS' or 'MSI-H' to isolate a homogeneous population
-- Restrict to a single treatment class (e.g. immunotherapy only)
-- Add a stage filter (Stage 4 only) to avoid mix of curative/palliative
+(a) CONTROL refinement — for each hypothesis with uncontrolled=3 you MUST submit a
+    version that controls for the confounder noted; for uncontrolled=2, strongly
+    consider one. Common fixes:
+    - Restrict both cohorts to one cancer type (if pan-cancer)
+    - Add MSI_TYPE = 'MSS' or 'MSI-H' to isolate a homogeneous population
+    - Restrict to a single treatment class (e.g. immunotherapy only)
+    - Add a stage filter (Stage 4 only) to avoid mix of curative/palliative
+
+(b) ENRICHMENT refinement — for a facile/volcano-cell parent with novelty=1 but a
+    promising signal, submit a STRUCTURALLY RICHER elaboration: take the parent's
+    gene as a seed and apply one of the four richness patterns (co-mutation split,
+    derived/temporal cohort, pathway aggregation, or clinical subgroup). This turns
+    a scan-cell into a hypothesis the scan could not have produced.
 
 If an "AVAILABLE CONFOUNDER CONTROLS" block appears below, it lists
 verified column names and values from this database — use those
@@ -76,9 +109,8 @@ Step 3: If you need to verify specific filter values beyond what describe_table
    this step — but DO query if the column is high-cardinality or the value
    you need wasn't in the top values shown.
 
-Step 3b (optional but recommended for gene/mutation columns): Use
-   scan_groupby_tool() to quickly find the strongest signals across all
-   values of a categorical column before committing to specific hypotheses.
+Step 3b (recommended): Use scan_groupby_tool() as a SEED-FINDER, not as the
+   source of finished hypotheses. It enumerates the 1-D volcano for you:
    Example: scan_groupby_tool(
      group_table="mutations_extended",
      group_column="Hugo_Symbol",
@@ -86,8 +118,15 @@ Step 3b (optional but recommended for gene/mutation columns): Use
    )
    Returns a ranked table with hazard ratios, p-values, and FDR q-values.
    Good for: mutations_extended.Hugo_Symbol, clinical_patient.CANCER_TYPE,
-   timeline_treatment.AGENT, etc. Skip if you already have a specific
-   hypothesis in mind.
+   timeline_treatment.AGENT, etc.
+
+   CRITICAL: a raw top hit from this scan is a VOLCANO CELL — do NOT submit it
+   as-is (beyond your 1-2 facile seeds). Instead, take a strong hit as a SEED
+   gene and build a structurally rich contrast around it: split it by a
+   co-mutation (Pattern 1), wrap it in a derived/temporal cohort (Pattern 2),
+   aggregate its pathway (Pattern 3), or restrict it to a clinical subgroup
+   (Pattern 4). The scan tells you WHERE the signal is; your job is to ask the
+   richer question the scan cannot.
 
 Step 3b-ii: To find treatment-response hypotheses, scan how a gene associates
    with outcomes within a specific treatment context:

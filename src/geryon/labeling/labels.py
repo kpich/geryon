@@ -6,9 +6,14 @@ RATING_DIMENSIONS: dict[str, dict] = {
     "novelty": {
         "label": "Novelty",
         "levels": {
-            1: "Known/obvious finding — good sanity check but not new knowledge",
-            2: "Somewhat expected — plausible based on existing literature",
-            3: "Surprising or non-obvious — potential new insight",
+            1: "Volcano-cell — a single gene-mut-vs-WT contrast inside a "
+            "(cancer type ∩ drug) slice, enumerable by a 1-D scan; adds no "
+            "knowledge a scan wouldn't, regardless of effect size",
+            2: "Adds one structural dimension a 1-D scan cannot produce "
+            "(co-mutation/epistasis, derived/temporal cohort, pathway burden, "
+            "or clinical-subgroup × marker), but the biology is fairly expected",
+            3: "Structurally rich AND surprising — a non-obvious combination "
+            "whose result would be a genuine new insight",
         },
     },
     "uncontrolled": {
