@@ -31,12 +31,14 @@ class ProgressionFromTreatmentHandler:
         4. os_event = parsed OS_STATUS (1=deceased, 0=censored)
         5. If first_prog exists and prog_time < os_time: time=prog_time, event=1
         6. Else: time=os_time, event=os_event
-        7. Exclude time <= 0
+        7. entry_time = max(0, -tx_start / 30.44): left-truncate treatment that
+           preceded sequencing (the treatment->sequencing gap is immortal time)
+        8. Exclude observed follow-up (time - entry_time) <= 0
 
-        Returns DataFrame with columns: PATIENT_ID, time, event
+        Returns DataFrame with columns: PATIENT_ID, time, event, entry_time
         """
         if not cohort_ids:
-            return pd.DataFrame(columns=["PATIENT_ID", "time", "event"])
+            return pd.DataFrame(columns=["PATIENT_ID", "time", "event", "entry_time"])
 
         ids_str = ", ".join(f"'{pid}'" for pid in cohort_ids)
 
@@ -68,7 +70,7 @@ class ProgressionFromTreatmentHandler:
         df = db.execute(sql)
 
         if df.empty:
-            return pd.DataFrame(columns=["PATIENT_ID", "time", "event"])
+            return pd.DataFrame(columns=["PATIENT_ID", "time", "event", "entry_time"])
 
         df["OS_MONTHS"] = pd.to_numeric(df["OS_MONTHS"], errors="coerce")
         df["tx_start"] = pd.to_numeric(df["tx_start"], errors="coerce")
@@ -87,7 +89,12 @@ class ProgressionFromTreatmentHandler:
         df.loc[prog_wins, "time"] = df.loc[prog_wins, "prog_time"]
         df.loc[prog_wins, "event"] = 1
 
-        df = df.dropna(subset=["time", "event"])
-        df = df[df["time"] > 0]
+        # Left-truncation entry: treatment before sequencing (tx_start < 0) enters
+        # the risk set at sequencing; treatment at/after sequencing enters at 0.
+        df["entry_time"] = (-df["tx_start"] / DAYS_PER_MONTH).clip(lower=0.0)
 
-        return df[["PATIENT_ID", "time", "event"]].reset_index(drop=True)
+        df = df.dropna(subset=["time", "event"])
+        # observed follow-up (time - entry_time) must be positive
+        df = df[df["time"] - df["entry_time"] > 0]
+
+        return df[["PATIENT_ID", "time", "event", "entry_time"]].reset_index(drop=True)
