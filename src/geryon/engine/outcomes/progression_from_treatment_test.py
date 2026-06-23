@@ -23,8 +23,30 @@ def test_empty_cohort_returns_empty_dataframe():
     handler = _make_handler()
     mock_db = MagicMock()
     result = handler.extract_data([], _outcome(), mock_db)
-    assert list(result.columns) == ["PATIENT_ID", "time", "event"]
+    assert list(result.columns) == ["PATIENT_ID", "time", "event", "entry_time"]
     assert len(result) == 0
+
+
+def test_entry_time_left_truncation():
+    """Treatment before sequencing enters the risk set at sequencing, not at tx."""
+    handler = _make_handler()
+    mock_db = MagicMock()
+
+    # tx_start = -304.4 days (10 months pre-sequencing); progression after tx.
+    mock_db.execute.return_value = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P1"],
+            "tx_start": [-304.4],
+            "OS_MONTHS": [24.0],
+            "OS_STATUS": ["1:DECEASED"],
+            "prog_date": [float("nan")],
+        }
+    )
+
+    result = handler.extract_data(["P1"], _outcome(), mock_db)
+
+    assert len(result) == 1
+    assert abs(result.iloc[0]["entry_time"] - 10.0) < 0.01
 
 
 def test_progression_before_death():

@@ -22,8 +22,33 @@ def test_empty_cohort_returns_empty_dataframe():
 
     result = handler.extract_data([], outcome, mock_db)
 
-    assert list(result.columns) == ["PATIENT_ID", "time", "event"]
+    assert list(result.columns) == ["PATIENT_ID", "time", "event", "entry_time"]
     assert len(result) == 0
+
+
+def test_entry_time_left_truncation():
+    handler = _make_handler()
+    mock_db = MagicMock()
+
+    # P1 treated 304.4 days (10 months) BEFORE sequencing -> immortal lead time;
+    # P2 treated 30.44 days (1 month) AFTER sequencing -> enters at treatment.
+    mock_db.execute.return_value = pd.DataFrame(
+        {
+            "PATIENT_ID": ["P1", "P2"],
+            "tx_start": [-304.4, 30.44],
+            "OS_MONTHS": [12.0, 12.0],
+            "OS_STATUS": ["1:DECEASED", "1:DECEASED"],
+        }
+    )
+
+    outcome = SurvivalFromTreatment(agent="Carboplatin")
+    result = handler.extract_data(["P1", "P2"], outcome, mock_db)
+
+    entry = dict(zip(result["PATIENT_ID"], result["entry_time"], strict=False))
+    assert abs(entry["P1"] - 10.0) < 0.01  # enters risk set at sequencing
+    assert entry["P2"] == 0.0  # post-sequencing start enters at treatment
+    # observed follow-up (time - entry_time) stays positive for both
+    assert len(result) == 2
 
 
 def test_adjusted_time_computation():
