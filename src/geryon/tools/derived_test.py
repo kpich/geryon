@@ -1,10 +1,11 @@
 """Unit tests for create_derived_view."""
 
+import json
 from unittest.mock import MagicMock
 
 import pandas as pd
 
-from geryon.tools.derived import create_derived_view
+from geryon.tools.derived import create_derived_view, replay_derived_views
 
 
 def _make_db(etl_tables=None, row_count=42, cols=None):
@@ -107,3 +108,39 @@ def test_col_truncation_at_ten():
     db = _make_db(cols=cols)
     result = create_derived_view(db, "wide", "SELECT * FROM foo")
     assert "15 total" in result
+
+
+def test_replay_recreates_views_in_file_order(tmp_path):
+    path = tmp_path / "derived_views.json"
+    defs = {
+        "derived_a": "SELECT PATIENT_ID FROM t",
+        "derived_b": "SELECT PATIENT_ID FROM derived_a",
+    }
+    path.write_text(json.dumps(defs))
+    db = MagicMock()
+
+    failed = replay_derived_views(db, path)
+
+    assert failed == []
+    assert [c.args for c in db.create_view.call_args_list] == [
+        ("derived_a", defs["derived_a"]),
+        ("derived_b", defs["derived_b"]),
+    ]
+
+
+def test_replay_reports_failed_views_but_continues(tmp_path):
+    path = tmp_path / "derived_views.json"
+    path.write_text(json.dumps({"derived_a": "SELECT 1", "derived_b": "SELECT 2"}))
+    db = MagicMock()
+    db.create_view.side_effect = [Exception("boom"), None]
+
+    failed = replay_derived_views(db, path)
+
+    assert failed == ["derived_a"]
+    assert db.create_view.call_count == 2
+
+
+def test_replay_missing_file_is_noop(tmp_path):
+    db = MagicMock()
+    assert replay_derived_views(db, tmp_path / "absent.json") == []
+    db.create_view.assert_not_called()

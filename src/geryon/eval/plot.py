@@ -13,6 +13,22 @@ from statsmodels.stats.multitest import multipletests
 _N_BOOT = 500
 _LOESS_FRAC = 0.75
 
+# Need at least this many paired points for OLS/LOESS/KDE and BH correction.
+_MIN_POINTS = 2
+
+# Hypotheses with a train result but no val result (val execution failed) get a
+# known x but no y, so they're rugged along the bottom instead of being dropped.
+_MISSING_COLOR = "#D55E00"  # Okabe-Ito vermillion
+
+
+def _save_placeholder(output_path: str | Path, message: str) -> None:
+    """Write a small figure with an explanatory message (too few points to plot)."""
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.text(0.5, 0.5, message, ha="center", va="center", fontsize=11)
+    ax.axis("off")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", transparent=True)
+    plt.close(fig)
+
 
 def _loess_with_bootstrap_ci(
     x: np.ndarray, y: np.ndarray, x_grid: np.ndarray
@@ -121,6 +137,29 @@ def _plot_scatter_with_fits(ax: plt.Axes, x: np.ndarray, y: np.ndarray) -> None:
     ax.set_ylim(0, 1)
 
 
+def _rug_missing_val(ax: plt.Axes, x_missing: np.ndarray) -> None:
+    """Rug hypotheses whose val result is missing along the bottom x-axis.
+
+    They have a known train x-position but no y (val) value, so they're drawn in
+    a thin strip just below the data area rather than silently dropped.
+    """
+    if len(x_missing) == 0:
+        return
+    ax.set_ylim(-0.06, 1.0)
+    ax.axhline(0.0, color="gray", linewidth=0.6, alpha=0.4)
+    ax.scatter(
+        x_missing,
+        np.full(len(x_missing), -0.03),
+        marker="|",
+        s=140,
+        linewidths=1.3,
+        color=_MISSING_COLOR,
+        clip_on=False,
+        zorder=4,
+        label=f"val missing (n={len(x_missing)})",
+    )
+
+
 def plot_pval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     """Scatter plot of train_p_value vs val_p_value with marginal densities.
 
@@ -128,14 +167,25 @@ def plot_pval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     and KDE marginals for train (top) and val (right).
     df must have columns: train_p_value, val_p_value. Null rows are dropped.
     """
-    mask = df["train_p_value"].notna() & df["val_p_value"].notna()
-    plot_df = df[mask].copy()
+    paired = df["train_p_value"].notna() & df["val_p_value"].notna()
+    missing = df["train_p_value"].notna() & df["val_p_value"].isna()
+    plot_df = df[paired].copy()
+    x_missing = df.loc[missing, "train_p_value"].astype(float).to_numpy()
+
+    if len(plot_df) < _MIN_POINTS:
+        _save_placeholder(
+            output_path,
+            f"Not enough paired p-values to plot "
+            f"(n={len(plot_df)}; {len(x_missing)} with val missing)",
+        )
+        return
 
     x = plot_df["train_p_value"].astype(float).to_numpy()
     y = plot_df["val_p_value"].astype(float).to_numpy()
 
     fig, ax, ax_top, ax_right = _make_marginal_fig(x, y)
     _plot_scatter_with_fits(ax, x, y)
+    _rug_missing_val(ax, x_missing)
 
     ax_top.set_ylabel("density", fontsize=8)
     ax_right.set_xlabel("density", fontsize=8, rotation=0, labelpad=4)
@@ -153,17 +203,38 @@ def plot_qval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     BH correction is applied independently to train and val p-values.
     df must have columns: train_p_value, val_p_value. Null rows are dropped.
     """
-    mask = df["train_p_value"].notna() & df["val_p_value"].notna()
-    plot_df = df[mask].copy()
+    has_train = df["train_p_value"].notna()
+    paired = has_train & df["val_p_value"].notna()
+    missing = has_train & df["val_p_value"].isna()
+    plot_df = df[paired].copy()
 
-    train_p = plot_df["train_p_value"].astype(float).to_numpy()
-    val_p = plot_df["val_p_value"].astype(float).to_numpy()
+    if len(plot_df) < _MIN_POINTS:
+        _save_placeholder(
+            output_path,
+            f"Not enough paired p-values to plot "
+            f"(n={len(plot_df)}; {int(missing.sum())} with val missing)",
+        )
+        return
 
-    _, train_q, _, _ = multipletests(train_p, method="fdr_bh")
-    _, val_q, _, _ = multipletests(val_p, method="fdr_bh")
+    # BH-correct train across every hypothesis with a train p-value (independent of
+    # whether val ran), so missing-val rows still get a train q for placement.
+    train_q_all = pd.Series(
+        multipletests(
+            df.loc[has_train, "train_p_value"].astype(float).to_numpy(),
+            method="fdr_bh",
+        )[1],
+        index=df.index[has_train],
+    )
+    _, val_q, _, _ = multipletests(
+        plot_df["val_p_value"].astype(float).to_numpy(), method="fdr_bh"
+    )
+
+    train_q = train_q_all.loc[plot_df.index].to_numpy()
+    q_missing = train_q_all.loc[df.index[missing]].to_numpy()
 
     fig, ax, ax_top, ax_right = _make_marginal_fig(train_q, val_q)
     _plot_scatter_with_fits(ax, train_q, val_q)
+    _rug_missing_val(ax, q_missing)
 
     ax.axvline(0.05, color="tab:red", linestyle=":", linewidth=1, label="q=0.05")
     ax.axhline(0.05, color="tab:red", linestyle=":", linewidth=1)

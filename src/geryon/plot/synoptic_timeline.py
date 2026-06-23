@@ -38,12 +38,35 @@ _AMBER = "#E69F00"
 _GREEN = "#009E73"
 _VERMILLION = "#D55E00"
 
-_LW = 0.9  # thin lines throughout
+_LW = 1.3  # line weight (kept readable in print)
 
+# x-position of the off-scale gutter where missing-val hyps are marked (right of q=1).
+_MISSING_GUTTER = 1.12
+
+# q-value significance threshold; non-significant points are drawn at low alpha.
+_SIG_Q = 0.05
+_SIG_ALPHA = 0.9
+_NONSIG_ALPHA = 0.25
+
+
+def _legend_below(ax: plt.Axes, **kw) -> None:
+    """Place the legend below the panel so it never covers the data."""
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.14),
+        fontsize=7,
+        framealpha=0.95,
+        **kw,
+    )
+
+
+# (dim, label, color, better_dir): better_dir is +1 if a higher rating is better
+# (arrow points right) or -1 if lower is better (arrow points left). "Uncontrolled"
+# is reversed: 1=clean is good, 3=confounded is bad.
 _RATING_DIMS = [
-    ("novelty", "Novelty", _BLUE),
-    ("uncontrolled", "Uncontrolled", _AMBER),
-    ("trustworthiness", "Trustworthiness", _GREEN),
+    ("novelty", "Novelty", _BLUE, +1),
+    ("uncontrolled", "Uncontrolled", _AMBER, -1),
+    ("trustworthiness", "Trustworthiness", _GREEN, +1),
 ]
 
 
@@ -130,7 +153,7 @@ def _plot_cost(ax: plt.Axes, y, without, with_c) -> None:
     if with_c is not None:
         ax.plot(with_c, y, color=_BLUE, linewidth=_LW, label="with caching")
     ax.set_xlabel("Cumulative cost (USD)")
-    ax.legend(loc="lower right", fontsize=8)
+    _legend_below(ax)
     ax.grid(True, alpha=0.3)
 
 
@@ -149,7 +172,12 @@ def _plot_tokens(ax: plt.Axes, y, cum_in, cum_out) -> None:
 
 
 def _plot_ratings(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
-    for dim, label, color in _RATING_DIMS:
+    for dim, label, color, better_dir in _RATING_DIMS:
+        # Direction of "better" differs per dimension (uncontrolled is reversed),
+        # so it rides in the legend label rather than a single shared arrow.
+        legend_label = (
+            f"{label} (better →)" if better_dir > 0 else f"{label} (← better)"
+        )
         pts = [
             (y[i], getattr(h.effective_rating, dim))
             for i, h in enumerate(hyps)
@@ -159,7 +187,7 @@ def _plot_ratings(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
             continue
         yy = np.array([p[0] for p in pts], dtype=float)
         rr = np.array([p[1] for p in pts], dtype=float)
-        ax.scatter(rr, yy, color=color, alpha=0.25, s=12, zorder=1)
+        ax.scatter(rr, yy, color=color, alpha=0.55, s=16, zorder=1)
 
         window = max(3, len(rr) // 5)
         if len(rr) >= window:
@@ -170,47 +198,88 @@ def _plot_ratings(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
                 yy[half : half + len(roll)],
                 color=color,
                 linewidth=_LW,
-                label=label,
+                label=legend_label,
                 zorder=2,
             )
         else:
-            ax.plot(rr, yy, color=color, linewidth=_LW, label=label, zorder=2)
+            ax.plot(rr, yy, color=color, linewidth=_LW, label=legend_label, zorder=2)
 
     ax.set_xlabel("Rating")
     ax.set_xlim(0.7, 3.3)
     ax.set_xticks([1, 2, 3])
-    ax.legend(loc="lower right", fontsize=8)
+    _legend_below(ax)
     ax.grid(True, alpha=0.3)
 
 
+def _sig_q_scatter(ax: plt.Axes, q, hy, color: str, label: str) -> None:
+    """Scatter q-values, fading the non-significant ones (q > 0.05) to low alpha
+    so the significant points carry the eye."""
+    q = np.asarray(q, dtype=float)
+    alphas = np.where(q <= _SIG_Q, _SIG_ALPHA, _NONSIG_ALPHA)
+    ax.scatter(q, hy, color=color, alpha=alphas, s=22, label=label, zorder=3)
+
+
 def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> None:
-    df = pd.read_csv(input_csv)
-    df = df[df["val_success"].astype(str) == "True"]
-    df = df[df["train_p_value"].notna() & df["val_p_value"].notna()].copy()
-    if df.empty:
+    raw = pd.read_csv(input_csv)
+    raw["hy"] = raw["hypothesis_id"].map(idx_by_id)
+    raw = raw[raw["hy"].notna()].copy()
+
+    val_ok = (raw["val_success"].astype(str) == "True") & raw["val_p_value"].notna()
+    has_val = raw[val_ok].copy()
+    has_train = raw[raw["train_p_value"].notna()].copy()
+    # Any mapped hyp without a usable val q-value, regardless of whether train ran.
+    no_val = raw[~val_ok]
+
+    if has_val.empty and has_train.empty and no_val.empty:
         ax.text(0.5, 0.5, "no val data", ha="center", va="center", fontsize=9)
         return
 
-    _, train_q, _, _ = multipletests(
-        df["train_p_value"].astype(float).to_numpy(), method="fdr_bh"
-    )
-    _, val_q, _, _ = multipletests(
-        df["val_p_value"].astype(float).to_numpy(), method="fdr_bh"
-    )
-    df["train_q"], df["val_q"] = train_q, val_q
-    df["hy"] = df["hypothesis_id"].map(idx_by_id)
-    df = df[df["hy"].notna()].sort_values("hy")
-    if df.empty:
-        ax.text(0.5, 0.5, "no matching val data", ha="center", va="center", fontsize=9)
-        return
+    # Train and val q-values are BH-corrected over their own available sets, so a
+    # hyp can carry one without the other (train ran but val failed, or vice versa).
+    if not has_train.empty:
+        has_train["train_q"] = multipletests(
+            has_train["train_p_value"].astype(float).to_numpy(), method="fdr_bh"
+        )[1]
+        _sig_q_scatter(ax, has_train["train_q"], has_train["hy"], _AMBER, "train q")
+    if not has_val.empty:
+        has_val["val_q"] = multipletests(
+            has_val["val_p_value"].astype(float).to_numpy(), method="fdr_bh"
+        )[1]
+        _sig_q_scatter(ax, has_val["val_q"], has_val["hy"], _BLUE, "val q")
+    if not has_train.empty or not has_val.empty:
+        ax.axvline(_SIG_Q, color=_VERMILLION, linestyle=":", linewidth=_LW)
 
-    ax.scatter(df["train_q"], df["hy"], color=_AMBER, alpha=0.7, s=18, label="train q")
-    ax.scatter(df["val_q"], df["hy"], color=_BLUE, alpha=0.7, s=18, label="val q")
-    ax.axvline(0.05, color=_VERMILLION, linestyle=":", linewidth=_LW)
+    # No-val hyps go in a gutter OFF the q-scale (right of q=1), not at a real q
+    # position where a marker would read as a low/high q-value.
+    if not no_val.empty:
+        ax.axvline(_MISSING_GUTTER - 0.04, color="gray", linewidth=0.8, alpha=0.6)
+        ax.scatter(
+            np.full(len(no_val), _MISSING_GUTTER),
+            no_val["hy"],
+            marker="x",
+            color=_VERMILLION,
+            s=40,
+            linewidths=1.6,
+            clip_on=False,
+            zorder=4,
+            label=f"no val (n={len(no_val)})",
+        )
+        ax.text(
+            _MISSING_GUTTER,
+            1.01,
+            "no val",
+            transform=ax.get_xaxis_transform(),
+            ha="center",
+            va="bottom",
+            fontsize=6,
+            color=_VERMILLION,
+        )
 
     ax.set_xlabel("q-value")
-    ax.set_xlim(-0.02, 1.02)
-    ax.legend(loc="lower right", fontsize=8)
+    # Pin ticks to the q-scale so the gutter is visibly off-scale, not a q value.
+    ax.set_xticks([0.0, 0.5, 1.0])
+    ax.set_xlim(-0.02, _MISSING_GUTTER + 0.04 if not no_val.empty else 1.02)
+    _legend_below(ax)
     ax.grid(True, alpha=0.3)
 
 

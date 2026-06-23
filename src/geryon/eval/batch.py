@@ -8,6 +8,7 @@ from geryon.db import Database
 from geryon.engine import HypothesisExecutor, load_split_ids
 from geryon.labeling.models import LabeledHypothesis
 from geryon.plot._loader import load_hypotheses
+from geryon.tools.derived import replay_derived_views
 
 
 def execute_hypotheses(
@@ -55,6 +56,14 @@ def main() -> None:
     train_p_by_id = {hyp.hypothesis_id: hyp.result.p_value for hyp in hypotheses}
 
     with Database(args.parquet_dir) as db:
+        # Hypotheses reference session-local derived_* views; recreate them in the
+        # fresh val DB or every such hypothesis fails with a Catalog Error.
+        for views_path in sorted(
+            (args.data_dir / "sessions").rglob("derived_views.json")
+        ):
+            for name in replay_derived_views(db, views_path):
+                print(f"  ⚠ Could not replay derived view '{name}' from {views_path}")
+
         val_ids = load_split_ids(db, "validation")
         if val_ids is None:
             raise SystemExit("No patient_split table found in parquet-dir.")
