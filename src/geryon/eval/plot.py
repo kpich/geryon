@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.stats import gaussian_kde
 from statsmodels.nonparametric.smoothers_lowess import lowess
 from statsmodels.stats.multitest import multipletests
 
@@ -49,10 +48,21 @@ def _loess_with_bootstrap_ci(
     )
 
 
+def _marginal_bin_edges(n: int) -> np.ndarray:
+    """Bin edges over [0, 1] for a marginal histogram of `n` points.
+
+    Bin count grows with sample size (~2·√n) so the marginals get finer as more
+    data accumulates, clamped to a sane [20, 80] range. p/q-values live in [0, 1],
+    so the edges are fixed to that span rather than the data's min/max.
+    """
+    n_bins = int(np.clip(round(2 * np.sqrt(max(n, 1))), 20, 80))
+    return np.linspace(0.0, 1.0, n_bins + 1)
+
+
 def _make_marginal_fig(
     x: np.ndarray, y: np.ndarray
 ) -> tuple[plt.Figure, plt.Axes, plt.Axes, plt.Axes]:
-    """Create a figure with marginal KDE axes.
+    """Create a figure with marginal histogram axes.
 
     Returns (fig, ax_main, ax_top, ax_right).
     ax_top shows the distribution of x; ax_right shows the distribution of y.
@@ -65,19 +75,21 @@ def _make_marginal_fig(
     ax_top = fig.add_subplot(gs[0, 0], sharex=ax)
     ax_right = fig.add_subplot(gs[1, 1], sharey=ax)
 
-    grid = np.linspace(0.0, 1.0, 300)
     color = "steelblue"
     for vals, axis, horizontal in [(x, ax_top, True), (y, ax_right, False)]:
-        try:
-            d = gaussian_kde(vals)(grid)
-        except Exception:
+        if len(vals) == 0:
             continue
-        if horizontal:
-            axis.fill_between(grid, d, alpha=0.25, color=color)
-            axis.plot(grid, d, color=color, linewidth=0.9)
-        else:
-            axis.fill_betweenx(grid, d, alpha=0.25, color=color)
-            axis.plot(d, grid, color=color, linewidth=0.9)
+        edges = _marginal_bin_edges(len(vals))
+        axis.hist(
+            vals,
+            bins=edges,
+            density=True,
+            color=color,
+            alpha=0.4,
+            edgecolor=color,
+            linewidth=0.4,
+            orientation="vertical" if horizontal else "horizontal",
+        )
 
     ax_top.tick_params(labelbottom=False, left=False, labelleft=False)
     ax_top.spines[["top", "right", "left"]].set_visible(False)
@@ -161,10 +173,10 @@ def _rug_missing_val(ax: plt.Axes, x_missing: np.ndarray) -> None:
 
 
 def plot_pval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
-    """Scatter plot of train_p_value vs val_p_value with marginal densities.
+    """Scatter plot of train_p_value vs val_p_value with marginal histograms.
 
     Shows identity line, OLS fit (R², p-value), LOESS with bootstrap 95% CI,
-    and KDE marginals for train (top) and val (right).
+    and histogram marginals for train (top) and val (right).
     df must have columns: train_p_value, val_p_value. Null rows are dropped.
     """
     paired = df["train_p_value"].notna() & df["val_p_value"].notna()
@@ -198,7 +210,7 @@ def plot_pval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
 
 
 def plot_qval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
-    """Scatter plot of BH q-values (train v val) with marginal densities and 0.05 lines.
+    """Scatter of BH q-values (train v val) with marginal histograms and 0.05 lines.
 
     BH correction is applied independently to train and val p-values.
     df must have columns: train_p_value, val_p_value. Null rows are dropped.
