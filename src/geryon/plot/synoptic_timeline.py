@@ -8,10 +8,13 @@ lines up as a horizontal band across every panel. Cost/tokens are metered per
 generation iteration, so they appear as staircases (the ~3 hypotheses from one
 iteration share that iteration's cumulative value):
 
-    hyp |  cost   | tokens  | ratings | q-value |
-      1 |  ...    |  ...    |  ...    |  ...    |
-      2 |  ...    |  ...    |  ...    |  ...    |
-      v |         |         |         |         |
+    hyp |  cost   | tokens  | ratings | q-value | lineage |
+      1 |  ...    |  ...    |  ...    |  ...    |  ...    |
+      2 |  ...    |  ...    |  ...    |  ...    |  ...    |
+      v |         |         |         |         |         |
+
+The lineage panel plots each hypothesis at (refinement depth, index) and links it
+to the parent it refines, so refinement chains read left-to-right.
 """
 
 import argparse
@@ -31,6 +34,7 @@ from geryon.plot.cost_over_time import (
     _input_volume,
     load_generation_usage,
 )
+from geryon.plot.ratings_by_depth import compute_depths
 
 # Okabe-Ito colorblind-safe palette.
 _BLUE = "#0072B2"
@@ -38,7 +42,11 @@ _AMBER = "#E69F00"
 _GREEN = "#009E73"
 _VERMILLION = "#D55E00"
 
-_LW = 1.3  # line weight (kept readable in print)
+# Per-panel line weights: context panels are de-emphasized, the data panels
+# (ratings / q-values) carry the eye, and the refinement tree stays light.
+_LW_COST = 0.8  # cost & token staircases — thinnest
+_LW_DATA = 1.9  # ratings & q-values — fat, the focus
+_LW_TREE = 0.8  # parent/child refinement connectors — thin
 
 # x-position of the off-scale gutter where missing-val hyps are marked (right of q=1).
 _MISSING_GUTTER = 1.12
@@ -149,23 +157,23 @@ def _per_hypothesis(arr: np.ndarray, gidx: list[int | None]) -> np.ndarray:
 
 
 def _plot_cost(ax: plt.Axes, y, without, with_c) -> None:
-    ax.plot(without, y, color=_VERMILLION, linewidth=_LW, label="without caching")
+    ax.plot(without, y, color=_VERMILLION, linewidth=_LW_COST, label="without caching")
     if with_c is not None:
-        ax.plot(with_c, y, color=_BLUE, linewidth=_LW, label="with caching")
+        ax.plot(with_c, y, color=_BLUE, linewidth=_LW_COST, label="with caching")
     ax.set_xlabel("Cumulative cost (USD)")
     _legend_below(ax)
     ax.grid(True, alpha=0.3)
 
 
 def _plot_tokens(ax: plt.Axes, y, cum_in, cum_out) -> None:
-    ax.plot(cum_in, y, color=_BLUE, linewidth=_LW)
+    ax.plot(cum_in, y, color=_BLUE, linewidth=_LW_COST)
     ax.set_xlabel("Cumulative input", color=_BLUE)
     ax.tick_params(axis="x", labelcolor=_BLUE)
     ax.xaxis.set_major_formatter(FuncFormatter(_fmt_tokens))
     ax.grid(True, alpha=0.3)
 
     ax_t = ax.twiny()  # second x-axis (top), shares the hypothesis y-axis
-    ax_t.plot(cum_out, y, color=_VERMILLION, linewidth=_LW)
+    ax_t.plot(cum_out, y, color=_VERMILLION, linewidth=_LW_COST)
     ax_t.set_xlabel("Cumulative output", color=_VERMILLION)
     ax_t.tick_params(axis="x", labelcolor=_VERMILLION)
     ax_t.xaxis.set_major_formatter(FuncFormatter(_fmt_tokens))
@@ -197,12 +205,14 @@ def _plot_ratings(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
                 roll,
                 yy[half : half + len(roll)],
                 color=color,
-                linewidth=_LW,
+                linewidth=_LW_DATA,
                 label=legend_label,
                 zorder=2,
             )
         else:
-            ax.plot(rr, yy, color=color, linewidth=_LW, label=legend_label, zorder=2)
+            ax.plot(
+                rr, yy, color=color, linewidth=_LW_DATA, label=legend_label, zorder=2
+            )
 
     ax.set_xlabel("Rating")
     ax.set_xlim(0.7, 3.3)
@@ -216,7 +226,7 @@ def _sig_q_scatter(ax: plt.Axes, q, hy, color: str, label: str) -> None:
     so the significant points carry the eye."""
     q = np.asarray(q, dtype=float)
     alphas = np.where(q <= _SIG_Q, _SIG_ALPHA, _NONSIG_ALPHA)
-    ax.scatter(q, hy, color=color, alpha=alphas, s=22, label=label, zorder=3)
+    ax.scatter(q, hy, color=color, alpha=alphas, s=34, label=label, zorder=3)
 
 
 def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> None:
@@ -247,7 +257,7 @@ def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> N
         )[1]
         _sig_q_scatter(ax, has_val["val_q"], has_val["hy"], _BLUE, "val q")
     if not has_train.empty or not has_val.empty:
-        ax.axvline(_SIG_Q, color=_VERMILLION, linestyle=":", linewidth=_LW)
+        ax.axvline(_SIG_Q, color=_VERMILLION, linestyle=":", linewidth=_LW_DATA)
 
     # No-val hyps go in a gutter OFF the q-scale (right of q=1), not at a real q
     # position where a marker would read as a low/high q-value.
@@ -283,6 +293,75 @@ def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> N
     ax.grid(True, alpha=0.3)
 
 
+def _resolved_parents(hyps: list) -> dict[str, str | None]:
+    """Map each hypothesis_id to its parent's full id within this set (or None).
+
+    Mirrors compute_depths' short-id (8-char prefix) resolution so a parent recorded
+    as a short prefix still links to the full hypothesis.
+    """
+    ids = {h.hypothesis_id for h in hyps}
+    short_to_full = {hid[:8]: hid for hid in ids}
+    parents: dict[str, str | None] = {}
+    for h in hyps:
+        parent = h.proposal.refines_hypothesis
+        if parent is not None and parent not in ids:
+            parent = short_to_full.get(parent, parent)
+        parents[h.hypothesis_id] = parent if parent in ids else None
+    return parents
+
+
+def _plot_lineage(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
+    """Refinement tree: x = refinement depth, y = hypothesis index (shared).
+
+    Each hypothesis is a node at (depth, index); a thin connector links it to the
+    parent it refines, so refinement chains read left-to-right while staying on
+    their creation-order rows.
+    """
+    depth = compute_depths(hyps)
+    parents = _resolved_parents(hyps)
+    y_of = {h.hypothesis_id: y[i] for i, h in enumerate(hyps)}
+
+    for h in hyps:
+        parent = parents[h.hypothesis_id]
+        if parent is None:
+            continue
+        ax.plot(
+            [depth[parent], depth[h.hypothesis_id]],
+            [y_of[parent], y_of[h.hypothesis_id]],
+            color="gray",
+            linewidth=_LW_TREE,
+            alpha=0.7,
+            zorder=1,
+        )
+
+    depths = np.array([depth[h.hypothesis_id] for h in hyps], dtype=float)
+    is_root = np.array([parents[h.hypothesis_id] is None for h in hyps])
+    ax.scatter(
+        depths[is_root],
+        y[is_root],
+        color=_GREEN,
+        s=22,
+        zorder=2,
+        label=f"original (n={int(is_root.sum())})",
+    )
+    if (~is_root).any():
+        ax.scatter(
+            depths[~is_root],
+            y[~is_root],
+            color=_BLUE,
+            s=22,
+            zorder=2,
+            label=f"refinement (n={int((~is_root).sum())})",
+        )
+
+    max_d = int(depths.max()) if len(depths) else 0
+    ax.set_xlabel("Refinement depth")
+    ax.set_xlim(-0.4, max_d + 0.4)
+    ax.set_xticks(range(max_d + 1))
+    _legend_below(ax)
+    ax.grid(True, alpha=0.3)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Synoptic timeline of a run")
     parser.add_argument("--data-dir", required=True, type=Path)
@@ -301,8 +380,8 @@ def main() -> None:
     y = np.arange(1, len(hyps) + 1)
     gidx = [_hyp_iteration(h, itmap) for h in hyps]
 
-    fig, (ax_cost, ax_tok, ax_rate, ax_q) = plt.subplots(
-        1, 4, figsize=(15, 8), sharey=True
+    fig, (ax_cost, ax_tok, ax_rate, ax_q, ax_tree) = plt.subplots(
+        1, 5, figsize=(18, 8), sharey=True
     )
 
     if hyps and events:
@@ -318,6 +397,7 @@ def main() -> None:
         )
     if hyps:
         _plot_ratings(ax_rate, hyps, y)
+        _plot_lineage(ax_tree, hyps, y)
     if args.input is not None and args.input.exists() and hyps:
         idx_by_id = {h.hypothesis_id: i + 1 for i, h in enumerate(hyps)}
         _plot_qvalues(ax_q, args.input, idx_by_id)

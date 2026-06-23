@@ -1,10 +1,34 @@
 """Tests for synoptic_timeline helpers."""
 
+from types import SimpleNamespace
+
 from geryon.plot.synoptic_timeline import (
     _pooled_cache_fractions,
+    _resolved_parents,
     _uncached_cost,
     iteration_index,
 )
+
+
+def _hyp(hid, parent):
+    return SimpleNamespace(
+        hypothesis_id=hid,
+        proposal=SimpleNamespace(refines_hypothesis=parent),
+    )
+
+
+def test_resolved_parents_links_full_short_and_unknown():
+    hyps = [
+        _hyp("aaaaaaaa-1111", None),
+        _hyp("bbbbbbbb-2222", "aaaaaaaa-1111"),  # full id
+        _hyp("cccccccc-3333", "bbbbbbbb"),  # 8-char short prefix
+        _hyp("dddddddd-4444", "zzzzzzzz"),  # parent not in set -> root
+    ]
+    parents = _resolved_parents(hyps)
+    assert parents["aaaaaaaa-1111"] is None
+    assert parents["bbbbbbbb-2222"] == "aaaaaaaa-1111"
+    assert parents["cccccccc-3333"] == "bbbbbbbb-2222"
+    assert parents["dddddddd-4444"] is None
 
 
 def test_iteration_index_global_sequence_across_sessions():
