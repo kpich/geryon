@@ -149,6 +149,56 @@ def _plot_scatter_with_fits(ax: plt.Axes, x: np.ndarray, y: np.ndarray) -> None:
     ax.set_ylim(0, 1)
 
 
+def _plot_qval_scatter(ax: plt.Axes, x: np.ndarray, y: np.ndarray) -> None:
+    """Scatter train vs val q-values with just the identity line — no OLS/LOESS fit.
+
+    Points significant in train OR val (q ≤ 0.05) keep full color; everything else
+    is grayed out so the hits stand out.
+    """
+    sig = (x <= 0.05) | (y <= 0.05)
+    ax.scatter(
+        x[~sig],
+        y[~sig],
+        alpha=0.5,
+        edgecolors="none",
+        s=35,
+        color="lightgray",
+        zorder=2,
+    )
+    ax.scatter(
+        x[sig], y[sig], alpha=0.7, edgecolors="none", s=35, color="steelblue", zorder=3
+    )
+    ax.plot([0, 1], [0, 1], "--", color="gray", linewidth=1)
+
+    # Each count sits on its own side of the identity line (above-left vs.
+    # below-right), clear of the q=0.05 reference lines.
+    n_above = int(np.sum(y > x))
+    n_below = int(np.sum(y < x))
+    ax.text(
+        0.12,
+        0.96,
+        f"above identity (val worse): {n_above}",
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        fontsize=8,
+        color="black",
+    )
+    ax.text(
+        0.97,
+        0.10,
+        f"below identity (val better): {n_below}",
+        transform=ax.transAxes,
+        va="bottom",
+        ha="right",
+        fontsize=8,
+        color="black",
+    )
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+
+
 def _rug_missing_val(ax: plt.Axes, x_missing: np.ndarray) -> None:
     """Rug hypotheses whose val result is missing along the bottom x-axis.
 
@@ -215,6 +265,8 @@ def plot_qval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     BH correction is applied independently to train and val p-values.
     df must have columns: train_p_value, val_p_value. Null rows are dropped.
     """
+    plt.rcParams["font.family"] = "Arial"
+
     has_train = df["train_p_value"].notna()
     paired = has_train & df["val_p_value"].notna()
     missing = has_train & df["val_p_value"].isna()
@@ -245,17 +297,16 @@ def plot_qval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     q_missing = train_q_all.loc[df.index[missing]].to_numpy()
 
     fig, ax, ax_top, ax_right = _make_marginal_fig(train_q, val_q)
-    _plot_scatter_with_fits(ax, train_q, val_q)
+    _plot_qval_scatter(ax, train_q, val_q)
     _rug_missing_val(ax, q_missing)
 
-    ax.axvline(0.05, color="tab:red", linestyle=":", linewidth=1, label="q=0.05")
+    ax.axvline(0.05, color="tab:red", linestyle=":", linewidth=1)
     ax.axhline(0.05, color="tab:red", linestyle=":", linewidth=1)
 
     ax_top.set_ylabel("density", fontsize=8)
     ax_right.set_xlabel("density", fontsize=8, rotation=0, labelpad=4)
     ax.set_xlabel("train q-value")
     ax.set_ylabel("val q-value")
-    ax.legend(fontsize=9)
 
     fig.savefig(output_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close(fig)
