@@ -50,11 +50,16 @@ _LW_COST = 0.8  # cost & token staircases — thinnest
 _LW_DATA = 1.9  # ratings & q-values — fat, the focus
 _LW_TREE = 0.8  # parent/child refinement connectors — thin
 
-# x-position of the off-scale gutter where missing-val hyps are marked (right of q=1).
-_MISSING_GUTTER = 1.12
+# q-values are plotted as −log10(q): more significant = larger = further right. Values
+# below _Q_FLOOR (very significant, e.g. tiny train q) pile at the right edge.
+_Q_CAP = 2.0  # max −log10 q shown (q = 0.01)
+_Q_FLOOR = 10**-_Q_CAP
+# x-position of the off-scale gutter (left, below q=1) where missing-val hyps are
+# marked.
+_NOVAL_X = -0.3
 
 # q-value significance threshold; non-significant points are drawn at low alpha.
-_SIG_Q = 0.05
+_SIG_Q = 0.1
 _SIG_ALPHA = 0.9
 _NONSIG_ALPHA = 0.25
 
@@ -71,11 +76,9 @@ def _legend_below(ax: plt.Axes, **kw) -> plt.legend:
 
 
 # (dim, label, color, better_dir): better_dir is +1 if a higher rating is better
-# (arrow points right) or -1 if lower is better (arrow points left). "Uncontrolled"
-# is reversed: 1=clean is good, 3=confounded is bad.
+# (arrow points right) or -1 if lower is better (arrow points left).
 _RATING_DIMS = [
     ("novelty", "Novelty", _BLUE, +1),
-    ("uncontrolled", "Uncontrolled", _AMBER, -1),
     ("trustworthiness", "Trustworthiness", _GREEN, +1),
 ]
 
@@ -166,6 +169,29 @@ def _plot_skip_nan(ax: plt.Axes, x, y, **kw) -> None:
     ax.plot(x[mask], np.asarray(y)[mask], **kw)
 
 
+def _mark_total(ax: plt.Axes, costs, color: str) -> None:
+    """Drop a vertical guide at the final (total) cost and print the dollar value at
+    the bottom of the panel, so cost reads as an actual number instead of off an
+    x-scale. Cost is cumulative, so the last point is the total."""
+    c = np.asarray(costs, dtype=float)
+    c = c[~np.isnan(c)]
+    if not len(c):
+        return
+    total = c[-1]
+    ax.axvline(total, color=color, linewidth=0.8, linestyle=":", alpha=0.7, zorder=0)
+    ax.annotate(
+        f"${total:.2f}",
+        xy=(total, 0.0),
+        xycoords=("data", "axes fraction"),
+        xytext=(0, -3),
+        textcoords="offset points",
+        ha="center",
+        va="top",
+        fontsize=8,
+        color=color,
+    )
+
+
 def _plot_cost(ax: plt.Axes, y, without, with_c) -> None:
     _plot_skip_nan(
         ax,
@@ -174,15 +200,20 @@ def _plot_cost(ax: plt.Axes, y, without, with_c) -> None:
         color=_VERMILLION,
         linewidth=_LW_COST,
         linestyle=":",
-        label="without caching",
+        label="no caching",
     )
     if with_c is not None:
         _plot_skip_nan(
-            ax, with_c, y, color=_BLUE, linewidth=_LW_COST, label="with caching"
+            ax, with_c, y, color=_BLUE, linewidth=_LW_COST, label="_nolegend_"
         )
-    ax.set_xlabel("Cumulative cost (USD)")
+    _mark_total(ax, without, _VERMILLION)
+    if with_c is not None:
+        _mark_total(ax, with_c, _BLUE)
+    ax.set_xlabel(
+        "Cost ($)", labelpad=16
+    )  # below the dollar totals printed at the axis
+    ax.set_xticks([])
     _legend_below(ax)
-    ax.grid(True, axis="x", alpha=0.3)
 
 
 def _plot_tokens(ax: plt.Axes, y, cum_in, cum_out) -> None:
@@ -190,7 +221,7 @@ def _plot_tokens(ax: plt.Axes, y, cum_in, cum_out) -> None:
     # bottom of the panel (an axis on top reads badly): output rides a twin whose
     # spine/ticks are pushed down just beneath the input axis.
     _plot_skip_nan(ax, cum_in, y, color=_BLUE, linewidth=_LW_COST)
-    ax.set_xlabel("Cumulative input tokens", color=_BLUE)
+    ax.set_xlabel("Input tokens", color=_BLUE)
     ax.xaxis.set_major_formatter(FuncFormatter(_fmt_tokens))
     ax.tick_params(axis="x", colors=_BLUE)
 
@@ -200,7 +231,7 @@ def _plot_tokens(ax: plt.Axes, y, cum_in, cum_out) -> None:
     ax_out.spines["bottom"].set_position(("axes", -0.10))
     ax_out.spines["top"].set_visible(False)
     _plot_skip_nan(ax_out, cum_out, y, color=_VERMILLION, linewidth=_LW_COST)
-    ax_out.set_xlabel("Cumulative output tokens", color=_VERMILLION)
+    ax_out.set_xlabel("Output tokens", color=_VERMILLION)
     ax_out.xaxis.set_major_formatter(FuncFormatter(_fmt_tokens))
     ax_out.tick_params(axis="x", colors=_VERMILLION)
 
@@ -218,8 +249,8 @@ def _plot_rating_dim(
 ) -> None:
     """One thin rating panel for a single dimension (scatter + rolling mean).
 
-    Direction of "better" differs per dimension (uncontrolled is reversed), so it
-    rides in the x-axis label as an arrow.
+    Direction of "better" can differ per dimension, so it rides in the x-axis
+    label as an arrow.
     """
     pts = [
         (y[i], getattr(h.effective_rating, dim))
@@ -260,11 +291,13 @@ def _q_legend_marker(marker: str, color: str, label: str) -> plt.Line2D:
 
 
 def _sig_q_scatter(ax: plt.Axes, q, hy, color: str, label: str) -> None:
-    """Scatter q-values, fading the non-significant ones (q > 0.05) to low alpha
-    so the significant points carry the eye."""
+    """Scatter q-values on a −log10 scale (significant = right), fading the
+    non-significant ones (q > _SIG_Q) to low alpha so the significant points carry
+    the eye."""
     q = np.asarray(q, dtype=float)
+    x = -np.log10(np.clip(q, _Q_FLOOR, 1.0))
     alphas = np.where(q <= _SIG_Q, _SIG_ALPHA, _NONSIG_ALPHA)
-    ax.scatter(q, hy, color=color, alpha=alphas, s=34, label=label, zorder=3)
+    ax.scatter(x, hy, color=color, alpha=alphas, s=34, label=label, zorder=3)
 
 
 def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> None:
@@ -295,14 +328,16 @@ def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> N
         )[1]
         _sig_q_scatter(ax, has_val["val_q"], has_val["hy"], _BLUE, "val q")
     if not has_train.empty or not has_val.empty:
-        ax.axvline(_SIG_Q, color=_VERMILLION, linestyle=":", linewidth=_LW_DATA)
+        ax.axvline(
+            -np.log10(_SIG_Q), color=_VERMILLION, linestyle=":", linewidth=_LW_DATA
+        )
 
-    # No-val hyps go in a gutter OFF the q-scale (right of q=1), not at a real q
-    # position where a marker would read as a low/high q-value.
+    # No-val hyps go in a gutter OFF the scale (left, below q=1), not at a real
+    # position where a marker would read as a q-value.
     if not no_val.empty:
-        ax.axvline(_MISSING_GUTTER - 0.04, color="gray", linewidth=0.8, alpha=0.6)
+        ax.axvline(_NOVAL_X + 0.13, color="gray", linewidth=0.8, alpha=0.6)
         ax.scatter(
-            np.full(len(no_val), _MISSING_GUTTER),
+            np.full(len(no_val), _NOVAL_X),
             no_val["hy"],
             marker="x",
             color=_VERMILLION,
@@ -313,7 +348,7 @@ def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> N
             label=f"no val (n={len(no_val)})",
         )
         ax.text(
-            _MISSING_GUTTER,
+            _NOVAL_X,
             1.01,
             "no val",
             transform=ax.get_xaxis_transform(),
@@ -323,10 +358,10 @@ def _plot_qvalues(ax: plt.Axes, input_csv: Path, idx_by_id: dict[str, int]) -> N
             color=_VERMILLION,
         )
 
-    ax.set_xlabel("q-value")
-    # Pin ticks to the q-scale so the gutter is visibly off-scale, not a q value.
-    ax.set_xticks([0.0, 0.5, 1.0])
-    ax.set_xlim(-0.02, _MISSING_GUTTER + 0.04 if not no_val.empty else 1.02)
+    ax.set_xlabel("$-\\log_{10}\\, q$\n(sig →)")
+    # Ticks are −log10 q: 0→q=1, 1→q=0.1 (the threshold), 2→q=0.01.
+    ax.set_xticks([0, 1, 2])
+    ax.set_xlim(_NOVAL_X - 0.15 if not no_val.empty else -0.05, _Q_CAP + 0.05)
     # Plotted points fade non-significant q-values (an array alpha), so build solid
     # proxy handles for the legend — its swatches should read at full alpha.
     handles = []
@@ -402,10 +437,9 @@ def _plot_lineage(ax: plt.Axes, hyps: list, y: np.ndarray) -> None:
         )
 
     max_d = int(depths.max()) if len(depths) else 0
-    ax.set_xlabel("Refinement depth")
+    ax.set_xlabel("Refinement\ndepth")
     ax.set_xlim(-0.4, max_d + 0.4)
-    ax.set_xticks(range(max_d + 1))
-    ax.grid(True, axis="x", alpha=0.3)
+    ax.set_xticks([])
 
 
 def _hypothesis_gridlines(fig: plt.Figure, axes: list[plt.Axes], n_hyp: int) -> None:
@@ -419,7 +453,7 @@ def _hypothesis_gridlines(fig: plt.Figure, axes: list[plt.Axes], n_hyp: int) -> 
     """
     ticks = np.arange(0, n_hyp + 1, 5)
     for ax in axes:
-        ax.set_yticks(ticks)
+        ax.set_yticks([])
 
     fig.canvas.draw()  # finalize transforms before reading panel positions
     ref = axes[0]
@@ -463,18 +497,21 @@ def main() -> None:
     y = np.arange(1, len(hyps) + 1)
     gidx = [_hyp_iteration(h, itmap) for h in hyps]
 
-    # Counts (thin) and cost (thin) lead on the left; the three rating dimensions
-    # are split into their own thin panels (no overlay); q-values and the lineage
-    # tree get the wider panels on the right.
+    # Counts (thin) and cost (thin) lead on the left; the rating dimensions are split
+    # into their own thin panels (no overlay); the lineage tree then the q-values
+    # (rightmost, so significant points sit at the far right edge).
     fig, axes = plt.subplots(
         1,
-        7,
-        figsize=(15, 8),
+        6,
+        figsize=(8.4, 8),
         sharey=True,
-        gridspec_kw={"width_ratios": [0.4, 0.4, 0.5, 0.5, 0.5, 0.8, 0.7]},
+        gridspec_kw={
+            "width_ratios": [0.30, 0.30, 0.38, 0.38, 0.28, 0.6],
+            "wspace": 0.15,
+        },
     )
-    ax_tok, ax_cost, ax_nov, ax_unc, ax_trust, ax_q, ax_tree = axes
-    rating_axes = (ax_nov, ax_unc, ax_trust)
+    ax_tok, ax_cost, ax_nov, ax_trust, ax_tree, ax_q = axes
+    rating_axes = (ax_nov, ax_trust)
 
     if hyps and events:
         without, with_c, cum_in, cum_out = _iteration_cumulatives(events)

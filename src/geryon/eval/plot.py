@@ -19,6 +19,9 @@ _MIN_POINTS = 2
 # known x but no y, so they're rugged along the bottom instead of being dropped.
 _MISSING_COLOR = "#D55E00"  # Okabe-Ito vermillion
 
+# q-value significance threshold (matches the synoptic timeline's _SIG_Q).
+_SIG_Q = 0.1
+
 
 def _save_placeholder(output_path: str | Path, message: str) -> None:
     """Write a small figure with an explanatory message (too few points to plot)."""
@@ -48,21 +51,10 @@ def _loess_with_bootstrap_ci(
     )
 
 
-def _marginal_bin_edges(n: int) -> np.ndarray:
-    """Bin edges over [0, 1] for a marginal histogram of `n` points.
-
-    Bin count grows with sample size (~2·√n) so the marginals get finer as more
-    data accumulates, clamped to a sane [20, 80] range. p/q-values live in [0, 1],
-    so the edges are fixed to that span rather than the data's min/max.
-    """
-    n_bins = int(np.clip(round(2 * np.sqrt(max(n, 1))), 20, 80))
-    return np.linspace(0.0, 1.0, n_bins + 1)
-
-
 def _make_marginal_fig(
     x: np.ndarray, y: np.ndarray
 ) -> tuple[plt.Figure, plt.Axes, plt.Axes, plt.Axes]:
-    """Create a figure with marginal histogram axes.
+    """Create a figure with marginal KDE axes.
 
     Returns (fig, ax_main, ax_top, ax_right).
     ax_top shows the distribution of x; ax_right shows the distribution of y.
@@ -76,20 +68,18 @@ def _make_marginal_fig(
     ax_right = fig.add_subplot(gs[1, 1], sharey=ax)
 
     color = "steelblue"
+    grid = np.linspace(0.0, 1.0, 200)
     for vals, axis, horizontal in [(x, ax_top, True), (y, ax_right, False)]:
-        if len(vals) == 0:
+        # gaussian_kde needs >1 point and some spread, else it's singular.
+        if len(vals) < 2 or np.ptp(vals) == 0:
             continue
-        edges = _marginal_bin_edges(len(vals))
-        axis.hist(
-            vals,
-            bins=edges,
-            density=True,
-            color=color,
-            alpha=0.4,
-            edgecolor=color,
-            linewidth=0.4,
-            orientation="vertical" if horizontal else "horizontal",
-        )
+        density = stats.gaussian_kde(vals, bw_method=0.25)(grid)
+        if horizontal:  # ax_top: variable on shared x, density rising on y
+            axis.fill_between(grid, density, color=color, alpha=0.4, linewidth=0)
+            axis.plot(grid, density, color=color, linewidth=0.8)
+        else:  # ax_right: variable on shared y, density growing on x
+            axis.fill_betweenx(grid, density, color=color, alpha=0.4, linewidth=0)
+            axis.plot(density, grid, color=color, linewidth=0.8)
 
     ax_top.tick_params(labelbottom=False, left=False, labelleft=False)
     ax_top.spines[["top", "right", "left"]].set_visible(False)
@@ -155,7 +145,7 @@ def _plot_qval_scatter(ax: plt.Axes, x: np.ndarray, y: np.ndarray) -> None:
     Points significant in train OR val (q ≤ 0.05) keep full color; everything else
     is grayed out so the hits stand out.
     """
-    sig = (x <= 0.05) | (y <= 0.05)
+    sig = (x <= _SIG_Q) | (y <= _SIG_Q)
     ax.scatter(
         x[~sig],
         y[~sig],
@@ -171,7 +161,7 @@ def _plot_qval_scatter(ax: plt.Axes, x: np.ndarray, y: np.ndarray) -> None:
     ax.plot([0, 1], [0, 1], "--", color="gray", linewidth=1)
 
     # Each count sits on its own side of the identity line (above-left vs.
-    # below-right), clear of the q=0.05 reference lines.
+    # below-right), clear of the reference lines.
     n_above = int(np.sum(y > x))
     n_below = int(np.sum(y < x))
     ax.text(
@@ -181,7 +171,7 @@ def _plot_qval_scatter(ax: plt.Axes, x: np.ndarray, y: np.ndarray) -> None:
         transform=ax.transAxes,
         va="top",
         ha="left",
-        fontsize=8,
+        fontsize=12,
         color="black",
     )
     ax.text(
@@ -191,7 +181,7 @@ def _plot_qval_scatter(ax: plt.Axes, x: np.ndarray, y: np.ndarray) -> None:
         transform=ax.transAxes,
         va="bottom",
         ha="right",
-        fontsize=8,
+        fontsize=12,
         color="black",
     )
 
@@ -294,19 +284,18 @@ def plot_qval_comparison(df: pd.DataFrame, output_path: str | Path) -> None:
     )
 
     train_q = train_q_all.loc[plot_df.index].to_numpy()
-    q_missing = train_q_all.loc[df.index[missing]].to_numpy()
 
     fig, ax, ax_top, ax_right = _make_marginal_fig(train_q, val_q)
     _plot_qval_scatter(ax, train_q, val_q)
-    _rug_missing_val(ax, q_missing)
 
-    ax.axvline(0.05, color="tab:red", linestyle=":", linewidth=1)
-    ax.axhline(0.05, color="tab:red", linestyle=":", linewidth=1)
+    ax.axvline(_SIG_Q, color="tab:red", linestyle=":", linewidth=1)
+    ax.axhline(_SIG_Q, color="tab:red", linestyle=":", linewidth=1)
 
-    ax_top.set_ylabel("density", fontsize=8)
-    ax_right.set_xlabel("density", fontsize=8, rotation=0, labelpad=4)
-    ax.set_xlabel("train q-value")
-    ax.set_ylabel("val q-value")
+    ax_top.set_ylabel("density", fontsize=10)
+    ax_right.set_xlabel("density", fontsize=10, rotation=0, labelpad=4)
+    ax.set_xlabel("train q-value", fontsize=12.5)
+    ax.set_ylabel("val q-value", fontsize=12.5)
+    ax.tick_params(labelsize=12.5)
 
     fig.savefig(output_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close(fig)

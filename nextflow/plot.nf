@@ -50,6 +50,21 @@ process scoreByDepth {
     """
 }
 
+process trustByDepth {
+    errorStrategy 'terminate'
+    publishDir params.output_dir, mode: 'copy', overwrite: true
+
+    output:
+    path "trust_by_depth.pdf"
+
+    script:
+    """
+    uv run python -m geryon.plot.trust_by_depth \
+        --data-dir ${params.data_dir} \
+        --output trust_by_depth.pdf
+    """
+}
+
 process scoreOverTime {
     errorStrategy 'terminate'
     publishDir params.output_dir, mode: 'copy', overwrite: true
@@ -192,6 +207,7 @@ workflow {
     ratingsOverTime()
     ratingsByDepth()
     scoreByDepth()
+    trustByDepth()
     scoreOverTime()
     costOverTime()
 
