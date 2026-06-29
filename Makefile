@@ -16,6 +16,15 @@ clean:
 	find src/ -name "__pycache__" | xargs rm -r
 	rm -rf ./build/ .venv/ uv.lock
 
+.PHONY: sandbox-build
+sandbox-build:
+	docker build -t geryon-sandbox src/geryon/sandbox
+
+.PHONY: sandbox-smoke
+sandbox-smoke: sandbox-build
+	docker run --rm --network none geryon-sandbox \
+		python -c "import duckdb, lifelines, geryon_runtime; print('sandbox OK')"
+
 .PHONY: mypy
 mypy:
 	uv run --extra dev mypy --check-untyped-defs src/geryon
@@ -63,6 +72,20 @@ run:
 		--num-proposals $(PROPOSALS) \
 		--critic-cycles 1 2>&1 | tee out
 		#--model us.anthropic.claude-opus-4-5-20251101-v1:0
+
+# Code-first workflow (LLM writes Python run in the Docker sandbox).
+# Requires the sandbox image: run `make sandbox-build` once first.
+# Quick first run: `make code-run ITERS=1 PROPOSALS=1`
+.PHONY: code-run
+code-run:
+	uv run python -u -m geryon.codeflow.runner \
+		--provider aws_bedrock \
+		--model us.anthropic.claude-opus-4-6-v1 \
+		--aws-profile saml \
+		--aws-region us-east-2 \
+		--max-iterations $(ITERS) \
+		--num-proposals $(PROPOSALS) \
+		--critic-cycles 1 2>&1 | tee code-out
 
 GERYON_DATA_DIR := geryon_data
 GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git

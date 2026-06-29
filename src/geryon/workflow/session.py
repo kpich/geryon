@@ -45,6 +45,10 @@ class SessionConfig(BaseModel):
         default=5, description="Hypotheses per iteration"
     )
     max_iterations: int = Field(default=10, description="Maximum iterations to run")
+    sandbox_timeout_seconds: int = Field(
+        default=180,
+        description="Wall-clock seconds before a sandboxed script is killed (codeflow)",
+    )
     critic_cycles: int = Field(
         default=0,
         description="Number of LLM critic cycles per iteration (0 = disabled)",

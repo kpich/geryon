@@ -16,6 +16,8 @@ OpenAI caches prefixes automatically and rejects ``cache_control`` blocks, so
 caching is only applied for Anthropic-style providers.
 """
 
+from typing import Any
+
 from langchain_core.messages import BaseMessage, ToolMessage
 
 # Providers whose models honor Anthropic-style cache_control breakpoints.
@@ -28,8 +30,12 @@ def supports_cache_control(provider_type: str) -> bool:
     return provider_type in CACHE_CONTROL_PROVIDERS
 
 
-def cached_text_content(text: str) -> list[dict]:
-    """Wrap text as a single content block carrying an ephemeral cache breakpoint."""
+def cached_text_content(text: str) -> list[str | dict[str, Any]]:
+    """Wrap text as a single content block carrying an ephemeral cache breakpoint.
+
+    Return type matches LangChain message ``content`` (``str | list[str | dict]``)
+    so it can be passed straight to SystemMessage/HumanMessage without a cast.
+    """
     return [{"type": "text", "text": text, "cache_control": _EPHEMERAL}]
 
 
