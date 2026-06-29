@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
@@ -24,6 +24,11 @@ from geryon.codeflow._shared import (
 from geryon.codeflow.models import CodeCritique, CodeHypothesis
 from geryon.codeflow.prompts import CRITIC_SYSTEM_PROMPT
 from geryon.db import Database
+from geryon.llm.caching import (
+    cached_text_content,
+    supports_cache_control,
+    tail_cache_pre_model_hook,
+)
 from geryon.sandbox import SandboxLimits
 from geryon.workflow.session import SessionConfig
 
@@ -58,14 +63,19 @@ class HypothesisCritic:
             make_run_python_tool(self.config, self.limits),
             self._make_submit_critique_tool(holder),
         ]
-        graph = create_react_agent(self.llm, ToolNode(tools, handle_tool_errors=True))
+        caching = supports_cache_control(self.config.provider_type)
+        graph = create_react_agent(
+            self.llm,
+            ToolNode(tools, handle_tool_errors=True),
+            pre_model_hook=tail_cache_pre_model_hook if caching else None,
+        )
 
         result_block = (
             json.dumps(hyp.result.model_dump(), default=str)
             if hyp.result
             else "(no reported result)"
         )
-        user = (
+        user_text = (
             f"# HYPOTHESIS [{hyp.short_id()}]\n{hyp.title}\n{hyp.description}\n\n"
             f"**Rationale**: {hyp.rationale}\n\n"
             f"# RESULT\n{result_block}\n\n"
@@ -74,15 +84,25 @@ class HypothesisCritic:
             f"confounding, then call submit_critique."
         )
 
+        sys_content: str | list[Any]
+        usr_content: str | list[Any]
+        if caching:
+            sys_content = cached_text_content(CRITIC_SYSTEM_PROMPT)
+            usr_content = cached_text_content(user_text)
+        else:
+            sys_content = CRITIC_SYSTEM_PROMPT
+            usr_content = user_text
+
+        steps_per_cycle = 3 if caching else 2
         try:
             result = graph.invoke(
                 {
                     "messages": [
-                        SystemMessage(content=CRITIC_SYSTEM_PROMPT),
-                        HumanMessage(content=user),
+                        SystemMessage(content=sys_content),
+                        HumanMessage(content=usr_content),
                     ]
                 },
-                config={"recursion_limit": _MAX_REACT_CYCLES * 2},
+                config={"recursion_limit": _MAX_REACT_CYCLES * steps_per_cycle},
             )
             self._log_usage(result.get("messages", []))
         except Exception as e:
