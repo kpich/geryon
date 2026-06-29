@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import traceback
-from typing import Annotated, Any, NamedTuple, TypedDict
+from typing import Annotated, Any, TypedDict
 import uuid
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -22,6 +22,7 @@ from geryon.codeflow._shared import (
     make_explore_tools,
     make_run_python_tool,
     run_in_sandbox,
+    sum_message_usage,
 )
 from geryon.codeflow.context import (
     format_previous_hypotheses,
@@ -53,33 +54,6 @@ _MAX_REACT_CYCLES = 70
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], "Messages in conversation"]
-
-
-class _GenerationUsage(NamedTuple):
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    cache_read_tokens: int
-    cache_creation_tokens: int
-    n_llm_calls: int
-
-
-def _sum_message_usage(messages: list) -> _GenerationUsage:
-    inp = out = tot = cache_read = cache_create = calls = 0
-    for msg in messages:
-        usage = getattr(msg, "usage_metadata", None)
-        if not usage:
-            continue
-        i = int(usage.get("input_tokens", 0) or 0)
-        o = int(usage.get("output_tokens", 0) or 0)
-        inp += i
-        out += o
-        tot += int(usage.get("total_tokens", 0) or 0) or (i + o)
-        details = usage.get("input_token_details") or {}
-        cache_read += int(details.get("cache_read", 0) or 0)
-        cache_create += int(details.get("cache_creation", 0) or 0)
-        calls += 1
-    return _GenerationUsage(inp, out, tot, cache_read, cache_create, calls)
 
 
 class CodeWorkflow:
@@ -170,6 +144,18 @@ class CodeWorkflow:
                     result=run.result,
                     stdout=run.stdout,
                 )
+                if self.llm_logger and narrator.last_usage is not None:
+                    nu = narrator.last_usage
+                    self.llm_logger.log_generation_usage(
+                        iteration=iteration,
+                        phase="narration",
+                        input_tokens=nu.input_tokens,
+                        output_tokens=nu.output_tokens,
+                        total_tokens=nu.total_tokens,
+                        cache_read_tokens=nu.cache_read_tokens,
+                        cache_creation_tokens=nu.cache_creation_tokens,
+                        n_llm_calls=nu.n_llm_calls,
+                    )
             except Exception as e:  # narration is best-effort
                 print(f"  ⚠ narration failed: {type(e).__name__}: {e}")
 
@@ -286,7 +272,7 @@ class CodeWorkflow:
             )
 
             if self.llm_logger:
-                u = _sum_message_usage(result["messages"])
+                u = sum_message_usage(result["messages"])
                 self.llm_logger.log_generation_usage(
                     iteration=iteration or 0,
                     input_tokens=u.input_tokens,
@@ -320,7 +306,10 @@ class CodeWorkflow:
         Mutates each hypothesis's ``critique`` in place, then rewrites the store so
         the on-disk records carry the assessments.
         """
-        critic = HypothesisCritic(self.config, self.db)
+        iteration = (hypotheses[0].iteration if hypotheses else 0) or 0
+        critic = HypothesisCritic(
+            self.config, self.db, tracer=self.llm_logger, iteration=iteration
+        )
         for hyp in hypotheses:
             print(f"  Critiquing [{hyp.short_id()}]...")
             try:

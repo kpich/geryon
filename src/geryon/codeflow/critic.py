@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import traceback
+from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
@@ -18,6 +19,7 @@ from geryon.codeflow._shared import (
     build_chat_model,
     make_explore_tools,
     make_run_python_tool,
+    sum_message_usage,
 )
 from geryon.codeflow.models import CodeCritique, CodeHypothesis
 from geryon.codeflow.prompts import CRITIC_SYSTEM_PROMPT
@@ -25,15 +27,26 @@ from geryon.db import Database
 from geryon.sandbox import SandboxLimits
 from geryon.workflow.session import SessionConfig
 
+if TYPE_CHECKING:
+    from geryon.llm.conversation_logger import SessionTracer
+
 _MAX_REACT_CYCLES = 40
 
 
 class HypothesisCritic:
     """Reviews one hypothesis at a time, optionally running code to test it."""
 
-    def __init__(self, config: SessionConfig, db: Database):
+    def __init__(
+        self,
+        config: SessionConfig,
+        db: Database,
+        tracer: SessionTracer | None = None,
+        iteration: int = 0,
+    ):
         self.config = config
         self.db = db
+        self.tracer = tracer
+        self.iteration = iteration
         self.limits = SandboxLimits()
         self.llm = build_chat_model(config)
         self.explore_tools = make_explore_tools(db)
@@ -62,7 +75,7 @@ class HypothesisCritic:
         )
 
         try:
-            graph.invoke(
+            result = graph.invoke(
                 {
                     "messages": [
                         SystemMessage(content=CRITIC_SYSTEM_PROMPT),
@@ -71,6 +84,7 @@ class HypothesisCritic:
                 },
                 config={"recursion_limit": _MAX_REACT_CYCLES * 2},
             )
+            self._log_usage(result.get("messages", []))
         except Exception as e:
             print(f"  ⚠ critic failed for {hyp.short_id()}: {type(e).__name__}: {e}")
             traceback.print_exc()
@@ -83,6 +97,21 @@ class HypothesisCritic:
             confound_risk=2,
             novelty=2,
             notes="Critic did not submit a structured assessment.",
+        )
+
+    def _log_usage(self, messages: list) -> None:
+        if self.tracer is None:
+            return
+        u = sum_message_usage(messages)
+        self.tracer.log_generation_usage(
+            iteration=self.iteration,
+            phase="critic",
+            input_tokens=u.input_tokens,
+            output_tokens=u.output_tokens,
+            total_tokens=u.total_tokens,
+            cache_read_tokens=u.cache_read_tokens,
+            cache_creation_tokens=u.cache_creation_tokens,
+            n_llm_calls=u.n_llm_calls,
         )
 
     def _make_submit_critique_tool(self, holder: list[CodeCritique]):

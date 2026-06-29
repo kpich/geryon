@@ -133,9 +133,14 @@ class SessionTracer:
         n_llm_calls: int,
         cache_read_tokens: int = 0,
         cache_creation_tokens: int = 0,
+        phase: str = "generation",
     ) -> None:
-        """Real token usage for one iteration's ReAct generation (proposals +
-        all tool-call round-trips), summed from LangChain message usage_metadata.
+        """Real token usage for one LLM phase of an iteration, summed from
+        provider/LangChain usage metadata.
+
+        ``phase`` distinguishes the cost source — ``generation`` (proposal ReAct
+        loop), ``critic`` (agentic critique loop), or ``narration``. All phases
+        share the ``generation_usage`` event so cost tooling sums the full run.
 
         cache_read_tokens / cache_creation_tokens are the cached portion of
         input_tokens (input_tokens is the total input, not just the uncached part).
@@ -143,6 +148,7 @@ class SessionTracer:
         self._write(
             event="generation_usage",
             iteration=iteration,
+            phase=phase,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             total_tokens=total_tokens,

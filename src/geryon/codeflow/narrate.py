@@ -4,6 +4,7 @@ import json
 
 from pydantic import ValidationError
 
+from geryon.codeflow._shared import MessageUsage, usage_from_response
 from geryon.codeflow.models import CodeNarrative
 from geryon.codeflow.prompts import NARRATOR_SYSTEM_PROMPT
 from geryon.llm.providers.base import ChatMessage, LLMProvider
@@ -17,6 +18,8 @@ class CodeNarrator:
 
     def __init__(self, provider: LLMProvider):
         self.provider = provider
+        # Usage of the most recent narrate() call, for cost logging.
+        self.last_usage: MessageUsage | None = None
 
     def narrate(
         self,
@@ -39,6 +42,7 @@ class CodeNarrator:
             ChatMessage(role="user", content=user_prompt),
         ]
         response = self.provider.generate(messages, temperature=0.3, cache_system=True)
+        self.last_usage = usage_from_response(response)
         return self._parse(response.content)
 
     def _build_user_prompt(
