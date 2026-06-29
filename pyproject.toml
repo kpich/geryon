@@ -82,6 +82,7 @@ ignore = ["SIM108"]  # Allow if-else over ternary for readability
 
 [tool.ruff.lint.per-file-ignores]
 "src/geryon/llm/prompts.py" = ["E501"]  # Long lines in prompt string literals
+"src/geryon/codeflow/prompts.py" = ["E501"]  # Long lines in prompt string literals
 
 [tool.ruff.lint.isort]
 force-single-line = false

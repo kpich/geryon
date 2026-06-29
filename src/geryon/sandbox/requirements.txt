@@ -1,0 +1,11 @@
+# Dependencies baked into the geryon-sandbox image. Pins kept loose and roughly
+# in step with the host project (pyproject.toml). Only what scripts need to do
+# genomics stats — no LLM / langchain deps inside the sandbox.
+duckdb>=1.4
+pandas>=2.3
+numpy>=1.26
+scipy>=1.11
+lifelines>=0.27.0
+statsmodels>=0.14
+matplotlib>=3.7
+pyarrow>=22.0

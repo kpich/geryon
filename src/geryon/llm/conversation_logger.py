@@ -133,9 +133,14 @@ class SessionTracer:
         n_llm_calls: int,
         cache_read_tokens: int = 0,
         cache_creation_tokens: int = 0,
+        phase: str = "generation",
     ) -> None:
-        """Real token usage for one iteration's ReAct generation (proposals +
-        all tool-call round-trips), summed from LangChain message usage_metadata.
+        """Real token usage for one LLM phase of an iteration, summed from
+        provider/LangChain usage metadata.
+
+        ``phase`` distinguishes the cost source — ``generation`` (proposal ReAct
+        loop), ``critic`` (agentic critique loop), or ``narration``. All phases
+        share the ``generation_usage`` event so cost tooling sums the full run.
 
         cache_read_tokens / cache_creation_tokens are the cached portion of
         input_tokens (input_tokens is the total input, not just the uncached part).
@@ -143,6 +148,7 @@ class SessionTracer:
         self._write(
             event="generation_usage",
             iteration=iteration,
+            phase=phase,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             total_tokens=total_tokens,
@@ -159,8 +165,12 @@ class SessionTracer:
             failed=failed,
         )
 
-    def log_raw_messages(self, messages: list) -> None:
-        """Dump full LangGraph conversation to the detail file."""
+    def log_raw_messages(self, messages: list, phase: str = "generation") -> None:
+        """Dump a full LangGraph conversation to the detail file.
+
+        ``phase`` tags each message so the generator and critic transcripts can
+        be told apart in detail.jsonl.
+        """
         for msg in messages:
             msg_type = getattr(msg, "type", type(msg).__name__)
             role = getattr(msg, "role", msg_type)
@@ -168,6 +178,7 @@ class SessionTracer:
             tool_calls = getattr(msg, "tool_calls", None) or []
             record: dict = {
                 "event": "message",
+                "phase": phase,
                 "role": role,
                 "type": msg_type,
                 "content": content,
