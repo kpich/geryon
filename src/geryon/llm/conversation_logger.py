@@ -165,8 +165,12 @@ class SessionTracer:
             failed=failed,
         )
 
-    def log_raw_messages(self, messages: list) -> None:
-        """Dump full LangGraph conversation to the detail file."""
+    def log_raw_messages(self, messages: list, phase: str = "generation") -> None:
+        """Dump a full LangGraph conversation to the detail file.
+
+        ``phase`` tags each message so the generator and critic transcripts can
+        be told apart in detail.jsonl.
+        """
         for msg in messages:
             msg_type = getattr(msg, "type", type(msg).__name__)
             role = getattr(msg, "role", msg_type)
@@ -174,6 +178,7 @@ class SessionTracer:
             tool_calls = getattr(msg, "tool_calls", None) or []
             record: dict = {
                 "event": "message",
+                "phase": phase,
                 "role": role,
                 "type": msg_type,
                 "content": content,

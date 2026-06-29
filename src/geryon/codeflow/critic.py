@@ -104,7 +104,7 @@ class HypothesisCritic:
                 },
                 config={"recursion_limit": _MAX_REACT_CYCLES * steps_per_cycle},
             )
-            self._log_usage(result.get("messages", []))
+            self._log_trace(result.get("messages", []))
         except Exception as e:
             print(f"  ⚠ critic failed for {hyp.short_id()}: {type(e).__name__}: {e}")
             traceback.print_exc()
@@ -119,7 +119,7 @@ class HypothesisCritic:
             notes="Critic did not submit a structured assessment.",
         )
 
-    def _log_usage(self, messages: list) -> None:
+    def _log_trace(self, messages: list) -> None:
         if self.tracer is None:
             return
         u = sum_message_usage(messages)
@@ -133,6 +133,7 @@ class HypothesisCritic:
             cache_creation_tokens=u.cache_creation_tokens,
             n_llm_calls=u.n_llm_calls,
         )
+        self.tracer.log_raw_messages(messages, phase="critic")
 
     def _make_submit_critique_tool(self, holder: list[CodeCritique]):
         @tool
