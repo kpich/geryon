@@ -65,7 +65,7 @@ run:
 		--aws-region us-east-2 \
 		--max-iterations $(ITERS) \
 		--num-proposals $(PROPOSALS) \
-		--critic-cycles 1 2>&1 | tee code-out
+		--critic-cycles 1 2>&1 | tee out
 
 GERYON_DATA_DIR := geryon_data
 GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git
