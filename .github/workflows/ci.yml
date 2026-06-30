@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel an in-progress run when the same ref is pushed again.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint · types · unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # uv reads .python-version (3.14) and downloads the interpreter if needed.
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+
+      - name: Ruff lint
+        run: uv run --no-sync ruff check src/
+
+      - name: Ruff format
+        run: uv run --no-sync ruff format --check src/
+
+      - name: mypy
+        run: uv run --no-sync mypy --check-untyped-defs src/geryon
+
+      - name: Unit tests
+        run: uv run --no-sync pytest src/
+
+  # Integration tests (tests/integration/) use real parquet + DuckDB, and the
+  # sandbox tests need the geryon-sandbox Docker image — neither is available on
+  # a normal push/PR. This job is manual-only (Actions tab → Run workflow) and is
+  # a no-op until tests/integration/ has tests and the data wiring below is filled
+  # in. We don't have any integration tests yet.
+  integration:
+    name: integration tests (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+
+      # --- Fill in when integration tests are added -----------------------
+      # Integration tests need real data and (for sandbox tests) the Docker
+      # image. ubuntu runners already have Docker, so e.g.:
+      #
+      #   - name: Clone private data repo
+      #     run: |
+      #       git clone https://x-access-token:${{ secrets.GERYON_DATA_TOKEN }}@github.com/kpich/geryon-data.git geryon_data
+      #
+      #   - name: Build sandbox image
+      #     run: make sandbox-build
+      # --------------------------------------------------------------------
+
+      - name: Integration tests
+        run: |
+          if ls tests/integration/*_test.py >/dev/null 2>&1; then
+            uv run --no-sync pytest tests/integration
+          else
+            echo "No integration tests yet — nothing to run."
+          fi

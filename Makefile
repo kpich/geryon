@@ -11,6 +11,10 @@ install:
 test:
 	uv run pytest src/
 
+.PHONY: int-test
+int-test:
+	uv run pytest tests/integration
+
 .PHONY: clean
 clean:
 	find src/ -name "__pycache__" | xargs rm -r
