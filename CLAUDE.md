@@ -38,8 +38,8 @@ METHOD_IMPLEMENTATIONS = {ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMetho
 
 ## Testing
 
-- **Unit tests** go in `src/` next to the code they test (e.g., `executor_test.py`). Use mocks for external dependencies. Run with `make test`.
-- **Integration tests** go in `tests/integration/`. These use real parquet files, real DB connections, etc. Run with `make int-test`.
+- **Unit tests** live in `src/` next to the code they test, named `*_test.py` (e.g., `agent_test.py`). Run with `make test` (`pytest src/`). CI (`.github/workflows/ci.yml`) runs ruff, mypy, and these on every push to `main` and every PR.
+- **Integration tests** (multi-module, not unit) are a separate category that will live outside `src/`. There are none yet — add the location and runner when the first one is written, don't scaffold it ahead of time.
 
 ## Code Style
 
