@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Geryon Code Viewer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #f5f5f5; color: #1f2937; line-height: 1.55; padding: 20px; }
+  h1 { text-align: center; margin-bottom: 6px; }
+  #stats { text-align: center; color: #6b7280; margin-bottom: 24px; font-size: 14px; }
+  .empty { text-align: center; color: #9ca3af; margin-top: 60px; font-size: 18px; }
+  code, pre, .mono { font-family: "SF Mono", "Fira Code", ui-monospace, monospace; }
+
+  .session-divider { max-width: 960px; margin: 20px auto 8px; padding-top: 8px;
+                     font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
+
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.08);
+          margin: 0 auto 6px; max-width: 960px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+               cursor: pointer; transition: background .12s; }
+  .card-head:hover { background: #fafafa; }
+  .iter { font-size: 11px; font-weight: 700; color: #6b7280; background: #f3f4f6;
+          border-radius: 4px; padding: 2px 7px; min-width: 30px; text-align: center; }
+  .title { flex: 1; font-weight: 600; font-size: 15px; }
+  .id { color: #9ca3af; font-size: 11px; }
+  .pill { font-size: 10px; font-variant: small-caps; font-weight: 700;
+          padding: 2px 8px; border-radius: 4px; }
+  .pill-ok { background: #dcfce7; color: #166534; }
+  .pill-fail { background: #fee2e2; color: #991b1b; }
+  .pill-refines { background: #ede9fe; color: #6d28d9; }
+  .toggle { color: #9ca3af; font-size: 14px; width: 14px; transition: transform .2s; }
+  .card.open .toggle { transform: rotate(90deg); }
+
+  .body { display: none; padding: 4px 22px 20px; border-top: 1px solid #f0f0f0; }
+  .card.open .body { display: block; }
+
+  .field { margin: 14px 0; }
+  .label { font-weight: 700; font-size: 11px; color: #6b7280; text-transform: uppercase;
+           letter-spacing: .6px; margin-bottom: 4px; }
+  .prose { font-size: 14px; }
+
+  pre.code { background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 14px 16px;
+             font-size: 12.5px; line-height: 1.45; overflow-x: auto; }
+  pre.out { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
+            padding: 12px 14px; font-size: 12px; line-height: 1.45; overflow-x: auto;
+            max-height: 340px; }
+
+  table.stats { border-collapse: collapse; width: 100%; margin-top: 4px; }
+  table.stats td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  table.stats td:first-child { color: #6b7280; width: 45%; }
+  table.stats td.num { text-align: right; font-family: "SF Mono", monospace; }
+
+  ul.lims { margin: 4px 0 0 18px; font-size: 13px; }
+  ul.lims li { margin: 3px 0; }
+
+  .section { border-radius: 8px; padding: 12px 14px; margin: 14px 0; }
+  .section.narrative { background: #f0f9ff; border: 1px solid #bae6fd; }
+  .section.critique { background: #fffbeb; border: 1px solid #fde68a; }
+  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: .6px; margin-bottom: 8px; }
+  .section.narrative .section-title { color: #0369a1; }
+  .section.critique .section-title { color: #92400e; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chip { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 4px;
+          background: #fff; border: 1px solid #e5e7eb; }
+  .chip b { font-weight: 700; }
+  .g1 { color: #dc2626; } .g2 { color: #d97706; } .g3 { color: #059669; }
+  .holds-yes { color: #059669; } .holds-no { color: #dc2626; } .holds-na { color: #9ca3af; }
+
+  .toolbar { max-width: 960px; margin: 0 auto 12px; display: flex; gap: 8px;
+             justify-content: flex-end; }
+  .toolbar button { font-size: 12px; padding: 5px 12px; border: 1px solid #d1d5db;
+                    background: #fff; border-radius: 6px; cursor: pointer; color: #374151; }
+  .toolbar button:hover { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Geryon Code Viewer</h1>
+<div id="stats"></div>
+<div class="toolbar">
+  <button onclick="setAll(true)">Expand all</button>
+  <button onclick="setAll(false)">Collapse all</button>
+</div>
+<div id="list"></div>
+
+<script>
+const fmt = (v, d = 4) => {
+  if (v === null || v === undefined) return "—";
+  if (typeof v !== "number") return String(v);
+  if (v !== 0 && (Math.abs(v) < 1e-3 || Math.abs(v) >= 1e5)) return v.toExponential(2);
+  return Number(v.toFixed(d)).toString();
+};
+const esc = (s) => (s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const grade = (n) => n ? `g${n}` : "";
+
+function resultTable(r) {
+  if (!r) return "";
+  const rows = [];
+  const add = (k, v) => rows.push(`<tr><td>${k}</td><td class="num">${v}</td></tr>`);
+  if (r.effect_size !== null) add(r.effect_size_type || "Effect size", fmt(r.effect_size));
+  if (r.p_value !== null) add("p-value", fmt(r.p_value));
+  if (r.ci_lower !== null || r.ci_upper !== null)
+    add("95% CI", `${fmt(r.ci_lower)} – ${fmt(r.ci_upper)}`);
+  if (r.n_a !== null) add("n (group A)", r.n_a);
+  if (r.n_b !== null) add("n (group B)", r.n_b);
+  for (const [k, v] of Object.entries(r.extra || {})) add(k, fmt(v));
+  return `<table class="stats">${rows.join("")}</table>`;
+}
+
+function field(label, html) {
+  if (!html) return "";
+  return `<div class="field"><div class="label">${label}</div>${html}</div>`;
+}
+
+function narrativeSection(n) {
+  if (!n) return "";
+  let h = `<div class="section narrative"><div class="section-title">Narrative</div>`;
+  if (n.summary) h += field("Summary", `<div class="prose">${esc(n.summary)}</div>`);
+  if (n.findings) h += field("Findings", `<div class="prose">${esc(n.findings)}</div>`);
+  if (n.limitations?.length)
+    h += field("Limitations",
+      `<ul class="lims">${n.limitations.map(l => `<li>${esc(l)}</li>`).join("")}</ul>`);
+  return h + `</div>`;
+}
+
+function critiqueSection(c) {
+  if (!c) return "";
+  const holds = c.holds_up === true ? `<span class="holds-yes">held up ✓</span>`
+    : c.holds_up === false ? `<span class="holds-no">did not hold ✗</span>`
+    : `<span class="holds-na">not tested</span>`;
+  let h = `<div class="section critique"><div class="section-title">Critique</div>`;
+  h += `<div class="chips">
+    <span class="chip">Trust <b class="${grade(c.trustworthiness)}">${c.trustworthiness}/3</b></span>
+    <span class="chip">Confound risk <b class="${grade(4 - c.confound_risk)}">${c.confound_risk}/3</b></span>
+    <span class="chip">Novelty <b class="${grade(c.novelty)}">${c.novelty}/3</b></span>
+    <span class="chip">Control test: ${holds}</span>
+  </div>`;
+  if (c.notes) h += field("Notes", `<div class="prose">${esc(c.notes)}</div>`);
+  if (c.suggested_fix) h += field("Suggested fix", `<div class="prose">${esc(c.suggested_fix)}</div>`);
+  if (c.tests_run?.length)
+    h += field("Checks run",
+      `<ul class="lims">${c.tests_run.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`);
+  return h + `</div>`;
+}
+
+function card(h) {
+  const refines = h.refines_short
+    ? `<span class="pill pill-refines">refines ${h.refines_short}</span>` : "";
+  const status = h.success
+    ? `<span class="pill pill-ok">ok</span>` : `<span class="pill pill-fail">fail</span>`;
+  const body =
+    field("Description", `<div class="prose">${esc(h.description)}</div>`) +
+    field("Rationale", `<div class="prose">${esc(h.rationale)}</div>`) +
+    field("Result", resultTable(h.result) +
+      (h.result?.summary ? `<div class="prose" style="margin-top:6px">${esc(h.result.summary)}</div>` : "")) +
+    narrativeSection(h.narrative) +
+    critiqueSection(h.critique) +
+    field("Code", `<pre class="code">${esc(h.code.trim())}</pre>`) +
+    (h.stdout?.trim() ? field("stdout", `<pre class="out">${esc(h.stdout.trim())}</pre>`) : "") +
+    (h.stderr?.trim() ? field("stderr", `<pre class="out">${esc(h.stderr.trim())}</pre>`) : "");
+
+  return `<div class="card" data-id="${h.hypothesis_id}">
+    <div class="card-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="iter">${h.iteration ?? "—"}</span>
+      <span class="title">${esc(h.title)}</span>
+      ${refines}${status}
+      <span class="id mono">${h.short_id}</span>
+      <span class="toggle">▶</span>
+    </div>
+    <div class="body">${body}</div>
+  </div>`;
+}
+
+function setAll(open) {
+  document.querySelectorAll(".card").forEach(c => c.classList.toggle("open", open));
+}
+
+async function load() {
+  const [hyps, stats] = await Promise.all([
+    fetch("/api/hypotheses").then(r => r.json()),
+    fetch("/api/stats").then(r => r.json()),
+  ]);
+  document.getElementById("stats").textContent =
+    `${stats.total} hypotheses · ${stats.sessions} sessions · ${stats.succeeded} ok · ${stats.failed} failed`;
+
+  const list = document.getElementById("list");
+  if (!hyps.length) { list.innerHTML = `<div class="empty">No hypotheses found.</div>`; return; }
+
+  let html = "", lastSession = null;
+  for (const h of hyps) {
+    if (h.session_id !== lastSession) {
+      html += `<div class="session-divider">session ${h.session_id} · ${h.created_at.slice(0, 10)}</div>`;
+      lastSession = h.session_id;
+    }
+    html += card(h);
+  }
+  list.innerHTML = html;
+  if (hyps.length <= 3) setAll(true);
+}
+
+load();
+</script>
+</body>
+</html>
