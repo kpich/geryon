@@ -34,6 +34,7 @@ from geryon.codeflow.narrate import CodeNarrator
 from geryon.codeflow.prompts import GENERATOR_SYSTEM_PROMPT
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.db import Database
+from geryon.etl.split_by_patient import EXPLORE_SPLIT, read_split_marker
 from geryon.llm.caching import (
     cached_text_content,
     supports_cache_control,
@@ -62,6 +63,15 @@ class CodeWorkflow:
     def __init__(self, config: SessionConfig):
         self.config = config
         self.session = Session(config)
+
+        split = read_split_marker(config.parquet_dir)
+        if split != EXPLORE_SPLIT:
+            raise ValueError(
+                f"The inner loop must read the '{EXPLORE_SPLIT}' split only, but "
+                f"parquet_dir is marked {split!r}: {config.parquet_dir}. Point it at "
+                f"the '{EXPLORE_SPLIT}/' subdir so the validation cohort stays held "
+                f"out (see geryon.etl.split_by_patient)."
+            )
 
         self.db = Database(config.parquet_dir)
         provider_kwargs: dict = {"model": config.model}

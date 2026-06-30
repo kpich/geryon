@@ -28,6 +28,18 @@ METHOD_IMPLEMENTATIONS = {ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMetho
 
 **Resilient workflow** - Empty proposals/failures don't crash session, logs to file
 
+**Holdout enforced at the data layer** - The inner loop must only ever see the
+*exploration* set, never validation. Because hypotheses are now free-form Python in
+a sandbox (no per-query chokepoint), this is enforced by physically splitting the
+parquet: `etl/create_patient_split.py` labels patients `explore` (80%) / `validation`
+(20%), and `etl/split_by_patient.py` writes `<dated>/explore/` and `<dated>/validation/`
+subdirs filtered to each split (with regenerated profiles + a `SPLIT` marker). The
+session reads `explore/` only — validation is absent from the DuckDB views and the
+read-only sandbox mount. `runner.resolve_explore_dir` hard-fails on an un-split dir,
+and `CodeWorkflow.__init__` refuses any dir not marked `explore`. Note: CNA is
+sample-keyed even though its column is *named* `PATIENT_ID` (it holds sample
+barcodes) — see `SAMPLE_KEY_COLUMNS`. Code uses `explore`; prose says "exploration".
+
 ## Current Status
 
 - One outcome: `OverallSurvival` (Cox regression on OS_MONTHS/OS_STATUS)

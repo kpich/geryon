@@ -12,6 +12,7 @@ import uuid
 
 from geryon.codeflow.agent import CodeWorkflow
 from geryon.codeflow.models import CodeHypothesis
+from geryon.etl.split_by_patient import EXPLORE_SPLIT, SPLIT_MARKER_FILENAME
 from geryon.llm import DEFAULT_BEDROCK_MODEL
 from geryon.workflow.session import SessionConfig
 
@@ -25,6 +26,36 @@ def get_latest_etl_output(base_dir: Path) -> Path:
     if not subdirs:
         raise FileNotFoundError(f"No subdirectories found in {base_path}")
     return subdirs[-1]
+
+
+def resolve_explore_dir(path: Path) -> Path:
+    """Resolve to the exploration-split parquet dir, enforcing the holdout.
+
+    Accepts either a dated ETL dir (which must contain an ``explore/`` subdir) or a
+    dir that is already the exploration split (identified by its ``SPLIT`` marker).
+    Hard-fails on a legacy, un-split dir so the inner loop can never silently read
+    the full cohort — that validation leak is exactly the bug this guards against.
+    """
+    path = Path(path)
+    marker = path / SPLIT_MARKER_FILENAME
+    if marker.exists():
+        got = marker.read_text().strip()
+        if got != EXPLORE_SPLIT:
+            raise SystemExit(
+                f"Refusing to run on the '{got}' split — the inner loop must read "
+                f"the '{EXPLORE_SPLIT}' split only: {path}"
+            )
+        return path
+
+    candidate = path / EXPLORE_SPLIT
+    if (candidate / SPLIT_MARKER_FILENAME).exists():
+        return candidate
+
+    raise SystemExit(
+        f"No '{EXPLORE_SPLIT}/' split subdir found under {path}. This ETL output "
+        f"predates the data-layer holdout split. Re-run the ETL (nextflow/etl.nf) "
+        f"so the validation cohort is physically absent from the inner loop."
+    )
 
 
 def run_workflow(
@@ -54,7 +85,8 @@ def run_workflow(
 
     if data_base is None:
         data_base = Path.home() / "data" / "geryon_data"
-    parquet_dir = data_dir if data_dir is not None else get_latest_etl_output(data_base)
+    etl_dir = data_dir if data_dir is not None else get_latest_etl_output(data_base)
+    parquet_dir = resolve_explore_dir(etl_dir)
 
     print(f"Using ETL data from: {parquet_dir}")
     print(f"Output directory: {run_dir}")

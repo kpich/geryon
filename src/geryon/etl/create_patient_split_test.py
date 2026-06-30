@@ -18,7 +18,7 @@ def test_create_split_writes_correct_columns(tmp_path: Path):
 
     df = pd.read_parquet(output_path)
     assert set(df.columns) == {"PATIENT_ID", "split"}
-    assert set(df["split"].unique()) <= {"train", "validation"}
+    assert set(df["split"].unique()) <= {"explore", "validation"}
 
 
 def test_create_split_roughly_80_20(tmp_path: Path):
@@ -34,7 +34,7 @@ def test_create_split_roughly_80_20(tmp_path: Path):
     df = pd.read_parquet(output_path)
     counts = df["split"].value_counts()
     assert counts["validation"] == round(n * 0.2)
-    assert counts["train"] == n - round(n * 0.2)
+    assert counts["explore"] == n - round(n * 0.2)
 
 
 def test_create_split_is_stable_across_seeds(tmp_path: Path):
