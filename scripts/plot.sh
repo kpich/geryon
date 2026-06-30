@@ -52,21 +52,6 @@ fi
 # Ensure output directory exists
 mkdir -p "${PROJECT_ROOT}/plots"
 
-# Auto-detect latest ETL parquet directory for pval comparison
-PARQUET_BASE="${HOME}/data/geryon_data"
-PARQUET_ARGS=""
-if [ -d "${PARQUET_BASE}" ]; then
-    LATEST_PARQUET=$(ls -d "${PARQUET_BASE}"/20*/  2>/dev/null | sort | tail -1)
-    if [ -n "${LATEST_PARQUET}" ]; then
-        log_info "Parquet dir (auto-detected): ${LATEST_PARQUET}"
-        PARQUET_ARGS="--parquet_dir ${LATEST_PARQUET}"
-    else
-        log_warn "No parquet dir found in ${PARQUET_BASE}; skipping pval comparison"
-    fi
-else
-    log_warn "${PARQUET_BASE} not found; skipping pval comparison"
-fi
-
 # Navigate to Nextflow directory and run pipeline
 log_info "Starting plot pipeline..."
 log_info "Project root: ${PROJECT_ROOT}"
@@ -74,7 +59,6 @@ log_info "Nextflow dir: ${NEXTFLOW_DIR}"
 
 cd "${NEXTFLOW_DIR}" && nextflow run plot.nf \
     -ansi-log true \
-    ${PARQUET_ARGS} \
     "$@"
 
 EXIT_CODE=$?

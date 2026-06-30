@@ -9,7 +9,7 @@ install:
 
 .PHONY: test
 test:
-	uv run pytest src/ tests/
+	uv run pytest src/
 
 .PHONY: clean
 clean:
@@ -31,7 +31,7 @@ mypy:
 
 .PHONY: format
 format:
-	uv run --extra dev ruff format src/ tests/
+	uv run --extra dev ruff format src/
 
 .PHONY: etl
 etl:
@@ -49,39 +49,15 @@ data:
 viewer:
 	uv run --extra viewer python -m geryon.cli.viewer
 
-.PHONY: viewer-legacy
-viewer-legacy:
-	uv run python -m geryon.legacy.cli.annotate
-
-.PHONY: report
-report:
-	uv run python -m geryon.legacy.cli.report
-
-.PHONY: label-best
-label-best:
-	uv run python -m geryon.legacy.cli.label_best --aws-profile saml
-
 # Override per invocation, e.g. `make run ITERS=2 PROPOSALS=1` for a quick pass.
 ITERS ?= 10
 PROPOSALS ?= 3
 
-.PHONY: run
-run:
-	./scripts/run.sh \
-		--provider aws_bedrock \
-		--model us.anthropic.claude-opus-4-6-v1 \
-		--aws-profile saml \
-		--aws-region us-east-2 \
-		--max-iterations $(ITERS) \
-		--num-proposals $(PROPOSALS) \
-		--critic-cycles 1 2>&1 | tee out
-		#--model us.anthropic.claude-opus-4-5-20251101-v1:0
-
 # Code-first workflow (LLM writes Python run in the Docker sandbox).
 # Requires the sandbox image: run `make sandbox-build` once first.
-# Quick first run: `make code-run ITERS=1 PROPOSALS=1`
-.PHONY: code-run
-code-run:
+# Quick first run: `make run ITERS=1 PROPOSALS=1`
+.PHONY: run
+run:
 	uv run python -u -m geryon.codeflow.runner \
 		--provider aws_bedrock \
 		--model us.anthropic.claude-opus-4-6-v1 \
