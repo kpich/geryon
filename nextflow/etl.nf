@@ -61,6 +61,27 @@ process createPatientSplit {
     """
 }
 
+process splitByPatient {
+    publishDir "${params.output_base}/${workflow.start.format('yyyy-MM-dd')}",
+               mode: 'copy', overwrite: false
+
+    input:
+    path parquet_files
+    path split_table
+
+    output:
+    path "explore"
+    path "validation"
+
+    script:
+    """
+    python -m geryon.etl.split_by_patient \
+        --input . \
+        --output . \
+        --split-table ${split_table}
+    """
+}
+
 process publishResults {
     publishDir "${params.output_base}/${workflow.start.format('yyyy-MM-dd')}",
                mode: 'copy',
@@ -91,11 +112,16 @@ workflow {
     // Extract and transform
     parquet_files = extractTSV(tsv_files)
 
-    // Generate train/validation patient split
+    // Generate exploration/validation patient split
     clinical_parquet = parquet_files
         .filter { parquet, profile -> parquet.name == 'data_clinical_patient.parquet' }
         .map { parquet, profile -> parquet }
-    createPatientSplit(clinical_parquet)
+    split_table = createPatientSplit(clinical_parquet)
+
+    // Partition every table into explore/ and validation/ subdirs so the holdout
+    // is enforced at the data layer (the inner-loop session reads explore/ only).
+    all_parquet = parquet_files.map { parquet, profile -> parquet }.collect()
+    splitByPatient(all_parquet, split_table)
 
     // Publish to timestamped directory
     publishResults(parquet_files)
