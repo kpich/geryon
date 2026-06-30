@@ -46,6 +46,7 @@ annotate = [
     "flask>=2.3",
 ]
 viewer = [
+    "flask>=2.3",
     "harlequin[duckdb]>=1.0",
 ]
 
@@ -54,7 +55,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mbird_data = ["py.typed"]
-geryon = ["legacy/cli/templates/*.html"]
+geryon = ["legacy/cli/templates/*.html", "cli/templates/*.html"]
 
 [tool.pytest.ini_options]
 addopts = "--ignore=src/geryon/legacy"

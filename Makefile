@@ -47,6 +47,10 @@ data:
 
 .PHONY: viewer
 viewer:
+	uv run --extra viewer python -m geryon.cli.viewer
+
+.PHONY: viewer-legacy
+viewer-legacy:
 	uv run python -m geryon.legacy.cli.annotate
 
 .PHONY: report
