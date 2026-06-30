@@ -42,9 +42,6 @@ test = [
     "flask>=2.3",
     "pytest",
 ]
-annotate = [
-    "flask>=2.3",
-]
 viewer = [
     "flask>=2.3",
     "harlequin[duckdb]>=1.0",
@@ -55,10 +52,9 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mbird_data = ["py.typed"]
-geryon = ["legacy/cli/templates/*.html", "cli/templates/*.html"]
+geryon = ["cli/templates/*.html"]
 
 [tool.pytest.ini_options]
-addopts = "--ignore=src/geryon/legacy"
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:lifelines",
@@ -67,15 +63,8 @@ filterwarnings = [
     "ignore:Core Pydantic V1 functionality.*:UserWarning",
 ]
 
-# Legacy spec-based stack is parked under src/geryon/legacy/ as a fallback until the
-# code-first path is proven; it is excluded from type-checking and linting so it no
-# longer gates the build.
-[tool.mypy]
-exclude = ["src/geryon/legacy/"]
-
 [tool.ruff]
 line-length = 88
-extend-exclude = ["src/geryon/legacy"]
 
 [tool.ruff.lint]
 select = [
