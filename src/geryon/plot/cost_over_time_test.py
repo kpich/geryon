@@ -50,7 +50,9 @@ def test_cache_fractions_uses_latest_session_only():
             "cache_creation_tokens": 40,
         },
     ]
-    f_read, f_write = _cache_fractions(events)
+    fractions = _cache_fractions(events)
+    assert fractions is not None
+    f_read, f_write = fractions
     assert abs(f_read - 0.95) < 1e-9
     assert abs(f_write - 0.04) < 1e-9
 

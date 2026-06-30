@@ -47,15 +47,15 @@ data:
 
 .PHONY: viewer
 viewer:
-	uv run python -m geryon.cli.annotate
+	uv run python -m geryon.legacy.cli.annotate
 
 .PHONY: report
 report:
-	uv run python -m geryon.cli.report
+	uv run python -m geryon.legacy.cli.report
 
 .PHONY: label-best
 label-best:
-	uv run python -m geryon.cli.label_best --aws-profile saml
+	uv run python -m geryon.legacy.cli.label_best --aws-profile saml
 
 # Override per invocation, e.g. `make run ITERS=2 PROPOSALS=1` for a quick pass.
 ITERS ?= 10
