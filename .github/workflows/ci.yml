@@ -28,13 +28,29 @@ jobs:
         run: uv sync --all-extras --frozen
 
       - name: Ruff lint
+        if: ${{ !cancelled() }}
         run: uv run --no-sync ruff check src/
 
       - name: Ruff format
+        if: ${{ !cancelled() }}
         run: uv run --no-sync ruff format --check src/
 
+      # Persist mypy's incremental cache between runs (a fresh runner has none, so
+      # mypy is ~25x slower cold). Stays out of git; lives in GitHub's cache store.
+      # New entry per commit; restore-keys falls back to the newest cache for this
+      # lockfile.
+      - name: mypy cache
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ hashFiles('uv.lock') }}-${{ github.sha }}
+          restore-keys: |
+            mypy-${{ hashFiles('uv.lock') }}-
+
       - name: mypy
+        if: ${{ !cancelled() }}
         run: uv run --no-sync mypy --check-untyped-defs src/geryon
 
       - name: Tests
+        if: ${{ !cancelled() }}
         run: uv run --no-sync pytest src/
