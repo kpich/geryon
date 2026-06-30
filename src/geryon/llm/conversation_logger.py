@@ -7,9 +7,6 @@ import json
 from pathlib import Path
 import re
 
-from geryon.lang.results import ComparisonResult
-from geryon.llm.generator import HypothesisProposal
-
 
 class SessionTracer:
     """Writes a compact trace.jsonl event log per run directory."""
@@ -47,27 +44,39 @@ class SessionTracer:
         extra = self._extract_tool_metadata(tool_name, args, result)
         self._write(event="tool_call", tool=tool_name, args=args, **extra)
 
-    def log_proposal(self, idx: int, proposal: HypothesisProposal) -> None:
-        spec = proposal.geryon_spec
-        filters_a = [f.model_dump() for f in spec.query.cohort_a.filters]
-        filters_b = [f.model_dump() for f in spec.query.cohort_b.filters]
+    def log_proposal(
+        self,
+        idx: int,
+        cohort_a: str,
+        cohort_b: str,
+        filters_a: list[dict],
+        filters_b: list[dict],
+    ) -> None:
         self._write(
             event="proposal",
             idx=idx,
-            cohort_a=proposal.cohort_a_description,
-            cohort_b=proposal.cohort_b_description,
+            cohort_a=cohort_a,
+            cohort_b=cohort_b,
             filters_a=filters_a,
             filters_b=filters_b,
         )
 
-    def log_execution(self, idx: int, result: ComparisonResult, time_s: float) -> None:
+    def log_execution(
+        self,
+        idx: int,
+        success: bool,
+        error: str | None,
+        cohort_a_size: int,
+        cohort_b_size: int,
+        time_s: float,
+    ) -> None:
         self._write(
             event="execution",
             idx=idx,
-            success=result.success,
-            error=result.error_message,
-            cohort_a_size=result.cohort_a_size,
-            cohort_b_size=result.cohort_b_size,
+            success=success,
+            error=error,
+            cohort_a_size=cohort_a_size,
+            cohort_b_size=cohort_b_size,
             time_s=round(time_s, 3),
         )
 

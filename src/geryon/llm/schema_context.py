@@ -81,7 +81,7 @@ def write_schema_context(parquet_dir: Path, db: Database) -> None:
 
 
 if __name__ == "__main__":
-    from geryon.workflow.runner import get_latest_etl_output
+    from geryon.codeflow.runner import get_latest_etl_output
 
     parser = argparse.ArgumentParser(
         description="Load or generate schema context for confounder controls"

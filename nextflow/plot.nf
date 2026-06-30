@@ -14,7 +14,7 @@ process ratingsOverTime {
 
     script:
     """
-    uv run python -m geryon.plot.ratings_over_time \
+    uv run python -m geryon.legacy.plot.ratings_over_time \
         --data-dir ${params.data_dir} \
         --output ratings_over_time.pdf
     """
@@ -29,7 +29,7 @@ process ratingsByDepth {
 
     script:
     """
-    uv run python -m geryon.plot.ratings_by_depth \
+    uv run python -m geryon.legacy.plot.ratings_by_depth \
         --data-dir ${params.data_dir} \
         --output ratings_by_depth.pdf
     """
@@ -44,7 +44,7 @@ process scoreByDepth {
 
     script:
     """
-    uv run python -m geryon.plot.score_by_depth \
+    uv run python -m geryon.legacy.plot.score_by_depth \
         --data-dir ${params.data_dir} \
         --output score_by_depth.pdf
     """
@@ -59,7 +59,7 @@ process trustByDepth {
 
     script:
     """
-    uv run python -m geryon.plot.trust_by_depth \
+    uv run python -m geryon.legacy.plot.trust_by_depth \
         --data-dir ${params.data_dir} \
         --output trust_by_depth.pdf
     """
@@ -74,7 +74,7 @@ process scoreOverTime {
 
     script:
     """
-    uv run python -m geryon.plot.score_over_time \
+    uv run python -m geryon.legacy.plot.score_over_time \
         --data-dir ${params.data_dir} \
         --output score_over_time.pdf
     """
@@ -103,7 +103,7 @@ process executeAgainstVal {
 
     script:
     """
-    uv run python -m geryon.eval.batch \
+    uv run python -m geryon.legacy.eval.batch \
         --data-dir ${params.data_dir} \
         --parquet-dir ${params.parquet_dir} \
         --output val_results.csv
@@ -122,7 +122,7 @@ process pvalComparison {
 
     script:
     """
-    uv run python -m geryon.plot.pval_comparison \
+    uv run python -m geryon.legacy.plot.pval_comparison \
         --input ${val_results} \
         --output pval_comparison.pdf
     """
@@ -140,7 +140,7 @@ process qvalComparison {
 
     script:
     """
-    uv run python -m geryon.plot.qval_comparison \
+    uv run python -m geryon.legacy.plot.qval_comparison \
         --input ${val_results} \
         --output qval_comparison.pdf
     """
@@ -158,7 +158,7 @@ process topValHypotheses {
 
     script:
     """
-    uv run python -m geryon.plot.top_val_hyps \
+    uv run python -m geryon.legacy.plot.top_val_hyps \
         --input ${val_results} \
         --data-dir ${params.data_dir} \
         --output top_val_hypotheses.txt
@@ -177,7 +177,7 @@ process qvalByTrust {
 
     script:
     """
-    uv run python -m geryon.plot.qval_by_trust \
+    uv run python -m geryon.legacy.plot.qval_by_trust \
         --input ${val_results} \
         --data-dir ${params.data_dir} \
         --output qval_by_trust.pdf
@@ -196,7 +196,7 @@ process synopticTimeline {
 
     script:
     """
-    uv run python -m geryon.plot.synoptic_timeline \
+    uv run python -m geryon.legacy.plot.synoptic_timeline \
         --data-dir ${params.data_dir} \
         --input ${val_results} \
         --output synoptic_timeline.pdf

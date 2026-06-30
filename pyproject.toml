@@ -54,9 +54,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mbird_data = ["py.typed"]
-geryon = ["cli/templates/*.html"]
+geryon = ["legacy/cli/templates/*.html"]
 
 [tool.pytest.ini_options]
+addopts = "--ignore=src/geryon/legacy"
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:lifelines",
@@ -65,8 +66,15 @@ filterwarnings = [
     "ignore:Core Pydantic V1 functionality.*:UserWarning",
 ]
 
+# Legacy spec-based stack is parked under src/geryon/legacy/ as a fallback until the
+# code-first path is proven; it is excluded from type-checking and linting so it no
+# longer gates the build.
+[tool.mypy]
+exclude = ["src/geryon/legacy/"]
+
 [tool.ruff]
 line-length = 88
+extend-exclude = ["src/geryon/legacy"]
 
 [tool.ruff.lint]
 select = [
@@ -81,7 +89,6 @@ select = [
 ignore = ["SIM108"]  # Allow if-else over ternary for readability
 
 [tool.ruff.lint.per-file-ignores]
-"src/geryon/llm/prompts.py" = ["E501"]  # Long lines in prompt string literals
 "src/geryon/codeflow/prompts.py" = ["E501"]  # Long lines in prompt string literals
 
 [tool.ruff.lint.isort]
