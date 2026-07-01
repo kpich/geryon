@@ -29,7 +29,11 @@ from geryon.codeflow.context import (
     load_prior_hypotheses,
 )
 from geryon.codeflow.critic import HypothesisCritic
-from geryon.codeflow.models import MAX_STORED_OUTPUT_CHARS, CodeHypothesis
+from geryon.codeflow.models import (
+    MAX_STORED_OUTPUT_CHARS,
+    CodeCritique,
+    CodeHypothesis,
+)
 from geryon.codeflow.narrate import CodeNarrator
 from geryon.codeflow.prompts import GENERATOR_SYSTEM_PROMPT
 from geryon.codeflow.store import CodeHypothesisStore
@@ -51,6 +55,25 @@ __all__ = ["CodeWorkflow", "format_run"]
 
 # Max model->tools round-trips per iteration (matches legacy budget).
 _MAX_REACT_CYCLES = 70
+
+
+def _format_critique(critique: CodeCritique | None) -> str:
+    """Render a critic assessment for get_script; empty string if unreviewed."""
+    if critique is None:
+        return ""
+    lines = [
+        f"critique: trustworthiness={critique.trustworthiness}/3, "
+        f"confound_risk={critique.confound_risk}/3, novelty={critique.novelty}/3"
+    ]
+    if critique.holds_up is not None:
+        lines.append(f"  held up under control test: {critique.holds_up}")
+    if critique.suggested_fix:
+        lines.append(f"  suggested fix: {critique.suggested_fix}")
+    if critique.notes:
+        lines.append(f"  notes: {critique.notes}")
+    if critique.tests_run:
+        lines.append(f"  tests run: {'; '.join(critique.tests_run)}")
+    return "\n".join(lines) + "\n\n"
 
 
 class AgentState(TypedDict):
@@ -103,10 +126,12 @@ class CodeWorkflow:
     def _make_get_script_tool(self, submitted: list[CodeHypothesis]):
         @tool
         def get_script(hypothesis_id: str) -> str:
-            """Fetch the full code and result of a previously submitted hypothesis.
+            """Fetch the full code, result, and critique of a submitted hypothesis.
 
-            Use this to remix/refine a prior hypothesis. Pass the 8-char id shown in
-            the previously-tested list (or a full UUID).
+            Use this to remix/refine a prior hypothesis: you get its exact code, its
+            reported result, and — if it was reviewed — the critic's assessment
+            (confounds found, suggested fix). Address that critique in your refinement.
+            Pass the 8-char id shown in the previously-tested list (or a full UUID).
             """
             hyp = self._lookup(hypothesis_id, submitted)
             if hyp is None:
@@ -120,6 +145,7 @@ class CodeWorkflow:
                 f"# {hyp.title} [{hyp.short_id()}]\n"
                 f"{hyp.description}\n\n"
                 f"result: {result_block}\n\n"
+                f"{_format_critique(hyp.critique)}"
                 f"```python\n{hyp.code}\n```"
             )
 

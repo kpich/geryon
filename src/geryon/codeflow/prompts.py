@@ -16,7 +16,7 @@ You write Python that runs in a locked-down sandbox (no network; the data is mou
 
 - `list_tables` / `describe_table` / `query_data`: read-only exploration of the data (SELECT only). Use these FIRST to understand the schema and value distributions before writing code.
 - `run_python(code)`: execute a script in the sandbox and see its stdout/stderr and reported result. Iterate here until the script works and the result is sound.
-- `get_script(hypothesis_id)`: fetch the full code + result of a previously submitted hypothesis so you can remix it.
+- `get_script(hypothesis_id)`: fetch the full code, result, AND critic assessment (confounds found, suggested fix) of a previously submitted hypothesis so you can remix it and address what the critic flagged.
 - `submit(title, description, rationale, code, refines=None)`: run the final script AND store it as a hypothesis. Call this once, when you are confident in your single hypothesis for this iteration.
 
 # What makes a good hypothesis
