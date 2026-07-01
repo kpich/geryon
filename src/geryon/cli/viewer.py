@@ -71,7 +71,10 @@ def create_app(output_dir: Path) -> Flask:
 
     @app.get("/api/hypotheses")
     def api_hypotheses():
-        return jsonify(_load_all(output_dir))
+        # Hide crashed/timed-out runs (success=False): a failed submit that was
+        # fixed and resubmitted moments later is noise. They remain on disk and
+        # are still counted in /api/stats.
+        return jsonify([h for h in _load_all(output_dir) if h["success"]])
 
     @app.get("/api/stats")
     def api_stats():
