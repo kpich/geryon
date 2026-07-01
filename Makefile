@@ -49,22 +49,17 @@ data:
 viewer:
 	uv run --extra viewer python -m geryon.cli.viewer
 
-# Override per invocation, e.g. `make run ITERS=2 PROPOSALS=1` for a quick pass.
+# Override per invocation, e.g. `make run ITERS=2` for a quick pass.
 ITERS ?= 10
-PROPOSALS ?= 3
 
 # Code-first workflow (LLM writes Python run in the Docker sandbox).
 # Requires the sandbox image: run `make sandbox-build` once first.
-# Quick first run: `make run ITERS=1 PROPOSALS=1`
+# Quick first run: `make run ITERS=1`
 .PHONY: run
 run:
 	uv run python -u -m geryon.codeflow.runner \
-		--provider aws_bedrock \
-		--model us.anthropic.claude-opus-4-6-v1 \
 		--aws-profile saml \
-		--aws-region us-east-2 \
 		--max-iterations $(ITERS) \
-		--num-proposals $(PROPOSALS) \
 		--critic-cycles 1 2>&1 | tee out
 
 GERYON_DATA_DIR := geryon_data

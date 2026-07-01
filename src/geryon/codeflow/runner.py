@@ -68,7 +68,6 @@ def run_workflow(
     api_key: str | None = None,
     aws_region: str | None = None,
     aws_profile: str | None = None,
-    num_proposals: int | None = None,
     max_iterations: int | None = None,
     critic_cycles: int | None = None,
     sandbox_timeout: int | None = None,
@@ -99,7 +98,6 @@ def run_workflow(
         "api_key": api_key,
         "aws_region": aws_region,
         "aws_profile": aws_profile,
-        "num_proposals_per_iteration": num_proposals,
         "max_iterations": max_iterations,
         "critic_cycles": critic_cycles,
         "sandbox_timeout_seconds": sandbox_timeout,
@@ -150,7 +148,6 @@ def main() -> None:
     parser.add_argument("--api-key", default=None)
     parser.add_argument("--aws-region", default=None)
     parser.add_argument("--aws-profile", default=None)
-    parser.add_argument("--num-proposals", type=int, default=None)
     parser.add_argument("--max-iterations", type=int, default=None)
     parser.add_argument(
         "--critic-cycles",
@@ -174,7 +171,6 @@ def main() -> None:
         api_key=args.api_key,
         aws_region=args.aws_region,
         aws_profile=args.aws_profile,
-        num_proposals=args.num_proposals,
         max_iterations=args.max_iterations,
         critic_cycles=args.critic_cycles,
         sandbox_timeout=args.sandbox_timeout,

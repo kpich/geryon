@@ -34,16 +34,13 @@ class SessionConfig(BaseModel):
 
     # AWS-specific configuration (for aws_bedrock provider)
     aws_region: str | None = Field(
-        default="us-east-1", description="AWS region for Bedrock"
+        default="us-east-2", description="AWS region for Bedrock"
     )
     aws_profile: str | None = Field(
         default=None, description="AWS credentials profile name"
     )
 
     # Generation parameters
-    num_proposals_per_iteration: int = Field(
-        default=5, description="Hypotheses per iteration"
-    )
     max_iterations: int = Field(default=10, description="Maximum iterations to run")
     sandbox_timeout_seconds: int = Field(
         default=180,

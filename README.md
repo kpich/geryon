@@ -28,7 +28,7 @@ Parquet data lives in `~/data/geryon_data/`; the latest subdir is auto-detected.
 make run            # aws_bedrock + default model; stdout tee'd to ./out
 ```
 
-Override settings inline, e.g. `make run ITERS=1 PROPOSALS=1`. Providers:
+Override settings inline, e.g. `make run ITERS=1`. Providers:
 `aws_bedrock` (default), `anthropic`, `openai` — see the `run` target in the Makefile.
 Sessions are written to `geryon_data/code_sessions/`.
 
@@ -56,7 +56,7 @@ here it ran landmark analyses and concluded the effect was an artifact.
 ---
 
 > ### SMARCA4 mutation as a predictive biomarker for immunotherapy benefit in NSCLC (TMB-adjusted)
-> `iteration 1` · `aws_bedrock/claude-opus-4-6` · ran in 1.5s
+> `iteration 1` · `aws_bedrock/claude-opus-4-8` · ran in 1.5s
 >
 > **Description.** In NSCLC, SMARCA4 mutations are prognostically adverse without
 > immunotherapy (HR=1.36) but neutral under IO (HR=0.95). The SMARCA4×IO interaction

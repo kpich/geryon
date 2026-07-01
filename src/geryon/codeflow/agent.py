@@ -218,12 +218,7 @@ class CodeWorkflow:
     # ------------------------------------------------------------------
     # Loop
     # ------------------------------------------------------------------
-    def run_iteration(
-        self, n_proposals: int | None = None, iteration: int | None = None
-    ) -> list[CodeHypothesis]:
-        if n_proposals is None:
-            n_proposals = self.config.num_proposals_per_iteration
-
+    def run_iteration(self, iteration: int | None = None) -> list[CodeHypothesis]:
         prior = self._load_prior() + self.store.load()
         prev_ctx = format_previous_hypotheses(prior)
 
@@ -234,7 +229,7 @@ class CodeWorkflow:
                 n_context=len(prev_ctx.ids),
             )
 
-        print(f"Generating {n_proposals} hypothesis(es)...")
+        print("Generating a hypothesis...")
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
 
         schema_ctx = load_schema_context(self.config.parquet_dir, self.db)
@@ -243,8 +238,8 @@ class CodeWorkflow:
             system_content = system_content + "\n\n" + schema_ctx
         user_text = (
             f"{prev_ctx.text}\n\n"
-            f"Generate {n_proposals} hypothesis(es). Explore first, iterate on your "
-            f"script with run_python, then submit."
+            "Generate a hypothesis. Explore first, iterate on your "
+            "script with run_python, then submit."
         )
 
         caching = supports_cache_control(self.config.provider_type)
@@ -338,7 +333,6 @@ class CodeWorkflow:
         all_hypotheses: list[CodeHypothesis] = []
         print(f"Starting code-first session {self.session.session_id}")
         print(f"Max iterations: {self.config.max_iterations}")
-        print(f"Proposals per iteration: {self.config.num_proposals_per_iteration}")
 
         for i in range(self.config.max_iterations):
             print(f"=== Iteration {i + 1}/{self.config.max_iterations} ===")
