@@ -69,10 +69,15 @@ GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git
 schema-context:  ## Pre-generate schema_context.txt from confounder_config.json
 	uv run python -m geryon.llm.schema_context --write
 
+# Commit message for `make backup`. Defaults to a timestamp; override for a
+# meaningful checkpoint, e.g.:
+#   make backup BACKUP_MSG="wholesale swap: drop legacy sessions/, code_sessions -> sessions"
+BACKUP_MSG ?= backup $(shell date +%Y-%m-%d_%H:%M:%S)
+
 .PHONY: backup
 backup:
 	cd $(GERYON_DATA_DIR) && git add -A && \
-	git diff --cached --quiet || git commit -m "backup $$(date +%Y-%m-%d_%H:%M:%S)" && \
+	git diff --cached --quiet || git commit -m "$(BACKUP_MSG)" && \
 	git push
 
 .PHONY: restore
