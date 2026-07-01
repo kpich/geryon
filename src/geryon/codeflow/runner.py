@@ -78,7 +78,7 @@ def run_workflow(
     today = datetime.now().strftime("%Y-%m-%d")
 
     if output_dir is None:
-        output_dir = Path.cwd() / "geryon_data" / "code_sessions"
+        output_dir = Path.cwd() / "geryon_data" / "sessions"
     run_dir = output_dir / today / session_id
     run_dir.mkdir(parents=True, exist_ok=True)
 

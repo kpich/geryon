@@ -1,7 +1,7 @@
 """Browser-based viewer for code-first hypotheses.
 
 Read-only Flask app that surfaces ``CodeHypothesis`` records written by the
-codeflow runner under ``geryon_data/code_sessions/``. The legacy annotator
+codeflow runner under ``geryon_data/sessions/``. The legacy annotator
 (``geryon.legacy.cli.annotate``) was bound to the old spec model; this is its
 replacement for the overhaul.
 
@@ -88,9 +88,8 @@ def main():
     parser = argparse.ArgumentParser(description="Code-first hypothesis viewer")
     parser.add_argument(
         "--output-dir",
-        default="geryon_data/code_sessions",
-        help="Directory of code session JSONL files "
-        "(default: geryon_data/code_sessions/)",
+        default="geryon_data/sessions",
+        help="Directory of code session JSONL files (default: geryon_data/sessions/)",
     )
     parser.add_argument(
         "--port", type=int, default=8765, help="Port to serve on (default: 8765)"

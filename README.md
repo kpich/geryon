@@ -30,7 +30,7 @@ make run            # aws_bedrock + default model; stdout tee'd to ./out
 
 Override settings inline, e.g. `make run ITERS=1`. Providers:
 `aws_bedrock` (default), `anthropic`, `openai` — see the `run` target in the Makefile.
-Sessions are written to `geryon_data/code_sessions/`.
+Sessions are written to `geryon_data/sessions/`.
 
 ```bash
 make viewer         # browse hypotheses (http://localhost:8765)
