@@ -17,7 +17,7 @@ class BedrockProvider:
         profile: str | None = None,
     ):
         self.model = model
-        self.region = region or "us-east-1"
+        self.region = region
 
         session = boto3.Session(
             profile_name=profile,
