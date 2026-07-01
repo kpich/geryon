@@ -173,9 +173,10 @@ def build_chat_model(config: SessionConfig):
             kwargs["openai_api_key"] = config.api_key
         return ChatOpenAI(**kwargs)  # type: ignore[arg-type]
     elif config.provider_type == "anthropic":
+        # Claude 4.x (Opus 4.7/4.8, Fable 5) removed temperature/top_p/top_k — sending
+        # them 400s. Steer via prompting/effort instead.
         kwargs = {
             "model_name": config.model,
-            "temperature": 0.8,
             "max_tokens": 16384,
             "timeout": 300.0,
             "stop": None,
@@ -189,7 +190,9 @@ def build_chat_model(config: SessionConfig):
         )
         kwargs = {
             "model_id": config.model,
-            "model_kwargs": {"temperature": 0.8, "max_tokens": 16384},
+            # Claude 4.x on Bedrock rejects temperature (400: "deprecated for this
+            # model"); omit sampling params and steer via prompting/effort.
+            "model_kwargs": {"max_tokens": 16384},
             "config": boto_config,
         }
         if config.aws_region:
