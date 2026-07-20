@@ -46,7 +46,6 @@ from geryon.llm.caching import (
 )
 from geryon.llm.conversation_logger import SessionTracer
 from geryon.llm.provider import create_provider
-from geryon.llm.schema_context import load_schema_context
 from geryon.sandbox import SandboxLimits, ScriptRun, ensure_sandbox
 from geryon.workflow.session import Session, SessionConfig
 
@@ -258,10 +257,7 @@ class CodeWorkflow:
         print("Generating a hypothesis...")
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
 
-        schema_ctx = load_schema_context(self.config.parquet_dir, self.db)
         system_content = GENERATOR_SYSTEM_PROMPT
-        if schema_ctx:
-            system_content = system_content + "\n\n" + schema_ctx
         user_text = (
             f"{prev_ctx.text}\n\n"
             "Generate a hypothesis. Explore first, iterate on your "
