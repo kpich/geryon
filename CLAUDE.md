@@ -75,8 +75,20 @@ NEVER run git commands that change repository state, and never ask to. The human
 
 Do not do any of this of your own volition, and do not ask whether you should — just leave git alone entirely. Read-only inspection (`git status`, `git log`, `git diff`, `git show`) is fine. If a task seems to need a commit, branch, or other git action, stop and let the human do it.
 
-## Safety — Never Delete Files Without Asking
+## Safety — Don't Delete Miscellaneous Files
 
-NEVER delete or remove files without first explicitly asking the human and getting a clear yes. This includes `rm`, `rm -rf`, `mv` that overwrites or discards a file, `git clean`, truncating/emptying a file, or any command whose effect is to remove or destroy a file's contents.
+Removing code as a legitimate part of the task at hand is fine — delete dead modules,
+drop obsolete source files, and clean up in an approved refactor without a confirmation
+round-trip. This rule is about *miscellaneous* files, not task-scoped code changes.
 
-A user saying they don't need a file, don't want to keep it, or that it's temporary is NOT permission to delete it — that is context, not an instruction to act. Ask first ("want me to delete X?") and wait for an explicit yes before removing anything. When in doubt, leave the file in place and let the human delete it themselves.
+NEVER delete or remove files that are outside the scope of what you're working on without
+first explicitly asking the human and getting a clear yes. In particular, protect anything
+you didn't create or touch as part of the task, and anything that looks valuable —
+data, results, outputs, configs, someone else's work. This covers `rm`, `rm -rf`, `mv`
+that overwrites or discards such a file, `git clean`, truncating/emptying a file, or any
+command whose effect is to remove or destroy a file's contents.
+
+A user saying they don't need a file, don't want to keep it, or that it's temporary is NOT
+permission to delete it — that is context, not an instruction to act. When it's an
+out-of-scope or valuable file, ask first ("want me to delete X?") and wait for an explicit
+yes. When in doubt, leave the file in place and let the human delete it themselves.
