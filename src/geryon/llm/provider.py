@@ -8,7 +8,7 @@ from geryon.llm.providers.openai import OpenAIProvider
 
 ProviderType = Literal["openai", "anthropic", "aws_bedrock"]
 
-DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-5"
+DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-4-8"
 
 
 def create_provider(
