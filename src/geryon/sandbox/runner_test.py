@@ -41,6 +41,32 @@ def test_run_script_errors_when_image_missing(monkeypatch, tmp_path: Path):
         run_script("print(1)", tmp_path)
 
 
+@pytest.mark.parametrize(
+    "image,expected",
+    [
+        ("geryon-sandbox", "geryon-sandbox:latest"),
+        ("geryon-sandbox:v1", "geryon-sandbox:v1"),
+        ("localhost:5000/geryon-sandbox", "localhost:5000/geryon-sandbox:latest"),
+        ("registry.io/team/img:dev", "registry.io/team/img:dev"),
+        ("geryon-sandbox@sha256:abc", "geryon-sandbox@sha256:abc"),
+    ],
+)
+def test_with_default_tag(image: str, expected: str):
+    assert runner._with_default_tag(image) == expected
+
+
+def test_image_exists_inspects_tagged_reference(monkeypatch):
+    seen: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        seen.append(cmd)
+        return type("Proc", (), {"returncode": 0})()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    assert runner.image_exists("geryon-sandbox")
+    assert seen == [["docker", "image", "inspect", "geryon-sandbox:latest"]]
+
+
 def test_read_result_missing_file(tmp_path: Path):
     result, error = runner._read_result(tmp_path / "result.json")
     assert result is None

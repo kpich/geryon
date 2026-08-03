@@ -47,10 +47,23 @@ def docker_available() -> bool:
     return proc.returncode == 0
 
 
+def _with_default_tag(image: str) -> str:
+    """Add an explicit ``:latest`` when the reference carries no tag or digest.
+
+    ``docker run`` implies ``:latest`` for a bare name, but under Docker's
+    containerd image store ``docker image inspect geryon-sandbox`` reports
+    "No such image" while ``geryon-sandbox:latest`` resolves fine.
+    """
+    if "@" in image:
+        return image
+    last_segment = image.rsplit("/", 1)[-1]
+    return image if ":" in last_segment else f"{image}:latest"
+
+
 def image_exists(image: str = DEFAULT_IMAGE) -> bool:
     """True if the sandbox image has been built locally."""
     proc = subprocess.run(
-        ["docker", "image", "inspect", image],
+        ["docker", "image", "inspect", _with_default_tag(image)],
         capture_output=True,
         text=True,
     )
