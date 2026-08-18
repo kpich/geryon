@@ -33,9 +33,14 @@ mypy:
 format:
 	uv run --extra dev ruff format src/
 
+# Extra nextflow args. Name a data version and point at its own source tree, e.g.:
+#   make etl ARGS="--version medonc-pfs-2026-08 --data_root ~/data/msk-impact/msk_solid_heme_medonc"
+# Without ARGS the version defaults to today's date, as it always has.
+ARGS ?=
+
 .PHONY: etl
 etl:
-	./scripts/etl.sh
+	./scripts/etl.sh $(ARGS)
 
 .PHONY: plot
 plot:
@@ -52,6 +57,11 @@ viewer:
 # Override per invocation, e.g. `make run ITERS=2` for a quick pass.
 ITERS ?= 10
 
+# Line of investigation. `main` is the open-ended chain; a named chain is defined by
+# chains/<name>.md (focus prose + the data version it runs on) and sees only its own
+# prior hypotheses. E.g. `make run CHAIN=medonc-pfs ITERS=5`.
+CHAIN ?= main
+
 # Code-first workflow (LLM writes Python run in the Docker sandbox).
 # Requires the sandbox image: run `make sandbox-build` once first.
 # Quick first run: `make run ITERS=1`
@@ -60,6 +70,7 @@ run:
 	uv run python -u -m geryon.codeflow.runner \
 		--aws-profile saml \
 		--max-iterations $(ITERS) \
+		--chain $(CHAIN) \
 		--critic-cycles 1 2>&1 | tee out
 
 GERYON_DATA_DIR := geryon_data

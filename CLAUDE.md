@@ -40,6 +40,35 @@ and `CodeWorkflow.__init__` refuses any dir not marked `explore`. Note: CNA is
 sample-keyed even though its column is *named* `PATIENT_ID` (it holds sample
 barcodes) — see `SAMPLE_KEY_COLUMNS`. Code uses `explore`; prose says "exploration".
 
+**Named data versions** - An ETL run publishes to `~/data/geryon_data/<version>/`, where
+the version name is chosen by a human (`medonc-pfs-2026-08`), not the run date. Build one
+against its own copy of the source tree so the canonical `msk_solid_heme/` stays clean:
+
+```bash
+make etl ARGS="--version medonc-pfs-2026-08 --data_root ~/data/msk-impact/msk_solid_heme_medonc"
+```
+
+`--version` defaults to today's date, so a plain `make etl` behaves as it always has.
+`VERSION.json` at the version root (copied into `explore/` and `validation/`) records the
+name, source tree and seed; `resolve_data_version` reads it and every hypothesis stores it.
+Auto-detection of the "latest" dir considers **only** date-named dirs — a named version has
+to be asked for by name. Use `scripts/check_split_stable.py <a> <b>` after building a new
+version to confirm no patient crossed the explore/validation boundary; if one did, results
+are not comparable across the two versions.
+
+**Chains** - A chain is a separate line of investigation. `--chain <name>` (or
+`make run CHAIN=<name>`) shows the generator **only that chain's** prior hypotheses, so a
+focused investigation builds on its own work without being flooded by the main line.
+`get_script` deliberately still resolves ids from any chain — the boundary governs what is
+pushed into the prompt, not what can be pulled.
+
+A chain is defined by `chains/<name>.md`: optional frontmatter pinning `data_version`, then
+free prose appended to the generator, critic and narrator **system** prompts (the cache
+breakpoint). Prompting is the only steering lever available — sampling params are
+deliberately omitted because Claude 4.x 400s on them. `main` has no file, so the
+open-ended chain keeps its original behavior. Sessions written before chains existed read
+as `main`.
+
 ## Current Status
 
 - One outcome: `OverallSurvival` (Cox regression on OS_MONTHS/OS_STATUS)

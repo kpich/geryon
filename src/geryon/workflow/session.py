@@ -7,6 +7,7 @@ import uuid
 
 from pydantic import BaseModel, Field
 
+from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.llm import DEFAULT_BEDROCK_MODEL
 
 
@@ -53,6 +54,18 @@ class SessionConfig(BaseModel):
     rank_after_critic: bool = Field(
         default=True,
         description="Run LLM ranker after critic to synthesize top candidates",
+    )
+
+    # Line of investigation. Prior hypotheses are injected from this chain only, and the
+    # focus prose (from chains/<chain>.md) steers generator, critic and narrator.
+    chain: str = Field(default=DEFAULT_CHAIN, description="Chain this session extends")
+    focus: str | None = Field(
+        default=None,
+        description="Resolved focus prose appended to the system prompts",
+    )
+    data_version: str | None = Field(
+        default=None,
+        description="Human-readable name of the data version being read",
     )
 
     # Paths

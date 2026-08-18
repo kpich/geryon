@@ -35,9 +35,10 @@ from geryon.codeflow.models import (
     CodeHypothesis,
 )
 from geryon.codeflow.narrate import CodeNarrator
-from geryon.codeflow.prompts import GENERATOR_SYSTEM_PROMPT
+from geryon.codeflow.prompts import GENERATOR_SYSTEM_PROMPT, with_focus
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.db import Database
+from geryon.etl.data_version import resolve_data_version
 from geryon.etl.split_by_patient import EXPLORE_SPLIT, read_split_marker
 from geryon.llm.caching import (
     cached_text_content,
@@ -95,6 +96,12 @@ class CodeWorkflow:
                 f"out (see geryon.etl.split_by_patient)."
             )
 
+        # The runner normally resolves this; fall back to the data dir's own marker so
+        # a hypothesis always records which cohort produced it.
+        self.data_version = config.data_version or resolve_data_version(
+            config.parquet_dir
+        )
+
         self.db = Database(config.parquet_dir)
         provider_kwargs: dict = {"model": config.model}
         if config.provider_type == "aws_bedrock":
@@ -102,7 +109,7 @@ class CodeWorkflow:
             provider_kwargs["profile"] = config.aws_profile
         self.provider = create_provider(config.provider_type, **provider_kwargs)
 
-        self.store = CodeHypothesisStore(config.storage_dir)
+        self.store = CodeHypothesisStore(config.storage_dir, chain=config.chain)
         self.sandbox_limits = SandboxLimits()
 
         self.llm_logger: SessionTracer | None = None
@@ -171,7 +178,7 @@ class CodeWorkflow:
 
             narrative = None
             try:
-                narrator = CodeNarrator(self.provider)
+                narrator = CodeNarrator(self.provider, focus=self.config.focus)
                 narrative = narrator.narrate(
                     description=description,
                     rationale=rationale,
@@ -199,6 +206,8 @@ class CodeWorkflow:
                 session_id=self.session.session_id,
                 iteration=iteration,
                 refines=parent.hypothesis_id if parent else None,
+                chain=self.config.chain,
+                data_version=self.data_version,
                 title=title,
                 description=description,
                 rationale=rationale,
@@ -227,10 +236,19 @@ class CodeWorkflow:
     def _lookup(
         self, hypothesis_id: str | None, submitted: list[CodeHypothesis]
     ) -> CodeHypothesis | None:
-        """Find a hypothesis by full or 8-char id across session + prior sessions."""
+        """Find a hypothesis by full or 8-char id across session + prior sessions.
+
+        Deliberately searches *every* chain, unlike :meth:`_load_prior`: the chain
+        boundary governs what gets pushed into the prompt, not what can be pulled. An
+        id someone pasted from another line of investigation should still resolve.
+        """
         if not hypothesis_id:
             return None
-        candidates = submitted + self.store.load() + self._load_prior()
+        candidates = (
+            submitted
+            + self.store.load()
+            + load_prior_hypotheses(self.config.output_dir, self.config.session_id)
+        )
         short = hypothesis_id[:8]
         for hyp in candidates:
             if hyp.hypothesis_id == hypothesis_id or hyp.short_id() == short:
@@ -238,7 +256,10 @@ class CodeWorkflow:
         return None
 
     def _load_prior(self) -> list[CodeHypothesis]:
-        return load_prior_hypotheses(self.config.output_dir, self.config.session_id)
+        """Prior hypotheses from this session's chain only (what the prompt sees)."""
+        return load_prior_hypotheses(
+            self.config.output_dir, self.config.session_id, chain=self.config.chain
+        )
 
     # ------------------------------------------------------------------
     # Loop
@@ -257,7 +278,7 @@ class CodeWorkflow:
         print("Generating a hypothesis...")
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
 
-        system_content = GENERATOR_SYSTEM_PROMPT
+        system_content = with_focus(GENERATOR_SYSTEM_PROMPT, self.config.focus)
         user_text = (
             f"{prev_ctx.text}\n\n"
             "Generate a hypothesis. Explore first, iterate on your "

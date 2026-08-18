@@ -11,6 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.codeflow.models import CodeHypothesis
 
 HYPOTHESES_FILENAME = "hypotheses.jsonl"
@@ -21,6 +22,9 @@ class _Metadata(BaseModel):
     session_id: str
     created_at: datetime
     format: Literal["codeflow"] = "codeflow"
+    # Which line of investigation this session extends. Defaulted so sessions written
+    # before chains existed load as the main chain.
+    chain: str = DEFAULT_CHAIN
 
 
 class _Record(BaseModel):
@@ -32,8 +36,9 @@ class _Record(BaseModel):
 class CodeHypothesisStore:
     """Append-only JSONL store; the directory is the session."""
 
-    def __init__(self, storage_dir: Path | str):
+    def __init__(self, storage_dir: Path | str, chain: str = DEFAULT_CHAIN):
         self.storage_dir = Path(storage_dir)
+        self.chain = chain
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -44,7 +49,9 @@ class CodeHypothesisStore:
         """Append a hypothesis, writing the metadata header if the file is new."""
         if not self._path.exists():
             meta = _Metadata(
-                session_id=hypothesis.session_id, created_at=datetime.now(UTC)
+                session_id=hypothesis.session_id,
+                created_at=datetime.now(UTC),
+                chain=self.chain,
             )
             self._path.write_text(meta.model_dump_json() + "\n")
 
@@ -57,7 +64,9 @@ class CodeHypothesisStore:
             return
         tmp = self._path.with_suffix(".jsonl.tmp")
         meta = _Metadata(
-            session_id=hypotheses[0].session_id, created_at=datetime.now(UTC)
+            session_id=hypotheses[0].session_id,
+            created_at=datetime.now(UTC),
+            chain=self.chain,
         )
         with open(tmp, "w") as f:
             f.write(meta.model_dump_json() + "\n")

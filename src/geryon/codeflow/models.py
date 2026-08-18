@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.sandbox.result import IterationResult
 
 # Cap stored stdout/stderr so a chatty script can't bloat the JSONL. The full
@@ -58,6 +59,13 @@ class CodeHypothesis(BaseModel):
     iteration: int | None = Field(default=None, description="1-indexed iteration")
     refines: str | None = Field(
         default=None, description="Parent hypothesis_id this remixes, if any"
+    )
+    chain: str = Field(
+        default=DEFAULT_CHAIN, description="Line of investigation this belongs to"
+    )
+    data_version: str | None = Field(
+        default=None,
+        description="Human-readable name of the cohort version this was computed on",
     )
 
     # Proposal / deliverable

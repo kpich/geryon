@@ -1,5 +1,33 @@
 """System prompts for the code-first loop."""
 
+FOCUS_BLOCK = """
+
+# Research focus
+
+This session is a focused line of investigation, not free exploration. What follows
+constrains what counts as a good hypothesis here; treat it as binding.
+
+{focus}
+{note}"""
+
+CRITIC_FOCUS_NOTE = """
+Judge `novelty` relative to this focus: a hypothesis that is only newly *possible*
+under this focus counts as novel, not as a well-known result.
+"""
+
+
+def with_focus(base: str, focus: str | None, note: str = "") -> str:
+    """Append a session's focus to a system prompt; unchanged when there is no focus.
+
+    Goes on the system message rather than the user message because that is where the
+    cache breakpoint sits (see geryon.llm.caching) and the focus is session-static,
+    while the user message already varies per iteration with the prior-hypothesis list.
+    """
+    if not focus or not focus.strip():
+        return base
+    return base + FOCUS_BLOCK.format(focus=focus.strip(), note=note)
+
+
 GENERATOR_SYSTEM_PROMPT = """You are a cancer-genomics research agent. Your job is to generate NOVEL, WELL-CONTROLLED hypotheses about this clinical-genomics cohort, and the deliverable for each hypothesis is a self-contained **Python script** that computes the result.
 
 # How analysis works
