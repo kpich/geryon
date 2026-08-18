@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import json
 from pathlib import Path
 
+from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.codeflow.models import CodeHypothesis
 from geryon.codeflow.store import HYPOTHESES_FILENAME, CodeHypothesisStore
 
@@ -67,17 +68,26 @@ def format_previous_hypotheses(hypotheses: list[CodeHypothesis]) -> PreviousCont
 
 
 def load_prior_hypotheses(
-    output_dir: Path | None, current_session_id: str
+    output_dir: Path | None,
+    current_session_id: str,
+    chain: str | None = None,
 ) -> list[CodeHypothesis]:
     """Load code hypotheses from prior sessions under output_dir.
 
     Skips JSONL files that are not in the codeflow format (e.g. legacy sessions).
+    When ``chain`` is given, only sessions belonging to that chain are returned — this
+    is what keeps a separate line of investigation from being flooded by the main one.
+    Sessions written before chains existed have no ``chain`` in their header and count
+    as :data:`~geryon.codeflow.chains.DEFAULT_CHAIN`. Pass ``None`` to load every chain.
     """
     if output_dir is None or not output_dir.exists():
         return []
     out: list[CodeHypothesis] = []
     for jsonl_file in sorted(output_dir.rglob(HYPOTHESES_FILENAME)):
-        if not _is_codeflow_file(jsonl_file):
+        header = _read_header(jsonl_file)
+        if header is None or header.get("format") != "codeflow":
+            continue
+        if chain is not None and header.get("chain", DEFAULT_CHAIN) != chain:
             continue
         try:
             hyps = CodeHypothesisStore(jsonl_file.parent).load()
@@ -87,11 +97,11 @@ def load_prior_hypotheses(
     return out
 
 
-def _is_codeflow_file(path: Path) -> bool:
-    """True if the file's metadata header marks it as codeflow format."""
+def _read_header(path: Path) -> dict | None:
+    """Parse a JSONL store's metadata header, or None if it isn't readable."""
     try:
         with open(path) as f:
-            first = json.loads(f.readline())
-        return first.get("format") == "codeflow"
+            header = json.loads(f.readline())
     except (OSError, json.JSONDecodeError):
-        return False
+        return None
+    return header if isinstance(header, dict) else None

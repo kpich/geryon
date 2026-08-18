@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from geryon.codeflow._shared import MessageUsage, usage_from_response
 from geryon.codeflow.models import CodeNarrative
-from geryon.codeflow.prompts import NARRATOR_SYSTEM_PROMPT
+from geryon.codeflow.prompts import NARRATOR_SYSTEM_PROMPT, with_focus
 from geryon.llm.providers.base import ChatMessage, LLMProvider
 from geryon.sandbox.result import IterationResult
 
@@ -16,8 +16,9 @@ MAX_STDOUT_IN_PROMPT = 2000
 class CodeNarrator:
     """Generate a structured narrative from an executed script + its result."""
 
-    def __init__(self, provider: LLMProvider):
+    def __init__(self, provider: LLMProvider, focus: str | None = None):
         self.provider = provider
+        self.system_prompt = with_focus(NARRATOR_SYSTEM_PROMPT, focus)
         # Usage of the most recent narrate() call, for cost logging.
         self.last_usage: MessageUsage | None = None
 
@@ -38,7 +39,7 @@ class CodeNarrator:
             stdout=stdout,
         )
         messages = [
-            ChatMessage(role="system", content=NARRATOR_SYSTEM_PROMPT),
+            ChatMessage(role="system", content=self.system_prompt),
             ChatMessage(role="user", content=user_prompt),
         ]
         response = self.provider.generate(messages, temperature=0.3, cache_system=True)

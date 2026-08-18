@@ -80,3 +80,50 @@ def test_load_prior_skips_non_codeflow_and_current_session(tmp_path: Path):
     prior = load_prior_hypotheses(tmp_path, current_session_id="cur")
     ids = {h.hypothesis_id for h in prior}
     assert ids == {"p1"}
+
+
+def _session(tmp_path: Path, name: str, hid: str, chain: str | None = None) -> None:
+    store = (
+        CodeHypothesisStore(tmp_path / name)
+        if chain is None
+        else CodeHypothesisStore(tmp_path / name, chain=chain)
+    )
+    store.save(_hyp(hid, session=name, chain=chain or "main"))
+
+
+def test_load_prior_filters_by_chain(tmp_path: Path):
+    _session(tmp_path, "s-main", "m1")
+    _session(tmp_path, "s-medonc", "d1", chain="medonc-pfs")
+
+    main = load_prior_hypotheses(tmp_path, "cur", chain="main")
+    medonc = load_prior_hypotheses(tmp_path, "cur", chain="medonc-pfs")
+
+    assert {h.hypothesis_id for h in main} == {"m1"}
+    assert {h.hypothesis_id for h in medonc} == {"d1"}
+
+
+def test_load_prior_without_chain_loads_every_chain(tmp_path: Path):
+    """The unfiltered path backs get_script, which resolves ids across chains."""
+    _session(tmp_path, "s-main", "m1")
+    _session(tmp_path, "s-medonc", "d1", chain="medonc-pfs")
+
+    every = load_prior_hypotheses(tmp_path, "cur")
+    assert {h.hypothesis_id for h in every} == {"m1", "d1"}
+
+
+def test_pre_chain_sessions_count_as_main(tmp_path: Path):
+    """Headers written before chains existed have no chain key."""
+    legacy = tmp_path / "2026-06-01" / "sess-old"
+    legacy.mkdir(parents=True)
+    (legacy / "hypotheses.jsonl").write_text(
+        '{"record_type": "metadata", "session_id": "old", "created_at": '
+        '"2026-06-01T00:00:00Z", "format": "codeflow"}\n'
+        '{"record_type": "hypothesis", "data": '
+        + _hyp("old00001", session="old").model_dump_json()
+        + "}\n"
+    )
+
+    assert {
+        h.hypothesis_id for h in load_prior_hypotheses(tmp_path, "cur", "main")
+    } == {"old00001"}
+    assert load_prior_hypotheses(tmp_path, "cur", chain="medonc-pfs") == []

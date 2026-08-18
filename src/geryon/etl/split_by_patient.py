@@ -30,6 +30,7 @@ import shutil
 import duckdb
 import pandas as pd  # type: ignore
 
+from geryon.etl.data_version import VERSION_MARKER_FILENAME
 from geryon.etl.profiler import profile_parquet
 from geryon.etl.writers import write_parquet, write_profile
 
@@ -184,6 +185,12 @@ def split_directory(
                 write_profile(dict(profile), dest.with_suffix(".profile.json"))
 
             (split_dir / SPLIT_MARKER_FILENAME).write_text(split_name + "\n")
+
+            # Carry the version identity down so a split dir is self-describing.
+            version_marker = input_dir / VERSION_MARKER_FILENAME
+            if version_marker.exists():
+                shutil.copyfile(version_marker, split_dir / VERSION_MARKER_FILENAME)
+
             logger.info(
                 "Wrote split '%s' (%d patients) to %s",
                 split_name,

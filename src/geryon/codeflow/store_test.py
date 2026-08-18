@@ -62,6 +62,38 @@ def test_save_all_rewrites(tmp_path: Path):
     assert loaded[0].title == "updated"
 
 
+def test_header_records_the_chain(tmp_path: Path):
+    store = CodeHypothesisStore(tmp_path, chain="medonc-pfs")
+    store.save(_hyp("a"))
+    first_line = (tmp_path / "hypotheses.jsonl").read_text().splitlines()[0]
+    assert '"chain":"medonc-pfs"' in first_line.replace(" ", "")
+
+
+def test_header_defaults_to_main(tmp_path: Path):
+    CodeHypothesisStore(tmp_path).save(_hyp("a"))
+    first_line = (tmp_path / "hypotheses.jsonl").read_text().splitlines()[0]
+    assert '"chain":"main"' in first_line.replace(" ", "")
+
+
+def test_save_all_preserves_the_chain(tmp_path: Path):
+    """The critic rewrites the file; the header must not silently revert to main."""
+    store = CodeHypothesisStore(tmp_path, chain="medonc-pfs")
+    store.save(_hyp("a"))
+    store.save_all([_hyp("a", title="critiqued")])
+
+    first_line = (tmp_path / "hypotheses.jsonl").read_text().splitlines()[0]
+    assert '"chain":"medonc-pfs"' in first_line.replace(" ", "")
+
+
+def test_hypothesis_carries_chain_and_data_version(tmp_path: Path):
+    store = CodeHypothesisStore(tmp_path, chain="medonc-pfs")
+    store.save(_hyp("a", chain="medonc-pfs", data_version="medonc-pfs-2026-08"))
+
+    loaded = store.load()[0]
+    assert loaded.chain == "medonc-pfs"
+    assert loaded.data_version == "medonc-pfs-2026-08"
+
+
 def test_result_none_roundtrips(tmp_path: Path):
     store = CodeHypothesisStore(tmp_path)
     store.save(_hyp("a", result=None, success=False, stderr="boom"))

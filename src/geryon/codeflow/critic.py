@@ -22,7 +22,11 @@ from geryon.codeflow._shared import (
     sum_message_usage,
 )
 from geryon.codeflow.models import CodeCritique, CodeHypothesis
-from geryon.codeflow.prompts import CRITIC_SYSTEM_PROMPT
+from geryon.codeflow.prompts import (
+    CRITIC_FOCUS_NOTE,
+    CRITIC_SYSTEM_PROMPT,
+    with_focus,
+)
 from geryon.db import Database
 from geryon.llm.caching import (
     cached_text_content,
@@ -84,13 +88,17 @@ class HypothesisCritic:
             f"confounding, then call submit_critique."
         )
 
+        system_prompt = with_focus(
+            CRITIC_SYSTEM_PROMPT, self.config.focus, note=CRITIC_FOCUS_NOTE
+        )
+
         sys_content: str | list[Any]
         usr_content: str | list[Any]
         if caching:
-            sys_content = cached_text_content(CRITIC_SYSTEM_PROMPT)
+            sys_content = cached_text_content(system_prompt)
             usr_content = cached_text_content(user_text)
         else:
-            sys_content = CRITIC_SYSTEM_PROMPT
+            sys_content = system_prompt
             usr_content = user_text
 
         steps_per_cycle = 3 if caching else 2

@@ -4,6 +4,11 @@ from pathlib import Path
 
 import pandas as pd  # type: ignore
 
+from geryon.etl.data_version import (
+    VERSION_MARKER_FILENAME,
+    read_data_version,
+    write_version_marker,
+)
 from geryon.etl.split_by_patient import SPLIT_MARKER_FILENAME, split_directory
 
 
@@ -66,6 +71,29 @@ def test_split_creates_subdir_per_split(tmp_path: Path):
     assert (out / "validation" / SPLIT_MARKER_FILENAME).read_text().strip() == (
         "validation"
     )
+
+
+def test_version_marker_carried_into_each_split(tmp_path: Path):
+    """explore/ must be self-describing: the runner reads its version from there."""
+    inp = _build_input(tmp_path)
+    write_version_marker(
+        inp, name="medonc-pfs-2026-08", data_root="/src", holdout_seed=42
+    )
+    out = tmp_path / "out"
+
+    split_directory(inp, out)
+
+    assert read_data_version(out / "explore") == "medonc-pfs-2026-08"
+    assert read_data_version(out / "validation") == "medonc-pfs-2026-08"
+
+
+def test_split_works_without_a_version_marker(tmp_path: Path):
+    inp = _build_input(tmp_path)
+    out = tmp_path / "out"
+
+    split_directory(inp, out)
+
+    assert not (out / "explore" / VERSION_MARKER_FILENAME).exists()
 
 
 def test_patient_table_filtered_to_split(tmp_path: Path):
