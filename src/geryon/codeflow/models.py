@@ -1,9 +1,6 @@
-"""Data model for a code-first hypothesis.
-
-Replaces the spec-bound ``LabeledHypothesis``: the deliverable is the Python
-``code`` plus its standardized ``IterationResult`` and run metadata. Lineage is the
-``refines`` parent-pointer (deriving = remix the parent's code).
-"""
+"""Data model for a code-first hypothesis: the Python ``code``, the
+``IterationResult`` it reported, and run metadata. Lineage is the ``refines``
+pointer to a parent hypothesis."""
 
 from datetime import UTC, datetime
 
@@ -92,7 +89,6 @@ class CodeHypothesis(BaseModel):
     # Critique (agentic critic that can run code to test suspicions)
     critique: CodeCritique | None = None
 
-    # Labeling (human/critic), optional
     notes: str | None = None
 
     def short_id(self) -> str:

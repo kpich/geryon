@@ -49,7 +49,7 @@ class SessionConfig(BaseModel):
     )
     critic_cycles: int = Field(
         default=0,
-        description="Number of LLM critic cycles per iteration (0 = disabled)",
+        description="Critique each hypothesis when > 0 (the count isn't used yet)",
     )
 
     # Line of investigation. Prior hypotheses are injected from this chain only, and the
@@ -82,19 +82,7 @@ class SessionConfig(BaseModel):
 
 
 class Session:
-    """Manages a hypothesis generation session.
-
-    Tracks session state and provides access to configuration.
-    """
-
     def __init__(self, config: SessionConfig):
-        """Initialize session.
-
-        Parameters
-        ----------
-        config : SessionConfig
-            Session configuration
-        """
         self.config = config
         self.session_id = config.session_id
         self.created_at = config.created_at

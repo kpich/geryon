@@ -46,8 +46,8 @@ class BedrockProvider:
                     }
                 )
 
-        # Claude 4.x rejects temperature (400: "deprecated for this model"), so it's
-        # accepted for interface compatibility but not sent. Steer via prompting.
+        # temperature is accepted for the interface but not sent: current Claude
+        # models return a 400 when it's set.
         kwargs = {
             "modelId": self.model,
             "messages": converse_messages,

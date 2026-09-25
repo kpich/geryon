@@ -2,34 +2,23 @@
 
 ``IterationResult`` is what a script reports via the in-container ``report()``
 helper (written to ``/scratch/result.json``). ``ScriptRun`` is what the host-side
-runner returns: the parsed result plus execution metadata (stdout, exit code, ...).
+runner returns: the parsed result plus stdout, exit code and so on.
 
-Reporting is optional and partial — "no clean effect size" is a first-class case,
-so every analytic field is nullable. The ``extra`` dict is the extensibility hatch
-for anything else the method produced: numbers, notes, per-group breakdowns.
+Every analytic field is nullable because "no clean effect size" is a legitimate
+outcome. ``extra`` holds anything else the analysis produced.
 """
 
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-# Keys written by report() into result.json. Kept in sync with runtime.py, which
-# is standalone (not importable from this package) inside the container.
-RESULT_FIELDS = (
-    "effect_size",
-    "effect_size_type",
-    "p_value",
-    "ci_lower",
-    "ci_upper",
-    "n_a",
-    "n_b",
-    "summary",
-    "extra",
-)
-
 
 class IterationResult(BaseModel):
-    """The analytic result a script chose to report."""
+    """The analytic result a script chose to report.
+
+    Field names must match the keys ``runtime.report()`` writes, since runtime.py
+    can't import this module.
+    """
 
     effect_size: float | None = Field(
         default=None, description="Point estimate, e.g. a hazard ratio or mean diff"

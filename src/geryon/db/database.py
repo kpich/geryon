@@ -1,8 +1,4 @@
-"""
-DuckDB database connection and query execution.
-
-Provides in-memory database with auto-registered parquet files.
-"""
+"""In-memory DuckDB with every parquet file in a directory registered as a view."""
 
 import json
 from pathlib import Path
@@ -58,10 +54,6 @@ class Database:
 
         for parquet_file in parquet_files:
             table_name = _get_table_name(parquet_file)
-
-            # Create view pointing to parquet file
-            # Using views is more efficient than loading into memory
-            # Quote table name to handle special characters like hyphens
             sql = f"CREATE VIEW \"{table_name}\" AS SELECT * FROM '{parquet_file}'"
             self.conn.execute(sql)
 
@@ -78,11 +70,6 @@ class Database:
     def get_profile(self, table_name: str) -> dict | None:
         """Look up precomputed column profile for a table."""
         return self.profiles.get(table_name)
-
-    def create_view(self, name: str, sql: str) -> None:
-        """Register an in-session DuckDB view."""
-        with self._lock:
-            self.conn.execute(f'CREATE OR REPLACE VIEW "{name}" AS ({sql})')
 
     def execute(self, sql: str) -> pd.DataFrame:
         """
@@ -113,9 +100,7 @@ class Database:
         self.conn.close()
 
     def __enter__(self) -> "Database":
-        """Context manager entry."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore
-        """Context manager exit."""
         self.close()

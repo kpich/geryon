@@ -156,7 +156,6 @@ def profile_parquet(
         )
 
         if strategy == "wide_matrix":
-            # Profile PATIENT_ID (or first col) normally
             non_gene_cols = [
                 (name, dtype)
                 for name, dtype in columns
@@ -174,7 +173,6 @@ def profile_parquet(
                 )
                 profile["columns"].append(col_profile)
 
-            # Profile representative gene columns
             representative = gene_cols[:REPRESENTATIVE_GENE_COUNT]
             for col_name, dtype in representative:
                 col_profile = _profile_column(

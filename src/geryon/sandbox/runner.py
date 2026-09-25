@@ -1,8 +1,7 @@
 """Host-side driver: run an LLM-authored script in the Docker sandbox.
 
-The container only ever sees the data dir (read-only) and a fresh scratch dir, with
-networking disabled and resource limits applied. Arbitrary host files are simply
-not present in the container, so they cannot be read.
+The container sees only the data dir (read-only) and a fresh scratch dir, with no
+network and with resource limits applied. No other host files are mounted.
 """
 
 from __future__ import annotations

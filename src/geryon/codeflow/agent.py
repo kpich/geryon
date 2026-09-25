@@ -1,17 +1,16 @@
 """Code-first hypothesis generation loop (LangGraph ReAct).
 
 The agent explores the data with read-only tools, writes Python that runs in the
-Docker sandbox, and submits scripts as hypotheses. Mirrors the legacy
-``AutonomousWorkflow`` structure but the deliverable is code, not a formal spec.
+Docker sandbox, and submits scripts as hypotheses.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, TypedDict
+from typing import Any
 import uuid
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode, create_react_agent
 
@@ -49,10 +48,10 @@ from geryon.llm.provider import create_provider
 from geryon.sandbox import SandboxLimits, ScriptRun, ensure_sandbox
 from geryon.workflow.session import Session, SessionConfig
 
-# Re-exported for backwards-compatible imports / tests.
+# format_run is re-exported because agent_test imports it from here.
 __all__ = ["CodeWorkflow", "format_run"]
 
-# Max model->tools round-trips per iteration (matches legacy budget).
+# Max model->tools round-trips per iteration.
 _MAX_REACT_CYCLES = 70
 
 
@@ -73,10 +72,6 @@ def _format_critique(critique: CodeCritique | None) -> str:
     if critique.tests_run:
         lines.append(f"  tests run: {'; '.join(critique.tests_run)}")
     return "\n".join(lines) + "\n\n"
-
-
-class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], "Messages in conversation"]
 
 
 class CodeWorkflow:

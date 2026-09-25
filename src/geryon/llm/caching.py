@@ -6,11 +6,10 @@ system prompt (instructions + schema context) and the initial user message
 (previous-hypotheses block) — so it is read from cache on every tool-call
 round-trip instead of re-billed as fresh input.
 
-The stable prefix alone leaves the largest cost — the growing tool-result tail
-re-sent on every round-trip — uncached. ``tail_cache_pre_model_hook`` adds a
-second, sliding breakpoint on the most recent tool result before each LLM call,
-so the entire conversation prefix (system + prior turns + tool outputs) is read
-from cache rather than re-billed as fresh input.
+That alone leaves the biggest cost uncached: the growing tail of tool results,
+re-sent on every round-trip. ``tail_cache_pre_model_hook`` adds a second, sliding
+breakpoint on the latest tool result before each LLM call, so the whole
+conversation so far is read from cache.
 
 OpenAI caches prefixes automatically and rejects ``cache_control`` blocks, so
 caching is only applied for Anthropic-style providers.
@@ -45,9 +44,8 @@ def _with_tail_breakpoint(messages: list[BaseMessage]) -> list[BaseMessage]:
     Marks the final ``ToolMessage`` by reshaping its content into a
     ``tool_result`` block carrying ``cache_control`` (the only shape the Bedrock
     Anthropic formatter preserves the breakpoint on). Any other trailing message
-    type — e.g. the initial human turn, already cached at construction — is left
-    untouched. Returns the list unchanged on anything unexpected so a caching
-    quirk can never break a generation run.
+    type (e.g. the initial human turn, already cached at construction) is left
+    untouched, as is a tool message whose content isn't a plain string.
     """
     if not messages:
         return messages

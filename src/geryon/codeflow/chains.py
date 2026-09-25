@@ -1,9 +1,9 @@
 """Chains: separate lines of investigation.
 
-By default every session extends one uninterrupted chain — the generator sees every
-hypothesis ever submitted. A chain partitions that: a session tagged ``medonc-pfs``
-is shown only ``medonc-pfs`` hypotheses, so a distinct investigation can build
-linearly on its own prior work without being flooded by (or polluting) the main line.
+By default every session extends one chain, ``main``, and the generator sees every
+hypothesis submitted to it. A session tagged ``medonc-pfs`` is shown only
+``medonc-pfs`` hypotheses, so a focused investigation builds on its own work without
+being flooded by the main line (or flooding it).
 
 A chain is defined by ``chains/<name>.md``: optional frontmatter naming the data
 version the chain is valid on, then free prose that is appended to the generator,
@@ -15,8 +15,8 @@ critic and narrator system prompts to steer what counts as a good hypothesis.
 
     Prefer hypotheses that contrast the two progression sources...
 
-The file is optional. A chain with no file is a bare label: no focus, no pinned data
-version, today's behavior. That is why ``main`` has no ``chains/main.md``.
+The file is optional. A chain with no file is a bare label with no focus and no
+pinned data version, which is why ``main`` has no ``chains/main.md``.
 """
 
 from __future__ import annotations
@@ -30,8 +30,7 @@ CHAINS_DIRNAME = "chains"
 
 _VALID_CHAIN_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 
-# Only keys we act on are recognized; anything else in the frontmatter is ignored so
-# a chain file can carry notes for humans without breaking the parser.
+# Other frontmatter keys are ignored, so a chain file can carry notes for humans.
 _DATA_VERSION_KEY = "data_version"
 
 

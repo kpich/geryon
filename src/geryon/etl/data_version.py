@@ -1,15 +1,14 @@
 """Human-readable identity for an ETL output directory.
 
-An ETL run publishes to ``<output_base>/<version>/``. The version name is chosen by
-a human (``medonc-pfs-2026-08``), not derived from the run date, because it is what
-gets recorded on every hypothesis and named in a chain definition — remembering which
-anodyne date held which cohort is exactly the failure mode this avoids. The date
-remains the default so an unnamed run behaves as it always has.
+An ETL run publishes to ``<output_base>/<version>/``. A human picks the version name
+(``medonc-pfs-2026-08``) because it is recorded on every hypothesis and named in
+chain definitions, and a bare date doesn't say which cohort it holds. The date is
+still the default for unnamed runs.
 
 ``VERSION.json`` sits at the version-dir root and is copied into each split subdir by
-``split_by_patient``, so an ``explore/`` directory is self-describing on its own.
-Legacy dated dirs have no marker; ``read_data_version`` returns None for them and
-callers fall back to the directory name.
+``split_by_patient``, so an ``explore/`` directory is self-describing. Dated dirs
+from before markers existed have none; ``read_data_version`` returns None for them
+and callers fall back to the directory name.
 """
 
 from __future__ import annotations
@@ -77,8 +76,8 @@ def read_data_version(version_dir: Path | str) -> str | None:
 def resolve_data_version(parquet_dir: Path | str) -> str:
     """Best-effort version name for a parquet dir, for stamping onto hypotheses.
 
-    Falls back to the enclosing directory name so legacy dated outputs (which have no
-    marker) still record which cohort a hypothesis ran against.
+    Falls back to the directory name, so outputs from before markers existed still
+    record which cohort a hypothesis ran against.
     """
     parquet_dir = Path(parquet_dir)
     name = read_data_version(parquet_dir)

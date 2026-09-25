@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import json
 from pathlib import Path
-import re
 
 
 class SessionTracer:
@@ -40,99 +39,6 @@ class SessionTracer:
             n_context=n_context,
         )
 
-    def log_tool_call(self, tool_name: str, args: dict, result: str) -> None:
-        extra = self._extract_tool_metadata(tool_name, args, result)
-        self._write(event="tool_call", tool=tool_name, args=args, **extra)
-
-    def log_proposal(
-        self,
-        idx: int,
-        cohort_a: str,
-        cohort_b: str,
-        filters_a: list[dict],
-        filters_b: list[dict],
-    ) -> None:
-        self._write(
-            event="proposal",
-            idx=idx,
-            cohort_a=cohort_a,
-            cohort_b=cohort_b,
-            filters_a=filters_a,
-            filters_b=filters_b,
-        )
-
-    def log_execution(
-        self,
-        idx: int,
-        success: bool,
-        error: str | None,
-        cohort_a_size: int,
-        cohort_b_size: int,
-        time_s: float,
-    ) -> None:
-        self._write(
-            event="execution",
-            idx=idx,
-            success=success,
-            error=error,
-            cohort_a_size=cohort_a_size,
-            cohort_b_size=cohort_b_size,
-            time_s=round(time_s, 3),
-        )
-
-    def log_narration(
-        self,
-        idx: int,
-        summary: str,
-        tokens: int | None,
-        narrative: dict | None = None,
-        raw_response: str | None = None,
-    ) -> None:
-        self._write(event="narration", idx=idx, summary=summary, tokens=tokens)
-        if narrative or raw_response:
-            self._write_detail(
-                event="narration",
-                idx=idx,
-                narrative=narrative,
-                raw_response=raw_response,
-            )
-
-    def log_critic(
-        self,
-        count: int,
-        tokens: int | None,
-        ratings: list[dict] | None = None,
-        raw_response: str | None = None,
-    ) -> None:
-        self._write(event="critic", count=count, tokens=tokens)
-        if ratings or raw_response:
-            self._write_detail(
-                event="critic", ratings=ratings, raw_response=raw_response
-            )
-
-    def log_ranker(
-        self,
-        count: int,
-        tokens: int | None,
-        top_general: list[str] | None = None,
-        top_refinement: list[str] | None = None,
-        raw_response: str | None = None,
-    ) -> None:
-        self._write(
-            event="ranker",
-            count=count,
-            tokens=tokens,
-            n_general=len(top_general or []),
-            n_refinement=len(top_refinement or []),
-        )
-        if top_general or top_refinement or raw_response:
-            self._write_detail(
-                event="ranker",
-                top_general=top_general,
-                top_refinement=top_refinement,
-                raw_response=raw_response,
-            )
-
     def log_generation_usage(
         self,
         iteration: int,
@@ -144,15 +50,12 @@ class SessionTracer:
         cache_creation_tokens: int = 0,
         phase: str = "generation",
     ) -> None:
-        """Real token usage for one LLM phase of an iteration, summed from
-        provider/LangChain usage metadata.
+        """Token usage for one LLM phase of an iteration.
 
-        ``phase`` distinguishes the cost source — ``generation`` (proposal ReAct
-        loop), ``critic`` (agentic critique loop), or ``narration``. All phases
-        share the ``generation_usage`` event so cost tooling sums the full run.
-
-        cache_read_tokens / cache_creation_tokens are the cached portion of
-        input_tokens (input_tokens is the total input, not just the uncached part).
+        ``phase`` is ``generation``, ``critic`` or ``narration``. All phases share the
+        ``generation_usage`` event so the cost plot sums the whole run.
+        ``input_tokens`` is uncached input only; the two cache counts are separate
+        from it.
         """
         self._write(
             event="generation_usage",
@@ -224,21 +127,3 @@ class SessionTracer:
             fields["ts"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         with open(self.detail_path, "a") as f:
             f.write(json.dumps(fields, default=str) + "\n")
-
-    @staticmethod
-    def _extract_tool_metadata(tool_name: str, args: dict, result: str) -> dict:
-        """Pull compact numbers out of the raw tool result string."""
-        meta: dict = {}
-        if tool_name == "list_tables_tool":
-            meta["tables"] = len(result.strip().splitlines())
-        elif tool_name == "describe_table_tool":
-            m = re.search(r"(\d+)\s+rows", result)
-            if m:
-                meta["rows"] = int(m.group(1))
-            m = re.search(r"(\d+)\s+columns", result)
-            if m:
-                meta["columns"] = int(m.group(1))
-        elif tool_name == "query_data_tool":
-            meta["sql"] = args.get("sql", "")
-            meta["result_rows"] = len(result.strip().splitlines()) - 1  # minus header
-        return meta

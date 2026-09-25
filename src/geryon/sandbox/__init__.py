@@ -1,8 +1,8 @@
 """Sandboxed execution of LLM-authored Python against the genomics data.
 
-Each hypothesis is now arbitrary Python run inside a Docker container that only
-sees the data (read-only) and a scratch directory. The container reports a
-standardized :class:`IterationResult` via the injected ``report()`` helper.
+Each hypothesis is arbitrary Python run in a Docker container that sees only the
+data (read-only) and a scratch directory. The script reports an
+:class:`IterationResult` through ``geryon_runtime.report()``.
 """
 
 from geryon.sandbox.result import IterationResult, ScriptRun

@@ -1,13 +1,8 @@
-"""
-Data readers for ETL pipeline.
-
-Handles reading TSV files with various formats from MSK-IMPACT datasets.
-"""
+"""Readers for the MSK-IMPACT cBioPortal TSV files."""
 
 from pathlib import Path
 from typing import Any
 
-import duckdb
 import pandas as pd
 
 from geryon.etl.writers import write_parquet
@@ -26,9 +21,7 @@ def read_tsv(
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    # Read TSV with standard parameters
-    # Use low_memory=False to avoid dtype warnings on large files with mixed types
-    df = pd.read_csv(
+    return pd.read_csv(
         file_path,
         sep=sep,
         comment=comment,
@@ -36,121 +29,34 @@ def read_tsv(
         **kwargs,
     )
 
-    return df
-
 
 def write_cna_matrix_to_parquet(
     input_path: str | Path, output_path: str | Path
 ) -> None:
-    """Transpose CNA: genes as columns, patients as rows.
+    """Transpose the CNA matrix to one row per sample, one column per gene.
 
-    Fast approach: read as strings (no type inference), transpose, write.
-
-    Parameters
-    ----------
-    input_path : str | Path
-        Path to CNA TSV file
-    output_path : str | Path
-        Path to output parquet file
+    The output key column is named ``PATIENT_ID`` but holds sample barcodes (see
+    ``SAMPLE_KEY_COLUMNS`` in split_by_patient).
     """
-    # Read all columns as strings - much faster than type inference on 156k columns
+    # Reading as strings skips type inference across ~150k sample columns.
     df = pd.read_csv(input_path, sep="\t", dtype=str, low_memory=False)
 
     df = df.set_index(df.columns[0]).T
     df.index.name = "PATIENT_ID"
     df = df.reset_index()
 
-    # Drop duplicate gene columns (keep first); duplicate Hugo_Symbol rows in the
-    # input become duplicate column names after transpose and break pd.to_numeric
+    # Duplicate Hugo_Symbol rows become duplicate columns, which break pd.to_numeric.
     df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
-    # Convert gene columns to float (now only 706 columns)
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     write_parquet(df, output_path)
 
 
-def read_cna_matrix(file_path: str | Path) -> pd.DataFrame:
-    """Read CNA wide matrix and convert to long format.
-
-    Transforms from wide format (one column per patient sample):
-        Hugo_Symbol | P-001-T01 | P-002-T01 | ... (156,450+ patient columns)
-        KRAS        | 0         | 1         | ...
-        TP53        | -1        | 0         | ...
-
-    To long format:
-        patient_id | gene  | cna_value
-        P-001-T01  | KRAS  | 0
-        P-001-T01  | TP53  | -1
-        P-002-T01  | KRAS  | 1
-        P-002-T01  | TP53  | 0
-
-    This is the standard relational database format that enables:
-    - Fast schema discovery (3 columns instead of 156,451)
-    - SQL queries: SELECT * FROM cna WHERE patient_id = 'X' AND gene = 'KRAS'
-    - Reasonable LLM context (can describe 3 columns vs 156k)
-
-    Uses DuckDB for efficient memory usage - can UNPIVOT 156k columns without
-    loading 110M rows into pandas memory.
-
-    Parameters
-    ----------
-    file_path : str | Path
-        Path to CNA TSV file
-
-    Returns
-    -------
-    pd.DataFrame
-        Long-format DataFrame with columns: patient_id, gene, cna_value
-    """
-    file_path = Path(file_path)
-
-    # Use DuckDB to efficiently UNPIVOT without loading full result into memory
-    conn = duckdb.connect(":memory:")
-
-    # Read TSV into DuckDB (handles 156k columns efficiently)
-    # Increase max_line_size to handle 156k+ columns (~3MB per line)
-    conn.execute(f"""
-        CREATE TABLE cna_wide AS
-        SELECT * FROM read_csv_auto(
-            '{file_path}',
-            delim='\t',
-            header=true,
-            max_line_size=10000000
-        )
-    """)
-
-    col_result = conn.execute(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name='cna_wide' LIMIT 1"
-    ).fetchone()
-    if col_result is None:
-        raise ValueError("No columns found in cna_wide table")
-    gene_col = col_result[0]
-
-    df = conn.execute(f"""
-        UNPIVOT cna_wide
-        ON COLUMNS(* EXCLUDE ("{gene_col}"))
-        INTO
-            NAME patient_id
-            VALUE cna_value
-    """).df()
-
-    df = df.rename(columns={gene_col: "gene"})
-    df = df[["patient_id", "gene", "cna_value"]]
-
-    conn.close()
-
-    return df
-
-
 def get_table_name(file_path: str | Path) -> str:
     """Extract table name from filename, removing 'data_' prefix if present."""
-    file_path = Path(file_path)
-    stem = file_path.stem
-
-    # Remove 'data_' prefix if present
+    stem = Path(file_path).stem
     if stem.startswith("data_"):
         return stem[5:]
 

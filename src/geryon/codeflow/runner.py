@@ -61,10 +61,10 @@ def resolve_version_dir(data_base: Path, name: str) -> Path:
 def resolve_explore_dir(path: Path) -> Path:
     """Resolve to the exploration-split parquet dir, enforcing the holdout.
 
-    Accepts either a dated ETL dir (which must contain an ``explore/`` subdir) or a
-    dir that is already the exploration split (identified by its ``SPLIT`` marker).
-    Hard-fails on a legacy, un-split dir so the inner loop can never silently read
-    the full cohort — that validation leak is exactly the bug this guards against.
+    Accepts either a version dir (which must contain an ``explore/`` subdir) or a dir
+    that is already the exploration split (identified by its ``SPLIT`` marker).
+    Hard-fails on an unsplit dir, which would let the inner loop read the validation
+    cohort.
     """
     path = Path(path)
     marker = path / SPLIT_MARKER_FILENAME

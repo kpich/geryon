@@ -23,10 +23,8 @@ class LLMResponse(BaseModel):
 
 
 class LLMProvider(Protocol):
-    """Abstract interface for LLM providers.
-
-    Implementations must support message-based generation with temperature control.
-    """
+    """Interface for LLM providers. Implementations may ignore ``temperature``
+    (Bedrock does, since current Claude models reject it)."""
 
     def generate(
         self,
