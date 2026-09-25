@@ -35,6 +35,19 @@ mypy:
 format:
 	uv run --extra dev ruff format src/
 
+# Lint + format check, no changes made. `make format` is the one that rewrites.
+.PHONY: ruff
+ruff:
+	uv run --extra dev ruff check src/
+	uv run --extra dev ruff format --check src/
+
+# Everything CI runs. Add integration tests here once the first one exists.
+.PHONY: check
+check:
+	$(MAKE) ruff
+	$(MAKE) mypy
+	$(MAKE) test
+
 # Extra nextflow args. Name a data version and point at its own source tree, e.g.:
 #   make etl ARGS="--version medonc-pfs-2026-08 --data_root ~/data/msk-impact/msk_solid_heme_medonc"
 # Without ARGS the version defaults to today's date, as it always has.
