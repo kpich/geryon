@@ -168,11 +168,21 @@ class CodeWorkflow:
             """Run a final script and store it as a hypothesis.
 
             The code is executed in the sandbox; its reported result is recorded
-            along with an LLM narrative. Set `refines` to a parent hypothesis id when
-            this is a derivation/refinement. Returns a short confirmation.
+            along with an LLM narrative. If the script fails, nothing is stored and
+            you get the error back: fix it and submit again. Set `refines` to a
+            parent hypothesis id when this is a derivation/refinement. Returns a
+            short confirmation.
             """
             print(f"[TOOL] submit called: {title!r}")
             run = self._run_in_sandbox(code)
+            if not run.success or run.error:
+                # The model's own mistake: hand it back rather than storing a broken
+                # hypothesis that would be narrated, critiqued and shown as prior work.
+                print("[TOOL] submit rejected: script failed")
+                return (
+                    "✗ NOT SAVED: the script failed. Fix it and call submit again.\n"
+                    + format_run(run)
+                )
             parent = self._lookup(refines, submitted) if refines else None
 
             narrator = CodeNarrator(self.provider, focus=self.config.focus)
@@ -223,8 +233,7 @@ class CodeWorkflow:
                 if narrative and narrative.summary
                 else (run.result.summary if run.result and run.result.summary else "")
             )
-            status = "OK" if run.success else "SCRIPT FAILED"
-            return f"✓ Saved [{hyp.short_id()}] ({status}). {headline}"
+            return f"✓ Saved [{hyp.short_id()}]. {headline}"
 
         return submit
 

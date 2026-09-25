@@ -1,7 +1,7 @@
 """Tests for agent helpers that don't require Docker or an LLM."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -180,3 +180,55 @@ def test_critic_error_aborts_but_keeps_earlier_critiques(tmp_path: Path):
     stored = {h.hypothesis_id: h for h in wf.store.load()}
     assert stored["aaaa1111"].critique == good
     assert stored["bbbb2222"].critique is None
+
+
+# --- submit ------------------------------------------------------------------
+
+_SUBMIT_ARGS = {"title": "t", "description": "d", "rationale": "r", "code": "x"}
+
+
+def _submit(wf: CodeWorkflow, run: ScriptRun) -> tuple[str, list, MagicMock]:
+    submitted: list[CodeHypothesis] = []
+    with (
+        patch.object(wf, "_run_in_sandbox", return_value=run),
+        patch("geryon.codeflow.agent.CodeNarrator") as narrator_cls,
+    ):
+        narrator_cls.return_value.narrate.return_value = None
+        narrator_cls.return_value.last_usage = None
+        out = wf._make_submit_tool(1, submitted).invoke(_SUBMIT_ARGS)
+    return out, submitted, narrator_cls
+
+
+def test_submit_rejects_a_crashed_script_and_stores_nothing(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    run = ScriptRun(success=False, exit_code=1, stderr="ValueError: could not convert")
+
+    out, submitted, narrator_cls = _submit(wf, run)
+
+    assert "NOT SAVED" in out
+    assert "ValueError: could not convert" in out
+    assert submitted == []
+    assert wf.store.load() == []
+    narrator_cls.assert_not_called()
+
+
+def test_submit_rejects_an_unparseable_result(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    run = ScriptRun(success=True, exit_code=0, error="result.json is malformed")
+
+    out, submitted, _ = _submit(wf, run)
+
+    assert "NOT SAVED" in out
+    assert submitted == []
+    assert wf.store.load() == []
+
+
+def test_submit_stores_a_successful_script(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    run = ScriptRun(success=True, exit_code=0, result=IterationResult(summary="HR 0.6"))
+
+    out, submitted, _ = _submit(wf, run)
+
+    assert out.startswith("✓ Saved")
+    assert len(submitted) == 1
+    assert [h.hypothesis_id for h in wf.store.load()] == [submitted[0].hypothesis_id]
