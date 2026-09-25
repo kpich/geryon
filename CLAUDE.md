@@ -36,7 +36,7 @@ in the result is nullable, because "no clean effect size" is a legitimate outcom
 **Generator and critic share tools.** `codeflow/_shared.py` holds the LLM factory, the
 read-only exploration tools and `run_python`. The generator adds `submit` and
 `get_script`; the critic adds `submit_critique`. Both are LangGraph ReAct agents with
-tool calling. Instructor is still listed in `pyproject.toml` but nothing imports it.
+tool calling.
 
 **Resilient loop.** An empty or failed iteration is logged and skipped. It doesn't end
 the session.
@@ -100,10 +100,8 @@ this repo today. The one real chain (`medonc-pfs-os`) lives with the PFS paper i
 `~/dev/pfs/cdm-pfs-modeling-project/misc_analysis/pfs_os_hyp_gen/`, which drives this repo through
 `--chains-dir` / `--output-dir`.
 
-## Known dead code
+## Known loose ends
 
-- `SessionConfig.labeled_dir` and `rank_after_critic` have no readers but still
-  serialize into every `config.json`.
 - `explore/` has a `.profile.json` for only half the tables. The Nextflow
   `splitByPatient` step stages parquet only, so the other tables fall back to live
   sampling in `describe_table`. It works fine; it's just untidy.

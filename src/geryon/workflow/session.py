@@ -51,10 +51,6 @@ class SessionConfig(BaseModel):
         default=0,
         description="Number of LLM critic cycles per iteration (0 = disabled)",
     )
-    rank_after_critic: bool = Field(
-        default=True,
-        description="Run LLM ranker after critic to synthesize top candidates",
-    )
 
     # Line of investigation. Prior hypotheses are injected from this chain only, and the
     # focus prose (from chains/<chain>.md) steers generator, critic and narrator.
@@ -71,10 +67,6 @@ class SessionConfig(BaseModel):
     # Paths
     parquet_dir: Path = Field(..., description="Directory with parquet files")
     storage_dir: Path = Field(..., description="Directory for JSONL output")
-    labeled_dir: Path = Field(
-        default=Path("geryon_data/labeled"),
-        description="Directory with labeled hypothesis JSON files",
-    )
     output_dir: Path | None = Field(
         default=None,
         description="Parent output directory (for loading prior sessions)",
