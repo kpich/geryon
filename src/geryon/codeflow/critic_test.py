@@ -1,11 +1,15 @@
 """Tests for the critic's structured output and helpers (no LLM/Docker)."""
 
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from pydantic import ValidationError
 import pytest
 
-from geryon.codeflow.critic import _clamp
+from geryon.codeflow.critic import HypothesisCritic, _clamp
 from geryon.codeflow.models import CodeCritique, CodeHypothesis
 from geryon.codeflow.store import CodeHypothesisStore
+from geryon.workflow.session import SessionConfig
 
 
 def test_clamp_bounds():
@@ -56,3 +60,28 @@ def test_hypothesis_with_critique_roundtrips(tmp_path):
     assert loaded.critique.holds_up is False
     assert loaded.critique.suggested_fix == "adjust for STAGE"
     assert loaded.critique.tests_run == ["re-ran adjusting for stage"]
+
+
+def test_critic_that_never_submits_raises_instead_of_inventing_scores(tmp_path):
+    config = SessionConfig(
+        parquet_dir=Path(tmp_path), storage_dir=Path(tmp_path), enable_llm_logging=False
+    )
+    graph = MagicMock()
+    graph.invoke.return_value = {"messages": []}
+    with (
+        patch("geryon.codeflow.critic.build_chat_model"),
+        patch("geryon.codeflow.critic.make_explore_tools", return_value=[]),
+        patch("geryon.codeflow.critic.create_react_agent", return_value=graph),
+    ):
+        critic = HypothesisCritic(config, db=MagicMock())
+        hyp = CodeHypothesis(
+            hypothesis_id="abc12345",
+            session_id="s",
+            title="t",
+            description="d",
+            rationale="r",
+            code="print(1)",
+            success=True,
+        )
+        with pytest.raises(RuntimeError, match="without calling submit_critique"):
+            critic.critique(hyp)

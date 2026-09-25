@@ -103,8 +103,7 @@ limitations, context_summary.
                 text = "\n".join(lines[start:end])
             return CodeNarrative(**json.loads(text))
         except (json.JSONDecodeError, ValidationError) as e:
-            return CodeNarrative(
-                summary=f"Failed to parse narrative: {type(e).__name__}",
-                findings=content[:500] if content else "",
-                limitations=["Narrative parsing failed"],
-            )
+            raise ValueError(
+                f"narrator returned unparseable output ({type(e).__name__}): "
+                f"{content[:500]!r}"
+            ) from e

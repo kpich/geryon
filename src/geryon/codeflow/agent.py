@@ -8,7 +8,6 @@ Docker sandbox, and submits scripts as hypotheses. Mirrors the legacy
 from __future__ import annotations
 
 import json
-import traceback
 from typing import Annotated, Any, TypedDict
 import uuid
 
@@ -176,30 +175,26 @@ class CodeWorkflow:
             run = self._run_in_sandbox(code)
             parent = self._lookup(refines, submitted) if refines else None
 
-            narrative = None
-            try:
-                narrator = CodeNarrator(self.provider, focus=self.config.focus)
-                narrative = narrator.narrate(
-                    description=description,
-                    rationale=rationale,
-                    code=code,
-                    result=run.result,
-                    stdout=run.stdout,
+            narrator = CodeNarrator(self.provider, focus=self.config.focus)
+            narrative = narrator.narrate(
+                description=description,
+                rationale=rationale,
+                code=code,
+                result=run.result,
+                stdout=run.stdout,
+            )
+            if self.llm_logger and narrator.last_usage is not None:
+                nu = narrator.last_usage
+                self.llm_logger.log_generation_usage(
+                    iteration=iteration,
+                    phase="narration",
+                    input_tokens=nu.input_tokens,
+                    output_tokens=nu.output_tokens,
+                    total_tokens=nu.total_tokens,
+                    cache_read_tokens=nu.cache_read_tokens,
+                    cache_creation_tokens=nu.cache_creation_tokens,
+                    n_llm_calls=nu.n_llm_calls,
                 )
-                if self.llm_logger and narrator.last_usage is not None:
-                    nu = narrator.last_usage
-                    self.llm_logger.log_generation_usage(
-                        iteration=iteration,
-                        phase="narration",
-                        input_tokens=nu.input_tokens,
-                        output_tokens=nu.output_tokens,
-                        total_tokens=nu.total_tokens,
-                        cache_read_tokens=nu.cache_read_tokens,
-                        cache_creation_tokens=nu.cache_creation_tokens,
-                        n_llm_calls=nu.n_llm_calls,
-                    )
-            except Exception as e:  # narration is best-effort
-                print(f"  ⚠ narration failed: {type(e).__name__}: {e}")
 
             hyp = CodeHypothesis(
                 hypothesis_id=str(uuid.uuid4()),
@@ -304,7 +299,7 @@ class CodeWorkflow:
                 self._make_get_script_tool(submitted),
                 self._make_submit_tool(iteration or 0, submitted),
             ]
-            tool_node = ToolNode(tools, handle_tool_errors=True)
+            tool_node = ToolNode(tools)
             graph = create_react_agent(
                 self.llm,
                 tool_node,
@@ -340,13 +335,11 @@ class CodeWorkflow:
                 print("⚠ No hypotheses submitted in this iteration.")
             return submitted
 
-        except Exception as e:
-            print("⚠ WARNING: Hypothesis generation failed")
-            print(f"  Error: {type(e).__name__}: {e}")
-            traceback.print_exc()
+        except Exception:
+            # Anything submitted is already on disk; say so, then let the session die.
             if submitted:
-                print(f"  Returning {len(submitted)} submitted before failure.")
-            return submitted
+                print(f"✗ Generation failed after saving {len(submitted)} hypotheses.")
+            raise
 
     def _critique_and_persist(self, hypotheses: list[CodeHypothesis]) -> None:
         """Run the agentic critic on this iteration's hypotheses and persist results.
@@ -358,17 +351,16 @@ class CodeWorkflow:
         critic = HypothesisCritic(
             self.config, self.db, tracer=self.llm_logger, iteration=iteration
         )
-        for hyp in hypotheses:
-            print(f"  Critiquing [{hyp.short_id()}]...")
-            try:
+        try:
+            for hyp in hypotheses:
+                print(f"  Critiquing [{hyp.short_id()}]...")
                 hyp.critique = critic.critique(hyp)
-            except Exception as e:
-                print(f"  ⚠ critic failed [{hyp.short_id()}]: {type(e).__name__}: {e}")
-
-        by_id = {h.hypothesis_id: h for h in hypotheses}
-        stored = self.store.load()
-        if stored:
-            self.store.save_all([by_id.get(s.hypothesis_id, s) for s in stored])
+        finally:
+            # Persist whatever critiques finished, even when a later one raises.
+            by_id = {h.hypothesis_id: h for h in hypotheses}
+            stored = self.store.load()
+            if stored:
+                self.store.save_all([by_id.get(s.hypothesis_id, s) for s in stored])
 
     def run_full_session(self) -> list[CodeHypothesis]:
         ensure_sandbox()  # fail fast if Docker / the image is unavailable

@@ -38,8 +38,15 @@ read-only exploration tools and `run_python`. The generator adds `submit` and
 `get_script`; the critic adds `submit_critique`. Both are LangGraph ReAct agents with
 tool calling.
 
-**Resilient loop.** An empty or failed iteration is logged and skipped. It doesn't end
-the session.
+**Failures are loud.** An error in generation, narration or the critic ends the session
+with a nonzero exit code. Hypotheses already submitted are on disk, and so are the
+critiques that finished. Don't add `except Exception` handlers that warn and carry on,
+and don't write fallback values that look like real output (the critic used to fill in
+neutral 2/2/2 scores). What *does* go back to the model is its own mistakes: bad SQL, a
+crashing script, a timeout, bad tool arguments. The tools return those as strings, and
+`ToolNode` uses LangGraph's default handler, which re-raises everything else. An
+iteration where the model submits nothing is a legitimate outcome and the session
+continues.
 
 **Holdout enforced at the data layer.** The inner loop must only ever see the
 *exploration* set, never validation. Hypotheses are free-form Python in a sandbox, so

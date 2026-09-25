@@ -3,8 +3,10 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from geryon.codeflow.agent import CodeWorkflow, format_run
-from geryon.codeflow.models import CodeHypothesis
+from geryon.codeflow.models import CodeCritique, CodeHypothesis
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.etl.data_version import write_version_marker
 from geryon.etl.split_by_patient import SPLIT_MARKER_FILENAME
@@ -121,3 +123,60 @@ def test_get_script_still_resolves_across_chains(tmp_path: Path):
 def test_data_version_falls_back_to_the_dirs_marker(tmp_path: Path):
     wf = _workflow(tmp_path, chain="medonc-pfs")
     assert wf.data_version == "medonc-pfs-2026-08"
+
+
+# --- failures are loud -------------------------------------------------------
+
+
+class _RaisingGraph:
+    def invoke(self, *args, **kwargs):
+        raise RuntimeError("ExpiredTokenException")
+
+
+def test_generation_error_aborts_the_session(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    with (
+        patch("geryon.codeflow.agent.ensure_sandbox"),
+        patch("geryon.codeflow.agent.create_react_agent", return_value=_RaisingGraph()),
+        pytest.raises(RuntimeError, match="ExpiredToken"),
+    ):
+        wf.run_full_session()
+
+
+def test_infra_error_inside_a_tool_is_not_fed_to_the_model(tmp_path: Path):
+    """A tool that raises (e.g. docker dying mid-submit) must escape the ReAct loop."""
+    wf = _workflow(tmp_path, chain="main")
+    tool_node = None
+
+    def capture(llm, node, **kwargs):
+        nonlocal tool_node
+        tool_node = node
+        return _RaisingGraph()
+
+    with (
+        patch("geryon.codeflow.agent.create_react_agent", side_effect=capture),
+        pytest.raises(RuntimeError),
+    ):
+        wf.run_iteration(iteration=1)
+
+    assert tool_node is not None
+    assert tool_node._handle_tool_errors is not True
+
+
+def test_critic_error_aborts_but_keeps_earlier_critiques(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    first, second = _hyp("aaaa1111", "s", "main"), _hyp("bbbb2222", "s", "main")
+    wf.store.save(first)
+    wf.store.save(second)
+    good = CodeCritique(trustworthiness=3, confound_risk=1, novelty=2)
+
+    with (
+        patch("geryon.codeflow.agent.HypothesisCritic") as critic_cls,
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        critic_cls.return_value.critique.side_effect = [good, RuntimeError("boom")]
+        wf._critique_and_persist([first, second])
+
+    stored = {h.hypothesis_id: h for h in wf.store.load()}
+    assert stored["aaaa1111"].critique == good
+    assert stored["bbbb2222"].critique is None

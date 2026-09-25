@@ -8,7 +8,6 @@ re-run an analysis adjusting for a confounder) before scoring the hypothesis.
 from __future__ import annotations
 
 import json
-import traceback
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -70,7 +69,7 @@ class HypothesisCritic:
         caching = supports_cache_control(self.config.provider_type)
         graph = create_react_agent(
             self.llm,
-            ToolNode(tools, handle_tool_errors=True),
+            ToolNode(tools),
             pre_model_hook=tail_cache_pre_model_hook if caching else None,
         )
 
@@ -102,30 +101,23 @@ class HypothesisCritic:
             usr_content = user_text
 
         steps_per_cycle = 3 if caching else 2
-        try:
-            result = graph.invoke(
-                {
-                    "messages": [
-                        SystemMessage(content=sys_content),
-                        HumanMessage(content=usr_content),
-                    ]
-                },
-                config={"recursion_limit": _MAX_REACT_CYCLES * steps_per_cycle},
-            )
-            self._log_trace(result.get("messages", []))
-        except Exception as e:
-            print(f"  ⚠ critic failed for {hyp.short_id()}: {type(e).__name__}: {e}")
-            traceback.print_exc()
-
-        if holder:
-            return holder[-1]
-        # Neutral fallback if the critic never submitted.
-        return CodeCritique(
-            trustworthiness=2,
-            confound_risk=2,
-            novelty=2,
-            notes="Critic did not submit a structured assessment.",
+        result = graph.invoke(
+            {
+                "messages": [
+                    SystemMessage(content=sys_content),
+                    HumanMessage(content=usr_content),
+                ]
+            },
+            config={"recursion_limit": _MAX_REACT_CYCLES * steps_per_cycle},
         )
+        self._log_trace(result.get("messages", []))
+
+        if not holder:
+            # No made-up scores: a critique the critic never gave would read as real.
+            raise RuntimeError(
+                f"critic finished without calling submit_critique for {hyp.short_id()}"
+            )
+        return holder[-1]
 
     def _log_trace(self, messages: list) -> None:
         if self.tracer is None:
