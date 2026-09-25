@@ -1,48 +1,71 @@
 # Geryon Project
 
-Human-in-the-loop LLM tool for hypothesis generation on cancer genomics data. LLM proposes hypotheses in formal language, executor runs them, LLM narrates results.
+LLM agent for hypothesis generation on cancer clinicogenomic data (MSK-IMPACT). Each
+hypothesis is a Python script the model writes and runs in a Docker sandbox. A narrator
+summarizes the result, and an agentic critic tries to falsify it. The README covers
+usage; this file covers what matters for changing the code.
 
 ## Structure
 
 ```
-geryon/
-├── etl/        # Nextflow pipeline: TSV → parquet (includes CNA transpose)
-├── lang/       # Formal hypothesis language (GeryonHyp spec)
-├── db/         # DuckDB wrapper for parquet files
-├── engine/     # Execution engine (registry-based for outcomes/methods)
-├── llm/        # LLM integration (generator, narrator, providers, schema)
-├── labeling/   # JSONL storage for labeled hypotheses
-└── workflow/   # Linear workflow: propose → execute → narrate → store
+src/geryon/
+├── codeflow/   # the loop: agent.py (generator), critic.py, narrate.py, prompts.py,
+│               #   chains.py, context.py (prior-hypothesis summaries), store.py (JSONL),
+│               #   runner.py (CLI entry point, data-dir resolution)
+├── sandbox/    # runner.py (host-side docker run), runtime.py (in-container
+│               #   `geryon_runtime`: db() + report()), result.py, Dockerfile
+├── tools/      # list_tables / describe_table / query_data for the agents
+├── db/         # DuckDB over the parquet dir
+├── etl/        # parquet conversion, profiling, patient split, data_version.py
+├── llm/        # providers (Bedrock, OpenAI, Anthropic), prompt caching, tracing
+├── workflow/   # SessionConfig
+├── cli/        # hypothesis viewer (flask), list_sessions
+└── plot/       # cost-over-time plot
+nextflow/       # etl.nf (TSV -> parquet -> split), plot.nf
+scripts/        # etl.sh, plot.sh, check_split_stable.py, verify_sandbox.py, view_data.py
 ```
 
 ## Key Patterns
 
-**Registry for extensibility** - Add new outcomes/methods without executor changes:
-```python
-# engine/registry.py
-OUTCOME_HANDLERS = {OverallSurvival: OverallSurvivalHandler}
-METHOD_IMPLEMENTATIONS = {ComparisonMethod.HAZARD_RATIO_COX: CoxHazardRatioMethod}
-```
+**Code is the deliverable.** A `CodeHypothesis` (`codeflow/models.py`) is the script plus
+the `IterationResult` it reported through `geryon_runtime.report()`. Every analytic field
+in the result is nullable, because "no clean effect size" is a legitimate outcome.
+`sandbox/runtime.py` is copied into the image on its own and must not import from
+`geryon`.
 
-**Structured LLM output** - Uses Instructor library for Pydantic validation with retry
+**Generator and critic share tools.** `codeflow/_shared.py` holds the LLM factory, the
+read-only exploration tools and `run_python`. The generator adds `submit` and
+`get_script`; the critic adds `submit_critique`. Both are LangGraph ReAct agents with
+tool calling. Instructor is still listed in `pyproject.toml` but nothing imports it.
 
-**Resilient workflow** - Empty proposals/failures don't crash session, logs to file
+**Resilient loop.** An empty or failed iteration is logged and skipped. It doesn't end
+the session.
 
-**Holdout enforced at the data layer** - The inner loop must only ever see the
-*exploration* set, never validation. Because hypotheses are now free-form Python in
-a sandbox (no per-query chokepoint), this is enforced by physically splitting the
-parquet: `etl/create_patient_split.py` labels patients `explore` (80%) / `validation`
-(20%), and `etl/split_by_patient.py` writes `<dated>/explore/` and `<dated>/validation/`
-subdirs filtered to each split (with regenerated profiles + a `SPLIT` marker). The
-session reads `explore/` only — validation is absent from the DuckDB views and the
-read-only sandbox mount. `runner.resolve_explore_dir` hard-fails on an un-split dir,
-and `CodeWorkflow.__init__` refuses any dir not marked `explore`. Note: CNA is
-sample-keyed even though its column is *named* `PATIENT_ID` (it holds sample
-barcodes) — see `SAMPLE_KEY_COLUMNS`. Code uses `explore`; prose says "exploration".
+**Holdout enforced at the data layer.** The inner loop must only ever see the
+*exploration* set, never validation. Hypotheses are free-form Python in a sandbox, so
+there is no per-query chokepoint where a filter could be applied. Instead the parquet is
+split physically: `etl/create_patient_split.py` labels patients `explore` (80%) /
+`validation` (20%), and `etl/split_by_patient.py` writes `<version>/explore/` and
+`<version>/validation/`, each filtered to its split and carrying regenerated profiles and
+a `SPLIT` marker. The session reads `explore/` only. Validation is absent from both the
+DuckDB views and the read-only sandbox mount. `runner.resolve_explore_dir` hard-fails on
+an unsplit dir, and `CodeWorkflow.__init__` refuses any dir not marked `explore`.
 
-**Named data versions** - An ETL run publishes to `~/data/geryon_data/<version>/`, where
-the version name is chosen by a human (`medonc-pfs-2026-08`), not the run date. Build one
-against its own copy of the source tree so the canonical `msk_solid_heme/` stays clean:
+Traps:
+- CNA is keyed by sample even though its column is *named* `PATIENT_ID` (it holds sample
+  barcodes). See `SAMPLE_KEY_COLUMNS`.
+- A new sample-keyed source file must be added to `SAMPLE_KEY_COLUMNS`. Otherwise it is
+  treated as metadata and copied **unfiltered into both splits**, which leaks the
+  holdout without any error.
+- The split is seeded but depends on row order in `data_clinical_patient.txt`. Reorder
+  that file and patients move.
+
+Code says `explore`; prose says "exploration".
+
+**Named data versions.** An ETL run publishes to `~/data/geryon_data/<version>/`. A human
+picks the version name (`medonc-pfs-2026-08`); it isn't the run date. Build a named
+version from its own copy of the source tree so the canonical `msk_solid_heme/` stays
+clean:
 
 ```bash
 make etl ARGS="--version medonc-pfs-2026-08 --data_root ~/data/msk-impact/msk_solid_heme_medonc"
@@ -50,32 +73,40 @@ make etl ARGS="--version medonc-pfs-2026-08 --data_root ~/data/msk-impact/msk_so
 
 `--version` defaults to today's date, so a plain `make etl` behaves as it always has.
 `VERSION.json` at the version root (copied into `explore/` and `validation/`) records the
-name, source tree and seed; `resolve_data_version` reads it and every hypothesis stores it.
-Auto-detection of the "latest" dir considers **only** date-named dirs — a named version has
-to be asked for by name. Use `scripts/check_split_stable.py <a> <b>` after building a new
-version to confirm no patient crossed the explore/validation boundary; if one did, results
-are not comparable across the two versions.
+name, source tree and seed. `resolve_data_version` reads it, and every hypothesis stores
+it. Auto-detection of the "latest" dir considers **only** date-named dirs; otherwise a
+named version like `medonc-…` would sort after every date and silently become "latest".
+After building a new version, run `scripts/check_split_stable.py <a> <b>` to confirm
+that no patient crossed the explore/validation boundary. If one did, results are not
+comparable across the two versions. `publishDir` doesn't overwrite, so rebuilding under
+an existing name keeps the old files. Use a new name.
 
-**Chains** - A chain is a separate line of investigation. `--chain <name>` (or
-`make run CHAIN=<name>`) shows the generator **only that chain's** prior hypotheses, so a
-focused investigation builds on its own work without being flooded by the main line.
-`get_script` deliberately still resolves ids from any chain — the boundary governs what is
-pushed into the prompt, not what can be pulled.
+**Chains.** A chain is a separate line of investigation. `--chain <name>` (or
+`make run CHAIN=<name>`) shows the generator **only that chain's** prior hypotheses, so
+a focused investigation builds on its own work without being flooded by the main line.
+`get_script` deliberately still resolves ids from any chain: the boundary governs what
+is pushed into the prompt, not what can be pulled. Session dirs are not partitioned by
+chain. The chain is recorded in the JSONL header and filtered on read.
 
-A chain is defined by `chains/<name>.md`: optional frontmatter pinning `data_version`, then
-free prose appended to the generator, critic and narrator **system** prompts (the cache
-breakpoint). Prompting is the only steering lever available — sampling params are
-deliberately omitted because Claude 4.x 400s on them. `main` has no file, so the
-open-ended chain keeps its original behavior. Sessions written before chains existed read
-as `main`.
+A chain is defined by `chains/<name>.md` (the dir can be moved with `--chains-dir`). It
+has optional frontmatter pinning `data_version`, then free prose appended to the
+generator, critic and narrator **system** prompts, which sit before the cache
+breakpoint. The critic needs the prose too: without it, it scores novelty against the
+general literature and dismisses focused hypotheses as textbook. Prompting is the only
+steering lever. Sampling params are deliberately omitted because Claude 4.x returns a
+400 when they're set. `main` has no file, so the open-ended chain keeps its original
+behavior. Sessions written before chains existed read as `main`. No chain files live in
+this repo today. The one real chain (`medonc-pfs-os`) lives with the PFS paper in
+`~/dev/pfs/cdm-pfs-modeling-project/misc_analysis/pfs_os_hyp_gen/`, which drives this repo through
+`--chains-dir` / `--output-dir`.
 
-## Current Status
+## Known dead code
 
-- One outcome: `OverallSurvival` (Cox regression on OS_MONTHS/OS_STATUS)
-- One method: `HAZARD_RATIO_COX` (cohort A vs B)
-- LLM providers: AWS Bedrock (default), OpenAI, Anthropic
-- Hypothesis storage: JSONL files (one per session)
-- Very early stage - schema, prompts, error handling all subject to change
+- `SessionConfig.labeled_dir` and `rank_after_critic` have no readers but still
+  serialize into every `config.json`.
+- `explore/` has a `.profile.json` for only half the tables. The Nextflow
+  `splitByPatient` step stages parquet only, so the other tables fall back to live
+  sampling in `describe_table`. It works fine; it's just untidy.
 
 ## Testing
 
