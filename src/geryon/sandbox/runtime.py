@@ -1,8 +1,7 @@
 """In-container runtime API available to every sandboxed script.
 
-This module is baked into the Docker image and imported as ``geryon_runtime``. It
-is deliberately **standalone** — it must not import anything from the ``geryon``
-package, because only this single file (plus third-party deps) lives in the image.
+This file is copied into the Docker image as ``geryon_runtime``. It must not import
+from ``geryon``: nothing else from the package is in the image.
 
 Scripts use it like::
 
@@ -15,9 +14,8 @@ Scripts use it like::
            ci=(lo, hi), n_a=na, n_b=nb, summary="HR 1.8 for TP53-mut")
 
 ``db()`` returns an in-memory DuckDB connection with the parquet files in
-``$DATA_DIR`` (default ``/data``) registered as views. Scripts may freely
-``CREATE TABLE`` / ``INSERT`` — those land in the ephemeral in-memory catalog and
-cannot mutate the source parquet (which is also mounted read-only).
+``$GERYON_DATA_DIR`` (default ``/data``) registered as views. ``CREATE TABLE`` /
+``INSERT`` only touch the in-memory catalog; the parquet is mounted read-only.
 """
 
 from __future__ import annotations
@@ -68,10 +66,10 @@ def report(
 ) -> None:
     """Write the standardized result to $SCRATCH_DIR/result.json.
 
-    Last call wins (idempotent). All fields are optional — report whatever the
-    analysis produced. ``ci`` is a ``(lower, upper)`` tuple. ``extra`` takes any
-    JSON-serializable values (numbers, strings, lists, nested dicts); numpy and
-    pandas scalars/arrays are converted.
+    Calling again overwrites the previous result. All fields are optional; report
+    whatever the analysis produced. ``ci`` is a ``(lower, upper)`` tuple. ``extra``
+    takes any JSON-serializable values (numbers, strings, lists, nested dicts);
+    numpy and pandas scalars/arrays are converted.
     """
     ci_lower, ci_upper = (None, None)
     if ci is not None:

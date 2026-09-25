@@ -127,12 +127,10 @@ process publishResults {
 // ============================================================================
 
 workflow {
-    // Create channel from input TSV files
     tsv_files = Channel
         .fromPath("${params.data_root}/${params.file_pattern}")
         .ifEmpty { error "No TSV files found in ${params.data_root}" }
 
-    // Extract and transform
     parquet_files = extractTSV(tsv_files)
 
     // Generate exploration/validation patient split
@@ -149,7 +147,7 @@ workflow {
     all_parquet = parquet_files.map { parquet, profile -> parquet }.collect()
     splitByPatient(all_parquet, split_table, version_marker)
 
-    // Publish to timestamped directory
+    // Also publish the unsplit tables at the version root.
     publishResults(parquet_files)
 }
 

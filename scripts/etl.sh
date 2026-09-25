@@ -62,11 +62,11 @@ log_info "Starting ETL pipeline..."
 log_info "Project root: ${PROJECT_ROOT}"
 log_info "Nextflow dir: ${NEXTFLOW_DIR}"
 
+# set -e would exit before the failure message below; capture the code instead.
+EXIT_CODE=0
 nextflow run etl.nf \
     -ansi-log true \
-    "$@"
-
-EXIT_CODE=$?
+    "$@" || EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     log_info "Pipeline completed successfully!"

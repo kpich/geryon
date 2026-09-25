@@ -23,7 +23,6 @@ class PreviousContext:
 
 def _format_entry(hyp: CodeHypothesis) -> str:
     """One compact line: id, summary, headline numbers, lineage."""
-    body = ""
     if hyp.narrative and hyp.narrative.context_summary:
         body = hyp.narrative.context_summary
     elif hyp.narrative and hyp.narrative.summary:
@@ -74,11 +73,10 @@ def load_prior_hypotheses(
 ) -> list[CodeHypothesis]:
     """Load code hypotheses from prior sessions under output_dir.
 
-    Skips JSONL files that are not in the codeflow format (e.g. legacy sessions).
-    When ``chain`` is given, only sessions belonging to that chain are returned — this
-    is what keeps a separate line of investigation from being flooded by the main one.
-    Sessions written before chains existed have no ``chain`` in their header and count
-    as :data:`~geryon.codeflow.chains.DEFAULT_CHAIN`. Pass ``None`` to load every chain.
+    Skips JSONL files whose header isn't codeflow format. With ``chain`` set, returns
+    only that chain's sessions; ``None`` loads every chain. Sessions written before
+    chains existed have no ``chain`` in their header and count as
+    :data:`~geryon.codeflow.chains.DEFAULT_CHAIN`.
     """
     if output_dir is None or not output_dir.exists():
         return []

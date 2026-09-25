@@ -54,8 +54,8 @@ def read_split_marker(parquet_dir: Path | str) -> str | None:
 # Sample-keyed tables: the value maps the table to the column holding a SAMPLE_ID,
 # which reaches a patient only through clinical_sample. Checked BEFORE the generic
 # PATIENT_ID rule, because CNA's column is *named* PATIENT_ID but actually holds
-# sample barcodes (e.g. "P-0080859-T01-IM7") — every value is a clinical_sample
-# SAMPLE_ID, none a real patient id. The legacy executor keyed it the same way.
+# sample barcodes (e.g. "P-0080859-T01-IM7"): every value is a clinical_sample
+# SAMPLE_ID, none a real patient id.
 #
 # Any table not listed here and lacking a real PATIENT_ID column is metadata and
 # copied verbatim.
@@ -147,7 +147,7 @@ def split_directory(
         )
 
     ids_by_split = _split_patient_ids(split_table)
-    parquet_files = sorted(p for p in input_dir.glob("*.parquet"))
+    parquet_files = sorted(input_dir.glob("*.parquet"))
 
     con = duckdb.connect(":memory:")
     written: list[Path] = []

@@ -1,14 +1,8 @@
 """Browser-based viewer for code-first hypotheses.
 
-Read-only Flask app that surfaces ``CodeHypothesis`` records written by the
-codeflow runner under ``geryon_data/sessions/``. The legacy annotator
-(``geryon.legacy.cli.annotate``) was bound to the old spec model; this is its
-replacement for the overhaul.
-
-Kept deliberately thin: the API just serves the stored records as JSON and the
-template renders them. New fields on ``CodeHypothesis`` show up with no server
-change, and richer visualizations (plots, lineage graphs) can be layered on the
-client over the same ``/api/hypotheses`` payload.
+Read-only Flask app over the ``CodeHypothesis`` records under
+``geryon_data/sessions/``. The API serves the stored records as JSON and the
+template renders them, so new ``CodeHypothesis`` fields need no server change.
 """
 
 import argparse
@@ -71,9 +65,9 @@ def create_app(output_dir: Path) -> Flask:
 
     @app.get("/api/hypotheses")
     def api_hypotheses():
-        # Hide crashed/timed-out runs (success=False): a failed submit that was
-        # fixed and resubmitted moments later is noise. They remain on disk and
-        # are still counted in /api/stats.
+        # Only older sessions have success=False records (failed submits are no
+        # longer stored). They're usually retried moments later, so hide them here;
+        # /api/stats still counts them.
         return jsonify([h for h in _load_all(output_dir) if h["success"]])
 
     @app.get("/api/stats")

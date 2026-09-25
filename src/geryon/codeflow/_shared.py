@@ -1,8 +1,5 @@
-"""Shared building blocks for the code-first agent and critic.
-
-Factored out so the generator (agent.py) and the critic (critic.py) share one LLM
-factory, one set of exploration tools, and one sandbox-run path.
-"""
+"""LLM factory, exploration tools and sandbox runner shared by the generator
+(agent.py) and the critic (critic.py)."""
 
 from __future__ import annotations
 
@@ -39,8 +36,9 @@ class MessageUsage(NamedTuple):
 def sum_message_usage(messages: list) -> MessageUsage:
     """Sum token usage across a LangGraph/LangChain message list.
 
-    Reads each message's ``usage_metadata`` (set on AI responses). The cached
-    portion lives in ``input_token_details`` and is a subset of ``input_tokens``.
+    Reads each message's ``usage_metadata`` (set on AI responses). On Bedrock,
+    ``input_tokens`` is the uncached input only and the ``input_token_details`` cache
+    counts are separate from it, the same disjoint buckets the cost plot prices.
     """
     inp = out = tot = cache_read = cache_create = calls = 0
     for msg in messages:
@@ -60,11 +58,10 @@ def sum_message_usage(messages: list) -> MessageUsage:
 
 
 def usage_from_response(response: LLMResponse) -> MessageUsage:
-    """Map a provider ``LLMResponse.usage`` dict into a ``MessageUsage`` (one call).
+    """Map one provider ``LLMResponse.usage`` dict into a ``MessageUsage``.
 
-    Provider usage dicts report uncached input as ``prompt_tokens`` with the
-    cached portion broken out separately (``cache_read_tokens`` /
-    ``cache_write_tokens``) — disjoint buckets, matching the cost-plot pricing.
+    ``prompt_tokens`` is the uncached input; ``cache_read_tokens`` and
+    ``cache_write_tokens`` are separate from it, as the cost plot expects.
     """
     usage = response.usage or {}
     inp = int(usage.get("prompt_tokens", 0) or 0)
@@ -173,8 +170,7 @@ def build_chat_model(config: SessionConfig):
             kwargs["openai_api_key"] = config.api_key
         return ChatOpenAI(**kwargs)  # type: ignore[arg-type]
     elif config.provider_type == "anthropic":
-        # Claude 4.x (Opus 4.7/4.8, Fable 5) removed temperature/top_p/top_k — sending
-        # them 400s. Steer via prompting/effort instead.
+        # Current Claude models 400 on temperature/top_p/top_k, so none are sent.
         kwargs = {
             "model_name": config.model,
             "max_tokens": 16384,
@@ -190,8 +186,7 @@ def build_chat_model(config: SessionConfig):
         )
         kwargs = {
             "model_id": config.model,
-            # Claude 4.x on Bedrock rejects temperature (400: "deprecated for this
-            # model"); omit sampling params and steer via prompting/effort.
+            # Sampling params omitted for the same reason as the anthropic branch.
             "model_kwargs": {"max_tokens": 16384},
             "config": boto_config,
         }

@@ -1,8 +1,8 @@
 """Agentic critic: reviews a code hypothesis and can run code to falsify it.
 
-Unlike the legacy text-only rater, this critic gets the same exploration + sandbox
-``run_python`` tools as the generator, so it can actually test a suspicion (e.g.
-re-run an analysis adjusting for a confounder) before scoring the hypothesis.
+The critic has the same exploration and ``run_python`` tools as the generator, so it
+can test a suspicion (e.g. re-run the analysis adjusting for a confounder) before
+scoring the hypothesis.
 """
 
 from __future__ import annotations

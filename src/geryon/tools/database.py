@@ -73,7 +73,8 @@ def _describe_from_profile(profile: dict) -> str:
 
     if strategy == "wide_matrix":
         gene_columns = profile.get("gene_columns", [])
-        # Summarize the gene value domain from representative columns
+        # Only a handful of gene columns are profiled; pool their values to show the
+        # domain (e.g. -2..2 for CNA).
         gene_profiles = [
             c
             for c in profile["columns"]
@@ -167,7 +168,6 @@ def query_data(db: Database, sql: str) -> str:
     if not sql.strip().upper().startswith("SELECT"):
         return "ERROR: Only SELECT queries allowed"
 
-    # Add LIMIT if not present
     if "LIMIT" not in sql.upper():
         sql = f"{sql} LIMIT 100"
 

@@ -1,10 +1,4 @@
-"""
-CLI entry point for processing cBioPortal TSV files.
-
-This module provides a command-line interface for converting cBioPortal-formatted
-TSV files to parquet. It is designed to be invoked via
-`python -m geryon.etl.process_cbioportal_file`.
-"""
+"""Convert one cBioPortal TSV file to parquet plus a column-profile sidecar."""
 
 import argparse
 import logging
@@ -33,24 +27,19 @@ def process_cbioportal_file(
     output_path: Path,
     compression: Literal["snappy", "gzip", "brotli", "lz4", "zstd"] = "snappy",
 ) -> None:
-    """Convert cBioPortal TSV file to parquet format.
+    """Convert a cBioPortal TSV file to parquet.
 
-    Special handling for CNA files: transposes wide matrix (1 column per patient)
-    to long format (patient_id, gene, cna_value) for efficient SQL querying.
-    Uses DuckDB to stream directly to parquet without materializing 110M rows.
+    The CNA file is special-cased: it arrives with one column per sample and is
+    transposed to one row per sample, one column per gene.
     """
-    # Use specialized writer for CNA data files (wide matrix → long format)
-    # Match data_CNA but not meta_CNA
-    # Bypass pandas entirely to avoid memory issues with 110M rows
-    if "data_CNA" in input_path.name:
+    if "data_CNA" in input_path.name:  # not meta_CNA
         logger.info(f"Reading CNA file: {input_path}")
-        logger.info("Transposing wide matrix to long format (streaming to parquet)")
+        logger.info("Transposing to one row per sample")
         write_cna_matrix_to_parquet(input_path, output_path)
         _write_profile(output_path)
         logger.info("Success!")
         return
 
-    # Standard flow for non-CNA files
     logger.info(f"Reading TSV file: {input_path}")
     df = read_tsv(input_path)
 

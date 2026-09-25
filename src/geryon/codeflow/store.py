@@ -1,8 +1,5 @@
-"""JSONL storage for code hypotheses.
-
-Mirrors the legacy ``HypothesisStore`` format (metadata line 1, one record per line,
-atomic rewrite) but for ``CodeHypothesis`` and with no spec/version coupling.
-"""
+"""JSONL storage for code hypotheses: a metadata header line, then one record per
+line."""
 
 from datetime import UTC, datetime
 import json

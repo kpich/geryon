@@ -52,16 +52,16 @@ fi
 # Ensure output directory exists
 mkdir -p "${PROJECT_ROOT}/plots"
 
-# Navigate to Nextflow directory and run pipeline
 log_info "Starting plot pipeline..."
 log_info "Project root: ${PROJECT_ROOT}"
 log_info "Nextflow dir: ${NEXTFLOW_DIR}"
 
-cd "${NEXTFLOW_DIR}" && nextflow run plot.nf \
+# set -e would exit before the failure message below; capture the code instead.
+EXIT_CODE=0
+cd "${NEXTFLOW_DIR}"
+nextflow run plot.nf \
     -ansi-log true \
-    "$@"
-
-EXIT_CODE=$?
+    "$@" || EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     log_info "Pipeline completed successfully!"

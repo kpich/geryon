@@ -18,7 +18,6 @@ def main():
         print(f"Storage directory does not exist: {storage_path}")
         return
 
-    # Find all session JSONL files
     session_files = list(storage_path.rglob("hypotheses.jsonl"))
 
     if not session_files:
@@ -30,7 +29,6 @@ def main():
 
     for file in sorted(session_files):
         try:
-            # Load session metadata
             with open(file) as f:
                 first_line = f.readline()
                 metadata = json.loads(first_line)
@@ -39,7 +37,7 @@ def main():
                     session_id = metadata.get("session_id", "unknown")
                     created_at = metadata.get("created_at", "unknown")
 
-                    # Count hypotheses (subtract 1 for metadata line)
+                    # The header line was already consumed above.
                     num_hyps = sum(1 for _ in f)
 
                     print(f"Session: {session_id}")
