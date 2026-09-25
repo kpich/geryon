@@ -6,8 +6,10 @@ runner returns: the parsed result plus execution metadata (stdout, exit code, ..
 
 Reporting is optional and partial — "no clean effect size" is a first-class case,
 so every analytic field is nullable. The ``extra`` dict is the extensibility hatch
-for method-specific numbers (mirrors the legacy ``ComparisonResult.extra_stats``).
+for anything else the method produced: numbers, notes, per-group breakdowns.
 """
+
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -44,7 +46,7 @@ class IterationResult(BaseModel):
     summary: str | None = Field(
         default=None, description="One-line plain-language result the script reported"
     )
-    extra: dict[str, float] = Field(default_factory=dict)
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class ScriptRun(BaseModel):

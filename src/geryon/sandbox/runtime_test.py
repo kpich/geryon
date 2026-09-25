@@ -9,7 +9,9 @@ is the contract the host runner relies on.
 import json
 from pathlib import Path
 
+import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
+import pytest
 
 from geryon.sandbox import runtime
 from geryon.sandbox.result import IterationResult
@@ -80,3 +82,34 @@ def test_table_name_strips_data_prefix():
     assert runtime._table_name(Path("data_CNA.parquet")) == "CNA"
     timeline = Path("timeline_treatment.parquet")
     assert runtime._table_name(timeline) == "timeline_treatment"
+
+
+def test_report_extra_accepts_non_numeric_values(monkeypatch, tmp_path: Path):
+    result_path = _point_scratch(monkeypatch, tmp_path)
+
+    extra = {
+        "censoring": "first T-DXd dose; censored at global last follow-up",
+        "hr_by_line": {"1L": 0.8, "2L+": 1.3},
+        "n_events": np.int64(42),
+        "median_os": np.float64(18.5),
+        "cutpoints": np.array([6, 12, 24]),
+        "missing": None,
+    }
+    runtime.report(extra=extra)
+
+    parsed = IterationResult.model_validate(json.loads(result_path.read_text()))
+    assert parsed.extra == {
+        "censoring": "first T-DXd dose; censored at global last follow-up",
+        "hr_by_line": {"1L": 0.8, "2L+": 1.3},
+        "n_events": 42,
+        "median_os": 18.5,
+        "cutpoints": [6, 12, 24],
+        "missing": None,
+    }
+
+
+def test_report_extra_rejects_unserializable_value(monkeypatch, tmp_path: Path):
+    _point_scratch(monkeypatch, tmp_path)
+
+    with pytest.raises(TypeError, match="JSON-serializable"):
+        runtime.report(extra={"obj": object()})
