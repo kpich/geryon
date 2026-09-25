@@ -93,8 +93,8 @@ prompts and sessions under its own version control.
 ## Development
 
 ```bash
-make test            # pytest src/ (unit tests sit next to the code as *_test.py)
-make mypy
+make check           # ruff lint + format check, mypy, unit tests (what CI runs)
+make test            # just pytest src/ (unit tests sit next to the code as *_test.py)
 make format
 make backup          # commit and push geryon_data/ to its own git remote
 make restore         # clone geryon_data/ from that remote
