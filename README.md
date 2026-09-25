@@ -1,106 +1,30 @@
 # Geryon
 
-An LLM agent that generates and stress-tests hypotheses on cancer clinicogenomic data
-(MSK-IMPACT via cBioPortal). Early and changing fast; interfaces below will break.
+An LLM agent that generates hypotheses from a tabular dataset and then tries to knock
+them down. Early and changing fast.
 
-Each hypothesis is a Python script the model writes and runs in a locked-down Docker
-sandbox, with the data mounted read-only and no network. The script reports an effect
-size, CI and p-value. A second agent, the critic, then gets the same tools and tries to
-break the finding by running its own analyses.
-
-## How a session works
-
-Each iteration has three roles:
-
-1. **Generator.** Explores the data with read-only tools (`list_tables`,
-   `describe_table`, `query_data` for SQL), tries analyses with `run_python`, and calls
-   `submit` when it has a result worth keeping. It sees one-line summaries of earlier
-   hypotheses and can pull any of them in full with `get_script` to refine it.
-2. **Narrator.** Writes a plain-language account of the result and its limitations.
-3. **Critic** (optional, `--critic-cycles 1`). Same tools as the generator. It probes for
-   confounding and bias, then scores the hypothesis for trustworthiness, confound risk
-   and novelty, and says whether it holds up.
-
-Hypotheses are appended to `geryon_data/sessions/<date>/<id>/hypotheses.jsonl`, next to
-the session's `config.json` and a `trace.jsonl` of every tool call.
+Each hypothesis is a Python script the model writes and runs in a Docker sandbox. A
+critic agent then runs its own analyses to try to break it.
 
 ## Setup
 
 Needs [uv](https://docs.astral.sh/uv/), Docker and Nextflow.
 
 ```bash
-make dev             # uv sync --all-extras, install pre-commit hooks
-make sandbox-build   # build the geryon-sandbox Docker image
-make etl             # cBioPortal TSVs -> parquet, split into explore/validation
+make dev             # install deps and pre-commit hooks
+make sandbox-build   # build the sandbox image
+make etl             # raw TSVs -> parquet, with a held-out validation split
 ```
 
-The ETL reads from `params.data_root` in `nextflow/etl.nf` and writes to
-`~/data/geryon_data/<version>/`.
-
-## Running
+## Usage
 
 ```bash
-make run                         # 10 iterations on AWS Bedrock, critic on, tee'd to ./out
-make run ITERS=1                 # quick smoke run
-make run CHAIN=<name> ITERS=5    # a focused line of investigation (see Chains)
+make run ITERS=3     # run a session (billable LLM calls)
+make viewer          # browse results at http://localhost:8765
+make check           # lint, types, tests
 ```
 
-`make run` makes billable LLM calls. It forwards only `ITERS` and `CHAIN`. For other
-options (provider, model, data version, output dir) call the runner directly; see
-`uv run python -m geryon.codeflow.runner --help`. The providers are `aws_bedrock` (the
-default), `anthropic` and `openai`.
-
-```bash
-make viewer          # browse hypotheses at http://localhost:8765
-make data            # poke at the parquet tables in harlequin
-make plot            # Nextflow plot pipeline -> plots/
-```
-
-## Data
-
-**The validation holdout is enforced physically.** The ETL assigns 80% of patients to
-`explore/` and 20% to `validation/`, as separate parquet directories. A session mounts
-only `explore/`. The runner refuses a directory that isn't marked as the explore split,
-so nothing the model runs can reach the validation patients.
-
-**Data versions.** The ETL output directory is named by `--version`, which defaults to
-today's date. Give a version a real name when it's built from a variant source tree:
-
-```bash
-make etl ARGS="--version medonc-pfs-2026-08 --data_root ~/data/msk-impact/msk_solid_heme_medonc"
-uv run python scripts/check_split_stable.py 2026-06-30 medonc-pfs-2026-08
-```
-
-The second command confirms that no patient changed sides of the explore/validation
-split between versions. If one did, results from the two versions aren't comparable.
-When no version is requested, the runner picks the latest *date-named* directory. A
-named version is used only when asked for by name.
-
-**Chains.** A chain is a separate line of investigation. Its generator sees only its own
-earlier hypotheses. A chain is defined by `chains/<name>.md`:
-
-```markdown
----
-data_version: medonc-pfs-2026-08
----
-Prose that is appended to the generator, critic and narrator system prompts.
-```
-
-The default chain, `main`, has no file and is fully open-ended. Chain files don't have
-to live in this repo: `--chains-dir` and `--output-dir` let another project keep its
-prompts and sessions under its own version control.
-
-## Development
-
-```bash
-make check           # ruff lint + format check, mypy, unit tests (what CI runs)
-make test            # just pytest src/ (unit tests sit next to the code as *_test.py)
-make format
-make backup          # commit and push geryon_data/ to its own git remote
-make restore         # clone geryon_data/ from that remote
-```
-
-CI runs ruff, mypy and the tests on every PR.
+More options: `uv run python -m geryon.codeflow.runner --help`.
 
 ## Sample output
 
