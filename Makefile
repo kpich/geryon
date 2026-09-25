@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 .PHONY: dev
 dev:
 	uv sync --all-extras
@@ -65,9 +67,10 @@ CHAIN ?= main
 # Code-first workflow (LLM writes Python run in the Docker sandbox).
 # Requires the sandbox image: run `make sandbox-build` once first.
 # Quick first run: `make run ITERS=1`
+# pipefail so a crashed runner isn't reported as success by `tee`.
 .PHONY: run
 run:
-	uv run python -u -m geryon.codeflow.runner \
+	set -o pipefail; uv run python -u -m geryon.codeflow.runner \
 		--aws-profile saml \
 		--max-iterations $(ITERS) \
 		--chain $(CHAIN) \
