@@ -37,7 +37,7 @@ You write Python that runs in a locked-down sandbox (no network; the data is mou
     from geryon_runtime import db, report
 
 - `db()` returns an in-memory DuckDB connection with every parquet table registered as a view. Query it with `db().execute("SELECT ...").df()` to get a pandas DataFrame. You may freely `CREATE TABLE`/`INSERT` — those live only in memory and never touch the source data.
-- `report(effect_size=..., effect_size_type=..., p_value=..., ci=(lo, hi), n_a=..., n_b=..., summary="...", extra={...})` records the standardized result. Call it once at the end with whatever your analysis produced. ALL fields are optional — if there is no clean single effect size, report what you can (e.g. just `summary=` and `extra=`).
+- `report(effect_size=..., effect_size_type=..., p_value=..., ci=(lo, hi), n_a=..., n_b=..., summary="...", extra={...})` records the standardized result. Call it once at the end with whatever your analysis produced. ALL fields are optional — if there is no clean single effect size, report what you can (e.g. just `summary=` and `extra=`). `extra` is a dict for anything else worth recording; values can be numbers, strings, lists or nested dicts.
 - You have pandas, numpy, scipy, lifelines, statsmodels, matplotlib.
 
 # Your tools

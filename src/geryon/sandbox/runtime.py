@@ -69,7 +69,9 @@ def report(
     """Write the standardized result to $SCRATCH_DIR/result.json.
 
     Last call wins (idempotent). All fields are optional — report whatever the
-    analysis produced. ``ci`` is a ``(lower, upper)`` tuple.
+    analysis produced. ``ci`` is a ``(lower, upper)`` tuple. ``extra`` takes any
+    JSON-serializable values (numbers, strings, lists, nested dicts); numpy and
+    pandas scalars/arrays are converted.
     """
     ci_lower, ci_upper = (None, None)
     if ci is not None:
@@ -84,11 +86,23 @@ def report(
         "n_a": _as_int(n_a),
         "n_b": _as_int(n_b),
         "summary": summary,
-        "extra": {k: _as_float(v) for k, v in (extra or {}).items()},
+        "extra": extra or {},
     }
 
     SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
-    RESULT_PATH.write_text(json.dumps(payload))
+    RESULT_PATH.write_text(json.dumps(payload, default=_to_json))
+
+
+def _to_json(value: Any) -> Any:
+    # numpy scalars have .item(); numpy arrays and pandas Series have .tolist().
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if hasattr(value, "item"):
+        return value.item()
+    raise TypeError(
+        "report(extra=...) values must be JSON-serializable; "
+        f"got {type(value).__name__}"
+    )
 
 
 def _as_float(value: Any) -> float | None:
