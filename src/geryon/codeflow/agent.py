@@ -16,8 +16,10 @@ from langgraph.prebuilt import ToolNode, create_react_agent
 
 from geryon.codeflow._shared import (
     build_chat_model,
+    data_facts_text,
     format_run,
     make_explore_tools,
+    make_record_fact_tool,
     make_run_python_tool,
     run_in_sandbox,
     sum_message_usage,
@@ -33,7 +35,11 @@ from geryon.codeflow.models import (
     CodeHypothesis,
 )
 from geryon.codeflow.narrate import CodeNarrator
-from geryon.codeflow.prompts import GENERATOR_SYSTEM_PROMPT, with_focus
+from geryon.codeflow.prompts import (
+    GENERATOR_SYSTEM_PROMPT,
+    with_data_facts,
+    with_focus,
+)
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.db import Database
 from geryon.etl.data_version import resolve_data_version
@@ -182,7 +188,11 @@ class CodeWorkflow:
                 )
             parent = self._lookup(refines, submitted) if refines else None
 
-            narrator = CodeNarrator(self.provider, focus=self.config.focus)
+            narrator = CodeNarrator(
+                self.provider,
+                focus=self.config.focus,
+                data_facts=data_facts_text(self.config),
+            )
             narrative = narrator.narrate(
                 description=description,
                 rationale=rationale,
@@ -279,7 +289,10 @@ class CodeWorkflow:
         print("Generating a hypothesis...")
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
 
-        system_content = with_focus(GENERATOR_SYSTEM_PROMPT, self.config.focus)
+        system_content = with_focus(
+            with_data_facts(GENERATOR_SYSTEM_PROMPT, data_facts_text(self.config)),
+            self.config.focus,
+        )
         user_text = (
             f"{prev_ctx.text}\n\n"
             "Generate a hypothesis. Explore first, iterate on your "
@@ -302,6 +315,7 @@ class CodeWorkflow:
         try:
             tools = self.explore_tools + [
                 make_run_python_tool(self.config, self.sandbox_limits),
+                make_record_fact_tool(self.config, self.sandbox_limits, "generator"),
                 self._make_get_script_tool(submitted),
                 self._make_submit_tool(iteration or 0, submitted),
             ]
