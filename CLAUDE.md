@@ -115,6 +115,18 @@ this repo today. The one real chain (`medonc-pfs-os`) lives with the PFS paper i
 `~/dev/pfs/cdm-pfs-modeling-project/misc_analysis/pfs_os_hyp_gen/`, which drives this repo through
 `--chains-dir` / `--output-dir`.
 
+**Prompt sets and levers.** The generator, critic and narrator prose lives in a prompt
+set, a directory of templates: `generator.md`, `generator_user.md`, `critic.md` and
+`narrator.md`. `codeflow/prompt_sets/default/` ships with the package. `--prompts <dir>`
+runs a copy that you've edited, and it must contain every template. Nothing is filled in
+from the default. If `generator_user.md` has no `{previous_hypotheses}` placeholder, no
+prior hypotheses are shown. `--no-data-facts` leaves the facts block out. The runner
+resolves everything into `SessionConfig`, so `config.json` records the full prompt texts,
+`include_data_facts`, and `code_version` (commit, plus `+dirty` if tracked files had
+changed). Put new steering in a template or behind a config field, never as hardcoded
+prose, so sessions stay comparable. The facts and focus blocks are still appended in code
+(`with_data_facts`, `with_focus`).
+
 ## Known loose ends
 
 - `explore/` has a `.profile.json` for only half the tables. The Nextflow

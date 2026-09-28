@@ -25,7 +25,6 @@ from geryon.codeflow._shared import (
 from geryon.codeflow.models import CodeCritique, CodeHypothesis
 from geryon.codeflow.prompts import (
     CRITIC_FOCUS_NOTE,
-    CRITIC_SYSTEM_PROMPT,
     with_data_facts,
     with_focus,
 )
@@ -92,7 +91,7 @@ class HypothesisCritic:
         )
 
         system_prompt = with_focus(
-            with_data_facts(CRITIC_SYSTEM_PROMPT, data_facts_text(self.config)),
+            with_data_facts(self.config.prompts.critic, data_facts_text(self.config)),
             self.config.focus,
             note=CRITIC_FOCUS_NOTE,
         )

@@ -27,7 +27,7 @@ def _hyp(hid: str, session: str = "s1", **kw) -> CodeHypothesis:
 
 def test_empty_context():
     ctx = format_previous_hypotheses([])
-    assert "No previous hypotheses" in ctx.text
+    assert ctx.text == "(none yet)"
     assert ctx.ids == []
 
 

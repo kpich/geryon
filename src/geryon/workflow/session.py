@@ -8,6 +8,7 @@ import uuid
 from pydantic import BaseModel, Field
 
 from geryon.codeflow.chains import DEFAULT_CHAIN
+from geryon.codeflow.prompts import PromptSet, load_prompt_set
 from geryon.llm import DEFAULT_BEDROCK_MODEL
 
 
@@ -62,6 +63,20 @@ class SessionConfig(BaseModel):
     data_version: str | None = Field(
         default=None,
         description="Human-readable name of the data version being read",
+    )
+
+    # Steering levers, recorded per session so runs with different settings can be
+    # compared.
+    prompts: PromptSet = Field(
+        default_factory=load_prompt_set,
+        description="Resolved prompt texts (see geryon.codeflow.prompts)",
+    )
+    include_data_facts: bool = Field(
+        default=True, description="Show the verified data facts in all three prompts"
+    )
+    code_version: str | None = Field(
+        default=None,
+        description="git commit of the geryon checkout, '+dirty' if it had changes",
     )
 
     # Paths

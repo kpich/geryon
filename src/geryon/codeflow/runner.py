@@ -9,11 +9,13 @@ import json
 import logging
 from pathlib import Path
 import re
+import subprocess
 import uuid
 
 from geryon.codeflow.agent import CodeWorkflow
 from geryon.codeflow.chains import DEFAULT_CHAIN, ChainDef, chain_path, load_chain
 from geryon.codeflow.models import CodeHypothesis
+from geryon.codeflow.prompts import load_prompt_set
 from geryon.etl.data_version import (
     read_data_version,
     resolve_data_version,
@@ -122,6 +124,29 @@ def resolve_etl_dir(
     return etl_dir
 
 
+def code_version() -> str | None:
+    """The geryon checkout's commit, suffixed ``+dirty`` if tracked files changed.
+
+    None when geryon isn't running from a git checkout.
+    """
+    here = Path(__file__).parent
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(here), *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    try:
+        commit = git("rev-parse", "--short=12", "HEAD")
+        dirty = git("status", "--porcelain", "--untracked-files=no")
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return commit + ("+dirty" if dirty else "")
+
+
 def run_workflow(
     output_dir: Path | None = None,
     data_dir: Path | None = None,
@@ -131,6 +156,8 @@ def run_workflow(
     data_version: str | None = None,
     focus: str | None = None,
     focus_file: Path | None = None,
+    prompts: Path | str | None = None,
+    include_data_facts: bool | None = None,
     provider: str | None = None,
     model: str | None = None,
     base_url: str | None = None,
@@ -171,12 +198,14 @@ def run_workflow(
     if focus is None:
         focus = chain_def.focus
     resolved_version = resolve_data_version(parquet_dir)
+    prompt_set = load_prompt_set(prompts)
 
     print(f"Chain: {chain_def.name}")
     print(f"Data version: {resolved_version}")
     print(
         "Focus: " + (f"{len(focus)} chars" if focus else "none (unfocused exploration)")
     )
+    print(f"Prompt set: {prompt_set.name}")
     print(f"Using ETL data from: {parquet_dir}")
     print(f"Output directory: {run_dir}")
     print()
@@ -185,6 +214,9 @@ def run_workflow(
         "chain": chain_def.name,
         "focus": focus,
         "data_version": resolved_version,
+        "prompts": prompt_set,
+        "include_data_facts": include_data_facts,
+        "code_version": code_version(),
         "provider_type": provider,
         "model": model,
         "base_url": base_url,
@@ -255,6 +287,17 @@ def main() -> None:
         "--focus-file", type=Path, default=None, help="Read focus prose from a file"
     )
     parser.add_argument(
+        "--prompts",
+        default=None,
+        help="Prompt set: 'default' or a directory holding the same templates as "
+        "src/geryon/codeflow/prompt_sets/default/",
+    )
+    parser.add_argument(
+        "--no-data-facts",
+        action="store_true",
+        help="Leave the verified data facts out of the prompts",
+    )
+    parser.add_argument(
         "--provider", choices=["openai", "anthropic", "aws_bedrock"], default=None
     )
     parser.add_argument(
@@ -286,6 +329,8 @@ def main() -> None:
         data_version=args.data_version,
         focus=args.focus,
         focus_file=args.focus_file,
+        prompts=args.prompts,
+        include_data_facts=False if args.no_data_facts else None,
         provider=args.provider,
         model=args.model,
         base_url=args.base_url,

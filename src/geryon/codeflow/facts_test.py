@@ -93,3 +93,9 @@ def test_unknown_supersedes_is_rejected(tmp_path: Path) -> None:
     out = _record(tmp_path, ScriptRun(success=True, exit_code=0), supersedes="nope")
     assert "no fact with id 'nope'" in out
     assert DataFactStore(tmp_path / "sessions").load_all() == []
+
+
+def test_facts_can_be_left_out_of_the_prompts(tmp_path: Path) -> None:
+    _record(tmp_path, ScriptRun(success=True, exit_code=0))
+    config = _config(tmp_path).model_copy(update={"include_data_facts": False})
+    assert data_facts_text(config) is None
