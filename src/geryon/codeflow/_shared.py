@@ -12,7 +12,15 @@ from langchain_aws import ChatBedrock
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
+from geryon.codeflow.facts import (
+    DataFact,
+    DataFactStore,
+    Recorder,
+    format_facts,
+    has_assert,
+)
 from geryon.db import Database
+from geryon.etl.data_version import resolve_data_version
 from geryon.llm.providers.base import LLMResponse
 from geryon.sandbox import SandboxLimits, ScriptRun, run_script
 from geryon.tools.database import describe_table, list_tables, query_data
@@ -154,6 +162,65 @@ def make_run_python_tool(config: SessionConfig, limits: SandboxLimits):
         return format_run(run_in_sandbox(config, code, limits))
 
     return run_python
+
+
+def session_data_version(config: SessionConfig) -> str:
+    return config.data_version or resolve_data_version(config.parquet_dir)
+
+
+def facts_store(config: SessionConfig) -> DataFactStore:
+    # Without an output dir (tests, ad-hoc runs) facts stay with the session itself.
+    return DataFactStore(config.output_dir or config.storage_dir)
+
+
+def data_facts_text(config: SessionConfig) -> str | None:
+    """The verified facts for this session's data version, rendered for a prompt."""
+    store = facts_store(config)
+    return format_facts(store.current(session_data_version(config)))
+
+
+def make_record_fact_tool(
+    config: SessionConfig, limits: SandboxLimits, recorded_by: Recorder
+):
+    """A tool that saves a data fact, but only once a script asserting it passes."""
+    store = facts_store(config)
+
+    @tool
+    def record_data_fact(
+        fact: str, check_code: str, supersedes: str | None = None
+    ) -> str:
+        """Save a verified fact about the data for every later session to see.
+
+        `check_code` must contain `assert` statements that establish the fact and
+        must run cleanly in the sandbox (`from geryon_runtime import db`). Set
+        `supersedes` to the id of an earlier fact this one corrects.
+        """
+        print("[TOOL] record_data_fact called")
+        if not has_assert(check_code):
+            return (
+                "✗ NOT SAVED: check_code has no assert statement (or doesn't parse). "
+                "Assert the fact against the data."
+            )
+        old = None
+        if supersedes:
+            old = store.find(supersedes)
+            if old is None:
+                return f"✗ NOT SAVED: no fact with id '{supersedes}' to supersede."
+        run = run_in_sandbox(config, check_code, limits)
+        if not run.success:
+            return "✗ NOT SAVED: the check failed.\n" + format_run(run)
+        saved = DataFact(
+            fact=fact,
+            check_code=check_code,
+            data_version=session_data_version(config),
+            session_id=config.session_id,
+            recorded_by=recorded_by,
+            supersedes=old.fact_id if old else None,
+        )
+        store.append(saved)
+        return f"✓ Fact saved [{saved.short_id()}]."
+
+    return record_data_fact
 
 
 def build_chat_model(config: SessionConfig):

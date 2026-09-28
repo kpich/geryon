@@ -16,7 +16,9 @@ from langgraph.prebuilt import ToolNode, create_react_agent
 
 from geryon.codeflow._shared import (
     build_chat_model,
+    data_facts_text,
     make_explore_tools,
+    make_record_fact_tool,
     make_run_python_tool,
     sum_message_usage,
 )
@@ -24,6 +26,7 @@ from geryon.codeflow.models import CodeCritique, CodeHypothesis
 from geryon.codeflow.prompts import (
     CRITIC_FOCUS_NOTE,
     CRITIC_SYSTEM_PROMPT,
+    with_data_facts,
     with_focus,
 )
 from geryon.db import Database
@@ -64,6 +67,7 @@ class HypothesisCritic:
         holder: list[CodeCritique] = []
         tools = self.explore_tools + [
             make_run_python_tool(self.config, self.limits),
+            make_record_fact_tool(self.config, self.limits, "critic"),
             self._make_submit_critique_tool(holder),
         ]
         caching = supports_cache_control(self.config.provider_type)
@@ -88,7 +92,9 @@ class HypothesisCritic:
         )
 
         system_prompt = with_focus(
-            CRITIC_SYSTEM_PROMPT, self.config.focus, note=CRITIC_FOCUS_NOTE
+            with_data_facts(CRITIC_SYSTEM_PROMPT, data_facts_text(self.config)),
+            self.config.focus,
+            note=CRITIC_FOCUS_NOTE,
         )
 
         sys_content: str | list[Any]

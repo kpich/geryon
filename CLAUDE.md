@@ -38,6 +38,14 @@ read-only exploration tools and `run_python`. The generator adds `submit` and
 `get_script`; the critic adds `submit_critique`. Both are LangGraph ReAct agents with
 tool calling.
 
+**Data facts.** Agents record what they learn about the data (time zero, keys, traps)
+with `record_data_fact`, which saves a fact only if its check script contains an
+`assert` and passes in the sandbox. Facts go to `<output_dir>/data_facts.jsonl`, beside
+the sessions, and are backed up with them. Every later session on the same data version
+sees them in all three system prompts, before any chain focus. A fact is corrected by
+recording a new one with `supersedes`. This exists because the ETL drops the cBioPortal
+column descriptions, and agents disagreed on what `OS_MONTHS` means.
+
 **Failures are loud.** An error in generation, narration or the critic ends the session
 with a nonzero exit code. Hypotheses already submitted are on disk, and so are the
 critiques that finished. Don't add `except Exception` handlers that warn and carry on,

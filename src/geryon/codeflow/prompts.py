@@ -1,5 +1,17 @@
 """System prompts for the code-first loop."""
 
+DATA_FACTS_BLOCK = """
+
+# Verified facts about this data
+
+Each fact was recorded by an earlier agent together with a script that asserts it
+against this data version, and the script passed. Rely on them instead of re-deriving
+them. If you show one is wrong, record the correction with
+`record_data_fact(..., supersedes=<id>)`.
+
+{facts}
+"""
+
 FOCUS_BLOCK = """
 
 # Research focus
@@ -14,6 +26,16 @@ CRITIC_FOCUS_NOTE = """
 Judge `novelty` relative to this focus: a hypothesis that is only newly *possible*
 under this focus counts as novel, not as a well-known result.
 """
+
+
+def with_data_facts(base: str, facts: str | None) -> str:
+    """Append the verified data facts; unchanged when there are none.
+
+    Goes before the focus, which is the more specific of the two.
+    """
+    if not facts or not facts.strip():
+        return base
+    return base + DATA_FACTS_BLOCK.format(facts=facts.strip())
 
 
 def with_focus(base: str, focus: str | None, note: str = "") -> str:
@@ -45,6 +67,7 @@ You write Python that runs in a locked-down sandbox (no network; the data is mou
 - `list_tables` / `describe_table` / `query_data`: read-only exploration of the data (SELECT only). Use these FIRST to understand the schema and value distributions before writing code.
 - `run_python(code)`: execute a script in the sandbox and see its stdout/stderr and reported result. Iterate here until the script works and the result is sound.
 - `get_script(hypothesis_id)`: fetch the full code, result, AND critic assessment (confounds found, suggested fix) of a previously submitted hypothesis so you can remix it and address what the critic flagged.
+- `record_data_fact(fact, check_code, supersedes=None)`: save a fact about the DATA (what a column means, what time zero is, how tables join, a data-quality trap) so later analyses don't have to work it out again. `check_code` is a script that asserts the fact against the data; the fact is saved only if the script contains an `assert` and runs cleanly. State only what your asserts actually demonstrate. Findings about cancer biology or about a hypothesis are not data facts.
 - `submit(title, description, rationale, code, refines=None)`: run the final script AND store it as a hypothesis. If the script fails, nothing is stored and you get the error back; fix it and submit again. Call this once, when you are confident in your single hypothesis for this iteration.
 
 # What makes a good hypothesis
@@ -72,6 +95,7 @@ You are given the hypothesis, the Python that produced it, and its result.
 
 - `list_tables` / `describe_table` / `query_data`: read-only data exploration.
 - `run_python(code)`: execute Python in the sandbox (same `from geryon_runtime import db, report` runtime). USE THIS to test a suspicion — e.g. re-run the analysis adjusting for a confounder (cancer type, stage, age, treatment), check sample sizes, or see whether the effect survives a stratified/adjusted model.
+- `record_data_fact(fact, check_code, supersedes=None)`: if your review establishes a fact about the DATA (e.g. what a column means, or that the script misread one), save it so later agents don't repeat the mistake. `check_code` must assert the fact against the data; the fact is saved only if the script contains an `assert` and runs cleanly. State only what your asserts actually demonstrate.
 - `submit_critique(...)`: record your structured assessment. Call this exactly once when done.
 
 # What to scrutinize
