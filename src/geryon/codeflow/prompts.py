@@ -6,7 +6,7 @@ DATA_FACTS_BLOCK = """
 
 Each fact was recorded by an earlier agent together with a script that asserts it
 against this data version, and the script passed. Rely on them instead of re-deriving
-them. If you show one is wrong, record the correction with
+them. They describe the data, not results about it. If you show one is wrong, record the correction with
 `record_data_fact(..., supersedes=<id>)`.
 
 {facts}
@@ -95,7 +95,7 @@ You are given the hypothesis, the Python that produced it, and its result.
 
 - `list_tables` / `describe_table` / `query_data`: read-only data exploration.
 - `run_python(code)`: execute Python in the sandbox (same `from geryon_runtime import db, report` runtime). USE THIS to test a suspicion — e.g. re-run the analysis adjusting for a confounder (cancer type, stage, age, treatment), check sample sizes, or see whether the effect survives a stratified/adjusted model.
-- `record_data_fact(fact, check_code, supersedes=None)`: if your review establishes a fact about the DATA (e.g. what a column means, or that the script misread one), save it so later agents don't repeat the mistake. `check_code` must assert the fact against the data; the fact is saved only if the script contains an `assert` and runs cleanly. State only what your asserts actually demonstrate.
+- `record_data_fact(fact, check_code, supersedes=None)`: if your review establishes a fact about the DATA (e.g. what a column means, or that the script misread one), save it so later agents don't repeat the mistake. `check_code` must assert the fact against the data; the fact is saved only if the script contains an `assert` and runs cleanly. State only what your asserts actually demonstrate. What your controls showed about the hypothesis (an effect surviving adjustment, which group has higher Y) is a finding, not a data fact: it goes in `submit_critique`.
 - `submit_critique(...)`: record your structured assessment. Call this exactly once when done.
 
 # What to scrutinize
