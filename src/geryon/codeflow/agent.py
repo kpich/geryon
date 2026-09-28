@@ -63,6 +63,8 @@ def _format_critique(critique: CodeCritique | None) -> str:
         f"critique: trustworthiness={critique.trustworthiness}/3, "
         f"confound_risk={critique.confound_risk}/3, novelty={critique.novelty}/3"
     ]
+    if critique.headline:
+        lines.append(f"  verdict: {critique.headline}")
     if critique.holds_up is not None:
         lines.append(f"  held up under control test: {critique.holds_up}")
     if critique.suggested_fix:

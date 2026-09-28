@@ -141,6 +141,7 @@ class HypothesisCritic:
             trustworthiness: int,
             confound_risk: int,
             novelty: int,
+            headline: str,
             notes: str,
             holds_up: bool | None = None,
             suggested_fix: str | None = None,
@@ -148,14 +149,17 @@ class HypothesisCritic:
         ) -> str:
             """Record the structured critique. Call exactly once when finished.
 
-            trustworthiness/confound_risk/novelty are each 1-3. Set holds_up only if
-            you actually ran a control test. Give suggested_fix when confound_risk>=2.
+            trustworthiness/confound_risk/novelty are each 1-3. headline is your
+            verdict in one short clause (under ~15 words); later iterations see it
+            next to this hypothesis. Set holds_up only if you actually ran a control
+            test. Give suggested_fix when confound_risk>=2.
             """
             critique = CodeCritique(
                 trustworthiness=_clamp(trustworthiness),
                 confound_risk=_clamp(confound_risk),
                 novelty=_clamp(novelty),
                 holds_up=holds_up,
+                headline=headline,
                 notes=notes,
                 suggested_fix=suggested_fix,
                 tests_run=tests_run or [],
