@@ -191,6 +191,13 @@ def make_record_fact_tool(
     ) -> str:
         """Save a verified fact about the data for every later session to see.
 
+        A data fact says what the data IS: what a column means or holds, how
+        tables join, what time zero is, coverage, missingness, a data-quality
+        trap. It is never a relationship between variables. "X-mutant tumors
+        have higher Y", an odds ratio, or a result that holds after adjustment is
+        a finding. Findings belong in hypotheses and critiques, where they can be
+        challenged; stored here, later agents would take them as settled.
+
         `check_code` must contain `assert` statements that establish the fact and
         must run cleanly in the sandbox (`from geryon_runtime import db`). Set
         `supersedes` to the id of an earlier fact this one corrects.
