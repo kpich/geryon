@@ -8,7 +8,7 @@ from geryon.codeflow.narrate import CodeNarrator
 
 
 def _narrator() -> CodeNarrator:
-    return CodeNarrator(MagicMock())
+    return CodeNarrator(MagicMock(), "SYSTEM")
 
 
 def test_parse_fenced_json():

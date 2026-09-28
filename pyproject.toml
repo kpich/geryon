@@ -51,7 +51,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mbird_data = ["py.typed"]
-geryon = ["cli/templates/*.html"]
+geryon = ["cli/templates/*.html", "codeflow/prompt_sets/*/*.md"]
 
 [tool.pytest.ini_options]
 filterwarnings = [

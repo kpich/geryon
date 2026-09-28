@@ -60,21 +60,19 @@ def _format_verdict(hyp: CodeHypothesis) -> str:
 
 
 def format_previous_hypotheses(hypotheses: list[CodeHypothesis]) -> PreviousContext:
-    """Render prior hypotheses as a compact newest-first list, capped."""
+    """Render prior hypotheses as a compact newest-first list, capped.
+
+    Only the list: the heading and the key to the critic tags are prose in the
+    prompt set's ``generator_user.md``.
+    """
     if not hypotheses:
-        return PreviousContext(text="**No previous hypotheses yet.**")
+        return PreviousContext(text="(none yet)")
 
     ordered = list(reversed(hypotheses))  # JSONL is oldest-first
     included = ordered[:MAX_CONTEXT_HYPOTHESES]
     overflow = len(ordered) - len(included)
 
-    lines = [
-        "**PREVIOUSLY TESTED HYPOTHESES (avoid duplicates; "
-        "refine strong ones via get_script + submit(refines=...)):**",
-        "Critic tags: T=trustworthiness, C=confound risk, N=novelty (1-3 each); "
-        "held/did NOT hold = outcome of the critic's control test. Don't build on "
-        "a result that did not hold without fixing the flaw named.",
-    ]
+    lines = []
     for idx, hyp in enumerate(included, 1):
         lines.append(f"{idx}. {_format_entry(hyp)}")
     if overflow > 0:

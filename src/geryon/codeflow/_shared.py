@@ -175,6 +175,8 @@ def facts_store(config: SessionConfig) -> DataFactStore:
 
 def data_facts_text(config: SessionConfig) -> str | None:
     """The verified facts for this session's data version, rendered for a prompt."""
+    if not config.include_data_facts:
+        return None
     store = facts_store(config)
     return format_facts(store.current(session_data_version(config)))
 

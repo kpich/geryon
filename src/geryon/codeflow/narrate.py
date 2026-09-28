@@ -6,11 +6,7 @@ from pydantic import ValidationError
 
 from geryon.codeflow._shared import MessageUsage, usage_from_response
 from geryon.codeflow.models import CodeNarrative
-from geryon.codeflow.prompts import (
-    NARRATOR_SYSTEM_PROMPT,
-    with_data_facts,
-    with_focus,
-)
+from geryon.codeflow.prompts import with_data_facts, with_focus
 from geryon.llm.providers.base import ChatMessage, LLMProvider
 from geryon.sandbox.result import IterationResult
 
@@ -23,12 +19,13 @@ class CodeNarrator:
     def __init__(
         self,
         provider: LLMProvider,
+        system_prompt: str,
         focus: str | None = None,
         data_facts: str | None = None,
     ):
         self.provider = provider
         self.system_prompt = with_focus(
-            with_data_facts(NARRATOR_SYSTEM_PROMPT, data_facts), focus
+            with_data_facts(system_prompt, data_facts), focus
         )
         # Usage of the most recent narrate() call, for cost logging.
         self.last_usage: MessageUsage | None = None

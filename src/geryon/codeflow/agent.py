@@ -35,11 +35,7 @@ from geryon.codeflow.models import (
     CodeHypothesis,
 )
 from geryon.codeflow.narrate import CodeNarrator
-from geryon.codeflow.prompts import (
-    GENERATOR_SYSTEM_PROMPT,
-    with_data_facts,
-    with_focus,
-)
+from geryon.codeflow.prompts import with_data_facts, with_focus
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.db import Database
 from geryon.etl.data_version import resolve_data_version
@@ -190,6 +186,7 @@ class CodeWorkflow:
 
             narrator = CodeNarrator(
                 self.provider,
+                self.config.prompts.narrator,
                 focus=self.config.focus,
                 data_facts=data_facts_text(self.config),
             )
@@ -276,7 +273,12 @@ class CodeWorkflow:
     # Loop
     # ------------------------------------------------------------------
     def run_iteration(self, iteration: int | None = None) -> list[CodeHypothesis]:
-        prior = self._load_prior() + self.store.load()
+        prompts = self.config.prompts
+        prior = (
+            self._load_prior() + self.store.load()
+            if prompts.shows_previous_hypotheses
+            else []
+        )
         prev_ctx = format_previous_hypotheses(prior)
 
         if self.llm_logger and iteration is not None:
@@ -290,14 +292,10 @@ class CodeWorkflow:
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
 
         system_content = with_focus(
-            with_data_facts(GENERATOR_SYSTEM_PROMPT, data_facts_text(self.config)),
+            with_data_facts(prompts.generator, data_facts_text(self.config)),
             self.config.focus,
         )
-        user_text = (
-            f"{prev_ctx.text}\n\n"
-            "Generate a hypothesis. Explore first, iterate on your "
-            "script with run_python, then submit."
-        )
+        user_text = prompts.render_generator_user(prev_ctx.text)
 
         caching = supports_cache_control(self.config.provider_type)
         sys_content: str | list[Any]
