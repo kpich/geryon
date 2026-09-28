@@ -40,7 +40,23 @@ def _format_entry(hyp: CodeHypothesis) -> str:
         stat = " [FAILED]"
 
     refines = f" (refines {hyp.refines[:8]})" if hyp.refines else ""
-    return f"[{hyp.short_id()}] {body}{stat}{refines}"
+    return f"[{hyp.short_id()}] {body}{stat}{refines}{_format_verdict(hyp)}"
+
+
+_HOLDS_UP_LABEL = {True: "held", False: "did NOT hold", None: "untested"}
+
+
+def _format_verdict(hyp: CodeHypothesis) -> str:
+    c = hyp.critique
+    if c is None:
+        return ""
+    tag = (
+        f"critic T{c.trustworthiness}/C{c.confound_risk}/N{c.novelty}, "
+        f"{_HOLDS_UP_LABEL[c.holds_up]}"
+    )
+    if c.headline:
+        tag += f": {c.headline}"
+    return f" {{{tag}}}"
 
 
 def format_previous_hypotheses(hypotheses: list[CodeHypothesis]) -> PreviousContext:
@@ -53,8 +69,11 @@ def format_previous_hypotheses(hypotheses: list[CodeHypothesis]) -> PreviousCont
     overflow = len(ordered) - len(included)
 
     lines = [
-        "**PREVIOUSLY TESTED HYPOTHESES "
-        "(avoid duplicates; refine strong ones via get_script + submit(refines=...)):**"
+        "**PREVIOUSLY TESTED HYPOTHESES (avoid duplicates; "
+        "refine strong ones via get_script + submit(refines=...)):**",
+        "Critic tags: T=trustworthiness, C=confound risk, N=novelty (1-3 each); "
+        "held/did NOT hold = outcome of the critic's control test. Don't build on "
+        "a result that did not hold without fixing the flaw named.",
     ]
     for idx, hyp in enumerate(included, 1):
         lines.append(f"{idx}. {_format_entry(hyp)}")

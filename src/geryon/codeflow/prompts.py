@@ -86,6 +86,8 @@ You are given the hypothesis, the Python that produced it, and its result.
 - confound_risk: 1 low, 3 highly confounded.
 - novelty: 1 trivial/known, 3 novel.
 
+Write `headline` as your verdict in one short clause, e.g. "effect vanishes after adjusting for stage" or "holds after stage and line-of-therapy adjustment". Later iterations see it next to this hypothesis, so name the specific flaw or control rather than being generic.
+
 Set `holds_up` to true/false if you actually ran a control test (else leave it null). Give a concrete `suggested_fix` when confound_risk >= 2. List the checks you ran in `tests_run`.
 """
 

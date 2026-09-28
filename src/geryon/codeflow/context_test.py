@@ -6,7 +6,7 @@ from geryon.codeflow.context import (
     format_previous_hypotheses,
     load_prior_hypotheses,
 )
-from geryon.codeflow.models import CodeHypothesis, CodeNarrative
+from geryon.codeflow.models import CodeCritique, CodeHypothesis, CodeNarrative
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.sandbox.result import IterationResult
 
@@ -52,6 +52,37 @@ def test_context_marks_failures_and_lineage():
     ctx = format_previous_hypotheses([h])
     assert "FAILED" in ctx.text
     assert "refines parent99" in ctx.text
+
+
+def test_context_shows_critic_verdict():
+    debunked = _hyp(
+        "debunk01",
+        critique=CodeCritique(
+            trustworthiness=1,
+            confound_risk=3,
+            novelty=2,
+            holds_up=False,
+            headline="immortal-time bias from ever-IO grouping",
+        ),
+    )
+    held = _hyp(
+        "held0001",
+        critique=CodeCritique(
+            trustworthiness=3, confound_risk=1, novelty=2, holds_up=True
+        ),
+    )
+    ctx = format_previous_hypotheses([debunked, held])
+    assert (
+        "{critic T1/C3/N2, did NOT hold: immortal-time bias from ever-IO grouping}"
+        in ctx.text
+    )
+    assert "{critic T3/C1/N2, held}" in ctx.text
+
+
+def test_context_omits_verdict_when_uncritiqued():
+    ctx = format_previous_hypotheses([_hyp("nocrit01")])
+    line = next(ln for ln in ctx.text.splitlines() if "nocrit01" in ln)
+    assert "critic" not in line
 
 
 def test_context_newest_first():

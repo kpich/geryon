@@ -47,6 +47,7 @@ def test_hypothesis_with_critique_roundtrips(tmp_path):
             confound_risk=3,
             novelty=2,
             holds_up=False,
+            headline="effect vanishes after stage adjustment",
             notes="confounded by stage",
             suggested_fix="adjust for STAGE",
             tests_run=["re-ran adjusting for stage"],
@@ -58,6 +59,7 @@ def test_hypothesis_with_critique_roundtrips(tmp_path):
     assert loaded.critique is not None
     assert loaded.critique.confound_risk == 3
     assert loaded.critique.holds_up is False
+    assert loaded.critique.headline == "effect vanishes after stage adjustment"
     assert loaded.critique.suggested_fix == "adjust for STAGE"
     assert loaded.critique.tests_run == ["re-ran adjusting for stage"]
 

@@ -39,6 +39,11 @@ class CodeCritique(BaseModel):
     holds_up: bool | None = Field(
         default=None, description="Did the effect survive a control the critic ran?"
     )
+    headline: str | None = Field(
+        default=None,
+        description="One-clause verdict shown to the generator alongside this "
+        "hypothesis in later iterations; None on sessions predating the field",
+    )
     notes: str = ""
     suggested_fix: str | None = None
     tests_run: list[str] = Field(
