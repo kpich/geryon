@@ -152,6 +152,17 @@ def test_query_data_preserves_existing_limit():
     assert call_args.count("LIMIT") == 1
 
 
+def test_query_data_accepts_cte():
+    mock_db = Mock()
+    mock_db.execute.return_value = pd.DataFrame({"n": [3]})
+
+    sql = "WITH t AS (SELECT * FROM foo) SELECT COUNT(*) AS n FROM t"
+    result = query_data(mock_db, sql)
+
+    assert "ERROR" not in result
+    assert mock_db.execute.call_args[0][0] == f"{sql} LIMIT 100"
+
+
 def test_query_data_rejects_non_select():
     """Test query_data rejects non-SELECT queries."""
     mock_db = Mock()
@@ -168,7 +179,7 @@ def test_query_data_rejects_non_select():
     for query in dangerous_queries:
         result = query_data(mock_db, query)
         assert "ERROR" in result
-        assert "Only SELECT queries allowed" in result
+        assert "Only SELECT queries" in result
         mock_db.execute.assert_not_called()
         mock_db.reset_mock()
 

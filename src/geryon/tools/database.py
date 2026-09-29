@@ -151,22 +151,22 @@ def _describe_fallback(db: Database, table_name: str) -> str:
 
 
 def query_data(db: Database, sql: str) -> str:
-    """Run SQL query (SELECT only, max 100 rows).
+    """Run SQL query (SELECT or WITH ... SELECT only, max 100 rows).
 
     Parameters
     ----------
     db : Database
         Database connection
     sql : str
-        SQL query to execute (must be SELECT)
+        SQL query to execute (must start with SELECT or WITH)
 
     Returns
     -------
     str
         Markdown-formatted query results
     """
-    if not sql.strip().upper().startswith("SELECT"):
-        return "ERROR: Only SELECT queries allowed"
+    if not sql.strip().upper().startswith(("SELECT", "WITH")):
+        return "ERROR: Only SELECT queries (optionally with a WITH clause) allowed"
 
     if "LIMIT" not in sql.upper():
         sql = f"{sql} LIMIT 100"

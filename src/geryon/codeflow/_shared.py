@@ -141,7 +141,7 @@ def make_explore_tools(db: Database) -> list:
 
     @tool
     def query_data_tool(sql: str) -> str:
-        """Run a read-only SELECT query to explore the data (max 100 rows)."""
+        """Run a read-only SELECT (or WITH ... SELECT) query, max 100 rows."""
         return query_data(db, sql)
 
     return [list_tables_tool, describe_table_tool, query_data_tool]
