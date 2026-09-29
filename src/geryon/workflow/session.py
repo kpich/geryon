@@ -19,7 +19,7 @@ class SessionConfig(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # LLM configuration
-    provider_type: Literal["openai", "anthropic", "aws_bedrock"] = Field(
+    provider_type: Literal["openai", "aws_bedrock"] = Field(
         default="aws_bedrock", description="LLM provider type"
     )
     model: str = Field(

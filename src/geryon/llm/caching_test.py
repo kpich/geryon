@@ -11,7 +11,6 @@ from geryon.llm.caching import (
 
 def test_supports_cache_control():
     assert supports_cache_control("aws_bedrock")
-    assert supports_cache_control("anthropic")
     assert not supports_cache_control("openai")
     assert not supports_cache_control("unknown")
 
