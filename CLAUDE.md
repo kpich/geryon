@@ -38,13 +38,17 @@ read-only exploration tools and `run_python`. The generator adds `submit` and
 `get_script`; the critic adds `submit_critique`. Both are LangGraph ReAct agents with
 tool calling.
 
-**Data facts.** Agents record what they learn about the data (time zero, keys, traps)
-with `record_data_fact`, which saves a fact only if its check script contains an
-`assert` and passes in the sandbox. Facts go to `<output_dir>/data_facts.jsonl`, beside
-the sessions, and are backed up with them. Every later session on the same data version
-sees them in all three system prompts, before any chain focus. A fact is corrected by
-recording a new one with `supersedes`. This exists because the ETL drops the cBioPortal
-column descriptions, and agents disagreed on what `OS_MONTHS` means.
+**Data dictionary.** The ETL drops the cBioPortal column descriptions, and agents
+disagreed on what `OS_MONTHS` means, so the agents rebuild a codebook themselves
+(`codeflow/dictionary.py`). `add_to_data_dictionary` saves an entry only if its check
+script contains an `assert` and passes in the sandbox. An entry says how to read the
+data: what a column or value means, units, coding, joins, time zero, traps. What the
+data shows about patients (cohort rates, associations, interpretations) is a finding and
+is kept out; this was called "data facts" until the name drew findings in. Entries go
+to `<output_dir>/data_dictionary.jsonl`, beside the sessions, and are backed up with
+them. Every later session on the same data version sees them in all three system
+prompts, before any chain focus. An entry is corrected by adding a new one with
+`supersedes`.
 
 **Failures are loud.** An error in generation, narration or the critic ends the session
 with a nonzero exit code. Hypotheses already submitted are on disk, and so are the
@@ -120,12 +124,12 @@ set, a directory of templates: `generator.md`, `generator_user.md`, `critic.md` 
 `narrator.md`. `codeflow/prompt_sets/default/` ships with the package. `--prompts <dir>`
 runs a copy that you've edited, and it must contain every template. Nothing is filled in
 from the default. If `generator_user.md` has no `{previous_hypotheses}` placeholder, no
-prior hypotheses are shown. `--no-data-facts` leaves the facts block out. The runner
+prior hypotheses are shown. `--no-data-dictionary` leaves the dictionary block out. The runner
 resolves everything into `SessionConfig`, so `config.json` records the full prompt texts,
-`include_data_facts`, and `code_version` (commit, plus `+dirty` if tracked files had
+`include_data_dictionary`, and `code_version` (commit, plus `+dirty` if tracked files had
 changed). Put new steering in a template or behind a config field, never as hardcoded
-prose, so sessions stay comparable. The facts and focus blocks are still appended in code
-(`with_data_facts`, `with_focus`).
+prose, so sessions stay comparable. The dictionary and focus blocks are still appended in code
+(`with_data_dictionary`, `with_focus`).
 
 ## Known loose ends
 

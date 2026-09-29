@@ -11,11 +11,11 @@ from langchain_aws import ChatBedrock
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
-from geryon.codeflow.facts import (
-    DataFact,
-    DataFactStore,
+from geryon.codeflow.dictionary import (
+    DataDictionary,
+    DictionaryEntry,
     Recorder,
-    format_facts,
+    format_entries,
     has_assert,
 )
 from geryon.db import Database
@@ -167,68 +167,74 @@ def session_data_version(config: SessionConfig) -> str:
     return config.data_version or resolve_data_version(config.parquet_dir)
 
 
-def facts_store(config: SessionConfig) -> DataFactStore:
-    # Without an output dir (tests, ad-hoc runs) facts stay with the session itself.
-    return DataFactStore(config.output_dir or config.storage_dir)
+def dictionary_store(config: SessionConfig) -> DataDictionary:
+    # Without an output dir (tests, ad-hoc runs) the dictionary stays with the session.
+    return DataDictionary(config.output_dir or config.storage_dir)
 
 
-def data_facts_text(config: SessionConfig) -> str | None:
-    """The verified facts for this session's data version, rendered for a prompt."""
-    if not config.include_data_facts:
+def data_dictionary_text(config: SessionConfig) -> str | None:
+    """The data dictionary for this session's data version, rendered for a prompt."""
+    if not config.include_data_dictionary:
         return None
-    store = facts_store(config)
-    return format_facts(store.current(session_data_version(config)))
+    store = dictionary_store(config)
+    return format_entries(store.current(session_data_version(config)))
 
 
-def make_record_fact_tool(
+def make_dictionary_tool(
     config: SessionConfig, limits: SandboxLimits, recorded_by: Recorder
 ):
-    """A tool that saves a data fact, but only once a script asserting it passes."""
-    store = facts_store(config)
+    """A tool that adds a dictionary entry, once a script asserting it passes."""
+    store = dictionary_store(config)
 
     @tool
-    def record_data_fact(
-        fact: str, check_code: str, supersedes: str | None = None
+    def add_to_data_dictionary(
+        entry: str, check_code: str, supersedes: str | None = None
     ) -> str:
-        """Save a verified fact about the data for every later session to see.
+        """Add an entry to the data dictionary that every later session sees.
 
-        A data fact says what the data IS: what a column means or holds, how
-        tables join, what time zero is, coverage, missingness, a data-quality
-        trap. It is never a relationship between variables. "X-mutant tumors
-        have higher Y", an odds ratio, or a result that holds after adjustment is
-        a finding. Findings belong in hypotheses and critiques, where they can be
-        challenged; stored here, later agents would take them as settled.
+        The ETL dropped the source's column descriptions, so this dictionary is
+        what agents have instead. Write an entry the way a codebook would: what a
+        table, column or value means, its units or coding, how tables join, what
+        time zero is, coverage or missingness, a trap that makes a naive query
+        wrong. It must hold whatever cancer type or question someone is studying.
 
-        `check_code` must contain `assert` statements that establish the fact and
+        What the data shows about patients is a finding, not an entry: rates or
+        counts within a cohort, relationships between variables ("X-mutant tumors
+        have higher Y"), effect sizes, or an interpretation ("consistent with a
+        non-secretor phenotype"). Findings go in hypotheses and critiques, where
+        they can be challenged; stored here, later agents would take them as
+        settled. If an entry only holds for one cancer type, it is a finding.
+
+        `check_code` must contain `assert` statements that establish the entry and
         must run cleanly in the sandbox (`from geryon_runtime import db`). Set
-        `supersedes` to the id of an earlier fact this one corrects.
+        `supersedes` to the id of an earlier entry this one corrects.
         """
-        print("[TOOL] record_data_fact called")
+        print("[TOOL] add_to_data_dictionary called")
         if not has_assert(check_code):
             return (
                 "✗ NOT SAVED: check_code has no assert statement (or doesn't parse). "
-                "Assert the fact against the data."
+                "Assert the entry against the data."
             )
         old = None
         if supersedes:
             old = store.find(supersedes)
             if old is None:
-                return f"✗ NOT SAVED: no fact with id '{supersedes}' to supersede."
+                return f"✗ NOT SAVED: no entry with id '{supersedes}' to supersede."
         run = run_in_sandbox(config, check_code, limits)
         if not run.success:
             return "✗ NOT SAVED: the check failed.\n" + format_run(run)
-        saved = DataFact(
-            fact=fact,
+        saved = DictionaryEntry(
+            entry=entry,
             check_code=check_code,
             data_version=session_data_version(config),
             session_id=config.session_id,
             recorded_by=recorded_by,
-            supersedes=old.fact_id if old else None,
+            supersedes=old.entry_id if old else None,
         )
         store.append(saved)
-        return f"✓ Fact saved [{saved.short_id()}]."
+        return f"✓ Entry saved [{saved.short_id()}]."
 
-    return record_data_fact
+    return add_to_data_dictionary
 
 
 def build_chat_model(config: SessionConfig):

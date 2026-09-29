@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.codeflow.models import CodeHypothesis
@@ -27,7 +27,6 @@ class _Metadata(BaseModel):
 class _Record(BaseModel):
     record_type: Literal["hypothesis"] = "hypothesis"
     data: CodeHypothesis
-    written_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CodeHypothesisStore:
@@ -60,7 +59,7 @@ class CodeHypothesisStore:
         if not hypotheses:
             return
         tmp = self._path.with_suffix(".jsonl.tmp")
-        meta = _Metadata(
+        meta = self._read_metadata() or _Metadata(
             session_id=hypotheses[0].session_id,
             created_at=datetime.now(UTC),
             chain=self.chain,
@@ -70,6 +69,12 @@ class CodeHypothesisStore:
             for hyp in hypotheses:
                 f.write(_Record(data=hyp).model_dump_json() + "\n")
         tmp.rename(self._path)
+
+    def _read_metadata(self) -> _Metadata | None:
+        if not self._path.exists():
+            return None
+        with open(self._path) as f:
+            return _Metadata.model_validate_json(f.readline())
 
     def load(self) -> list[CodeHypothesis]:
         """Load all hypotheses (skipping the metadata header)."""

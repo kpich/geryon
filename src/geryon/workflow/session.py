@@ -70,8 +70,8 @@ class SessionConfig(BaseModel):
         default_factory=load_prompt_set,
         description="Resolved prompt texts (see geryon.codeflow.prompts)",
     )
-    include_data_facts: bool = Field(
-        default=True, description="Show the verified data facts in all three prompts"
+    include_data_dictionary: bool = Field(
+        default=True, description="Show the data dictionary in all three prompts"
     )
     code_version: str | None = Field(
         default=None,

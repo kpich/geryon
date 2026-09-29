@@ -157,7 +157,7 @@ def run_workflow(
     focus: str | None = None,
     focus_file: Path | None = None,
     prompts: Path | str | None = None,
-    include_data_facts: bool | None = None,
+    include_data_dictionary: bool | None = None,
     provider: str | None = None,
     model: str | None = None,
     base_url: str | None = None,
@@ -215,7 +215,7 @@ def run_workflow(
         "focus": focus,
         "data_version": resolved_version,
         "prompts": prompt_set,
-        "include_data_facts": include_data_facts,
+        "include_data_dictionary": include_data_dictionary,
         "code_version": code_version(),
         "provider_type": provider,
         "model": model,
@@ -293,9 +293,9 @@ def main() -> None:
         "src/geryon/codeflow/prompt_sets/default/",
     )
     parser.add_argument(
-        "--no-data-facts",
+        "--no-data-dictionary",
         action="store_true",
-        help="Leave the verified data facts out of the prompts",
+        help="Leave the data dictionary out of the prompts",
     )
     parser.add_argument("--provider", choices=["openai", "aws_bedrock"], default=None)
     parser.add_argument(
@@ -327,7 +327,7 @@ def main() -> None:
         focus=args.focus,
         focus_file=args.focus_file,
         prompts=args.prompts,
-        include_data_facts=False if args.no_data_facts else None,
+        include_data_dictionary=False if args.no_data_dictionary else None,
         provider=args.provider,
         model=args.model,
         base_url=args.base_url,

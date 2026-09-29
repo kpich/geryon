@@ -16,10 +16,10 @@ from langgraph.prebuilt import ToolNode, create_react_agent
 
 from geryon.codeflow._shared import (
     build_chat_model,
-    data_facts_text,
+    data_dictionary_text,
     format_run,
+    make_dictionary_tool,
     make_explore_tools,
-    make_record_fact_tool,
     make_run_python_tool,
     run_in_sandbox,
     sum_message_usage,
@@ -35,7 +35,7 @@ from geryon.codeflow.models import (
     CodeHypothesis,
 )
 from geryon.codeflow.narrate import CodeNarrator
-from geryon.codeflow.prompts import with_data_facts, with_focus
+from geryon.codeflow.prompts import with_data_dictionary, with_focus
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.db import Database
 from geryon.etl.data_version import resolve_data_version
@@ -188,7 +188,7 @@ class CodeWorkflow:
                 self.provider,
                 self.config.prompts.narrator,
                 focus=self.config.focus,
-                data_facts=data_facts_text(self.config),
+                data_dictionary=data_dictionary_text(self.config),
             )
             narrative = narrator.narrate(
                 description=description,
@@ -292,7 +292,7 @@ class CodeWorkflow:
         print(f"Using model: {self.config.provider_type}/{self.config.model}")
 
         system_content = with_focus(
-            with_data_facts(prompts.generator, data_facts_text(self.config)),
+            with_data_dictionary(prompts.generator, data_dictionary_text(self.config)),
             self.config.focus,
         )
         user_text = prompts.render_generator_user(prev_ctx.text)
@@ -313,7 +313,7 @@ class CodeWorkflow:
         try:
             tools = self.explore_tools + [
                 make_run_python_tool(self.config, self.sandbox_limits),
-                make_record_fact_tool(self.config, self.sandbox_limits, "generator"),
+                make_dictionary_tool(self.config, self.sandbox_limits, "generator"),
                 self._make_get_script_tool(submitted),
                 self._make_submit_tool(iteration or 0, submitted),
             ]
