@@ -86,8 +86,7 @@ run:
 	set -o pipefail; uv run python -u -m geryon.codeflow.runner \
 		--aws-profile saml \
 		--max-iterations $(ITERS) \
-		--chain $(CHAIN) \
-		--critic-cycles 1 2>&1 | tee out
+		--chain $(CHAIN) 2>&1 | tee out
 
 GERYON_DATA_DIR := geryon_data
 GERYON_DATA_REPO := git@github.com:kpich/geryon-data.git

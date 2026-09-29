@@ -24,12 +24,7 @@ def _load_all(output_dir: Path) -> list[dict]:
     """
     out: list[dict] = []
     for jsonl_file in sorted(output_dir.rglob("hypotheses.jsonl")):
-        store = CodeHypothesisStore(jsonl_file.parent)
-        try:
-            hypotheses = store.load()
-        except Exception:
-            continue
-        for hyp in hypotheses:
+        for hyp in CodeHypothesisStore(jsonl_file.parent).load():
             out.append(_serialize(hyp, jsonl_file.parent))
 
     out.sort(key=lambda h: (h["created_at"], h["iteration"] or 0))

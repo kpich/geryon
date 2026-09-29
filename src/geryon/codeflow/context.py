@@ -90,33 +90,26 @@ def load_prior_hypotheses(
 ) -> list[CodeHypothesis]:
     """Load code hypotheses from prior sessions under output_dir.
 
-    Skips JSONL files whose header isn't codeflow format. With ``chain`` set, returns
-    only that chain's sessions; ``None`` loads every chain. Sessions written before
-    chains existed have no ``chain`` in their header and count as
-    :data:`~geryon.codeflow.chains.DEFAULT_CHAIN`.
+    Skips JSONL files whose header isn't codeflow format. A codeflow session that
+    fails to load raises, so it can't silently drop out of the prompt context. With
+    ``chain`` set, returns only that chain's sessions; ``None`` loads every chain.
+    Sessions written before chains existed have no ``chain`` in their header and
+    count as :data:`~geryon.codeflow.chains.DEFAULT_CHAIN`.
     """
     if output_dir is None or not output_dir.exists():
         return []
     out: list[CodeHypothesis] = []
     for jsonl_file in sorted(output_dir.rglob(HYPOTHESES_FILENAME)):
         header = _read_header(jsonl_file)
-        if header is None or header.get("format") != "codeflow":
+        if not isinstance(header, dict) or header.get("format") != "codeflow":
             continue
         if chain is not None and header.get("chain", DEFAULT_CHAIN) != chain:
             continue
-        try:
-            hyps = CodeHypothesisStore(jsonl_file.parent).load()
-        except Exception:
-            continue
+        hyps = CodeHypothesisStore(jsonl_file.parent).load()
         out.extend(h for h in hyps if h.session_id != current_session_id)
     return out
 
 
-def _read_header(path: Path) -> dict | None:
-    """Parse a JSONL store's metadata header, or None if it isn't readable."""
-    try:
-        with open(path) as f:
-            header = json.loads(f.readline())
-    except (OSError, json.JSONDecodeError):
-        return None
-    return header if isinstance(header, dict) else None
+def _read_header(path: Path) -> object:
+    with open(path) as f:
+        return json.loads(f.readline())

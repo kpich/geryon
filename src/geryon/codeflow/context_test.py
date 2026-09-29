@@ -1,6 +1,10 @@
 """Tests for code-hypothesis context formatting."""
 
+import json
 from pathlib import Path
+
+from pydantic import ValidationError
+import pytest
 
 from geryon.codeflow.context import (
     format_previous_hypotheses,
@@ -111,6 +115,23 @@ def test_load_prior_skips_non_codeflow_and_current_session(tmp_path: Path):
     prior = load_prior_hypotheses(tmp_path, current_session_id="cur")
     ids = {h.hypothesis_id for h in prior}
     assert ids == {"p1"}
+
+
+def test_load_prior_raises_on_unloadable_codeflow_session(tmp_path: Path):
+    bad = tmp_path / "2026-06-01" / "sess-bad"
+    CodeHypothesisStore(bad).save(_hyp("p1", session="bad"))
+    with open(bad / "hypotheses.jsonl", "a") as f:
+        f.write('{"record_type": "hypothesis", "data": {"title": 3}}\n')
+    with pytest.raises(ValidationError):
+        load_prior_hypotheses(tmp_path, current_session_id="cur")
+
+
+def test_load_prior_raises_on_corrupt_header(tmp_path: Path):
+    bad = tmp_path / "2026-06-01" / "sess-bad"
+    bad.mkdir(parents=True)
+    (bad / "hypotheses.jsonl").write_text("{not json\n")
+    with pytest.raises(json.JSONDecodeError):
+        load_prior_hypotheses(tmp_path, current_session_id="cur")
 
 
 def _session(tmp_path: Path, name: str, hid: str, chain: str | None = None) -> None:
