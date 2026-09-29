@@ -68,16 +68,17 @@ def load_prompt_set(spec: str | Path | None = None) -> PromptSet:
     return PromptSet(name=name, **texts)
 
 
-DATA_FACTS_BLOCK = """
+DATA_DICTIONARY_BLOCK = """
 
-# Verified facts about this data
+# Data dictionary
 
-Each fact was recorded by an earlier agent together with a script that asserts it
+What the tables, columns and values mean, standing in for the column descriptions the
+ETL dropped. Each entry was added by an earlier agent with a script that asserts it
 against this data version, and the script passed. Rely on them instead of re-deriving
-them. They describe the data, not results about it. If you show one is wrong, record the correction with
-`record_data_fact(..., supersedes=<id>)`.
+them. If you show one is wrong, correct it with
+`add_to_data_dictionary(..., supersedes=<id>)`.
 
-{facts}
+{entries}
 """
 
 FOCUS_BLOCK = """
@@ -96,14 +97,14 @@ under this focus counts as novel, not as a well-known result.
 """
 
 
-def with_data_facts(base: str, facts: str | None) -> str:
-    """Append the verified data facts; unchanged when there are none.
+def with_data_dictionary(base: str, entries: str | None) -> str:
+    """Append the data dictionary; unchanged when it is empty.
 
     Goes before the focus, which is the more specific of the two.
     """
-    if not facts or not facts.strip():
+    if not entries or not entries.strip():
         return base
-    return base + DATA_FACTS_BLOCK.format(facts=facts.strip())
+    return base + DATA_DICTIONARY_BLOCK.format(entries=entries.strip())
 
 
 def with_focus(base: str, focus: str | None, note: str = "") -> str:

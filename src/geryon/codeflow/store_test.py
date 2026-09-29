@@ -85,6 +85,17 @@ def test_save_all_preserves_the_chain(tmp_path: Path):
     assert '"chain":"medonc-pfs"' in first_line.replace(" ", "")
 
 
+def test_save_all_keeps_the_header_timestamp(tmp_path: Path):
+    """The critic's rewrite must not restamp the session as created at its end."""
+    store = CodeHypothesisStore(tmp_path)
+    store.save(_hyp("a"))
+    path = tmp_path / "hypotheses.jsonl"
+    header = path.read_text().splitlines()[0]
+    store.save_all([_hyp("a", title="critiqued")])
+
+    assert path.read_text().splitlines()[0] == header
+
+
 def test_hypothesis_carries_chain_and_data_version(tmp_path: Path):
     store = CodeHypothesisStore(tmp_path, chain="medonc-pfs")
     store.save(_hyp("a", chain="medonc-pfs", data_version="medonc-pfs-2026-08"))
