@@ -7,7 +7,6 @@ import json
 from typing import NamedTuple
 
 from botocore.config import Config as BotoConfig
-from langchain_anthropic import ChatAnthropic
 from langchain_aws import ChatBedrock
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -245,24 +244,13 @@ def build_chat_model(config: SessionConfig):
         if config.api_key:
             kwargs["openai_api_key"] = config.api_key
         return ChatOpenAI(**kwargs)  # type: ignore[arg-type]
-    elif config.provider_type == "anthropic":
-        # Current Claude models 400 on temperature/top_p/top_k, so none are sent.
-        kwargs = {
-            "model_name": config.model,
-            "max_tokens": 16384,
-            "timeout": 300.0,
-            "stop": None,
-        }
-        if config.api_key:
-            kwargs["anthropic_api_key"] = config.api_key
-        return ChatAnthropic(**kwargs)  # type: ignore[arg-type]
     elif config.provider_type == "aws_bedrock":
         boto_config = BotoConfig(
             read_timeout=300, connect_timeout=30, retries={"max_attempts": 2}
         )
         kwargs = {
             "model_id": config.model,
-            # Sampling params omitted for the same reason as the anthropic branch.
+            # Current Claude models 400 on temperature/top_p/top_k, so none are sent.
             "model_kwargs": {"max_tokens": 16384},
             "config": boto_config,
         }

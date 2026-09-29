@@ -297,9 +297,7 @@ def main() -> None:
         action="store_true",
         help="Leave the verified data facts out of the prompts",
     )
-    parser.add_argument(
-        "--provider", choices=["openai", "anthropic", "aws_bedrock"], default=None
-    )
+    parser.add_argument("--provider", choices=["openai", "aws_bedrock"], default=None)
     parser.add_argument(
         "--model", default=None, help=f"default: {DEFAULT_BEDROCK_MODEL}"
     )

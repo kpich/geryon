@@ -1,6 +1,6 @@
 """Prompt-caching helpers for the LangChain generation path.
 
-Anthropic-family models (direct or via Bedrock) cache the prompt prefix up to a
+Anthropic-family models on Bedrock cache the prompt prefix up to a
 content block marked with ``cache_control``. We mark the stable prefix — the
 system prompt (instructions + schema context) and the initial user message
 (previous-hypotheses block) — so it is read from cache on every tool-call
@@ -12,7 +12,7 @@ breakpoint on the latest tool result before each LLM call, so the whole
 conversation so far is read from cache.
 
 OpenAI caches prefixes automatically and rejects ``cache_control`` blocks, so
-caching is only applied for Anthropic-style providers.
+caching is only applied for Bedrock.
 """
 
 from typing import Any
@@ -20,7 +20,7 @@ from typing import Any
 from langchain_core.messages import BaseMessage, ToolMessage
 
 # Providers whose models honor Anthropic-style cache_control breakpoints.
-CACHE_CONTROL_PROVIDERS = frozenset({"aws_bedrock", "anthropic"})
+CACHE_CONTROL_PROVIDERS = frozenset({"aws_bedrock"})
 
 _EPHEMERAL = {"type": "ephemeral"}
 

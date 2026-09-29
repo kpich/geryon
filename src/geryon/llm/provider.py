@@ -6,7 +6,7 @@ from geryon.llm.providers.base import LLMProvider
 from geryon.llm.providers.bedrock import BedrockProvider
 from geryon.llm.providers.openai import OpenAIProvider
 
-ProviderType = Literal["openai", "anthropic", "aws_bedrock"]
+ProviderType = Literal["openai", "aws_bedrock"]
 
 DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-4-8"
 
@@ -20,7 +20,7 @@ def create_provider(
     Parameters
     ----------
     provider_type : ProviderType
-        Type of provider ("openai", "anthropic", "aws_bedrock")
+        Type of provider ("openai", "aws_bedrock")
     **kwargs
         Provider-specific configuration
 
@@ -33,8 +33,6 @@ def create_provider(
     ------
     ValueError
         If provider_type is unknown
-    NotImplementedError
-        If provider is not yet implemented
 
     Examples
     --------
@@ -42,8 +40,6 @@ def create_provider(
     """
     if provider_type == "openai":
         return OpenAIProvider(**kwargs)
-    elif provider_type == "anthropic":
-        raise NotImplementedError("Anthropic provider not yet implemented")
     elif provider_type == "aws_bedrock":
         return BedrockProvider(**kwargs)
     else:
