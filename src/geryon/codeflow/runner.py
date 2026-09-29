@@ -165,7 +165,7 @@ def run_workflow(
     aws_region: str | None = None,
     aws_profile: str | None = None,
     max_iterations: int | None = None,
-    critic_cycles: int | None = None,
+    run_critic: bool | None = None,
     sandbox_timeout: int | None = None,
     enable_llm_logging: bool | None = None,
 ) -> list[CodeHypothesis]:
@@ -224,7 +224,7 @@ def run_workflow(
         "aws_region": aws_region,
         "aws_profile": aws_profile,
         "max_iterations": max_iterations,
-        "critic_cycles": critic_cycles,
+        "run_critic": run_critic,
         "sandbox_timeout_seconds": sandbox_timeout,
         "enable_llm_logging": enable_llm_logging,
     }
@@ -307,10 +307,9 @@ def main() -> None:
     parser.add_argument("--aws-profile", default=None)
     parser.add_argument("--max-iterations", type=int, default=None)
     parser.add_argument(
-        "--critic-cycles",
-        type=int,
-        default=None,
-        help="Run the agentic critic on each hypothesis when > 0 (default 0)",
+        "--no-critic",
+        action="store_true",
+        help="Skip the agentic critic",
     )
     parser.add_argument("--sandbox-timeout", type=int, default=None)
     parser.add_argument("--no-log", action="store_true")
@@ -336,7 +335,7 @@ def main() -> None:
         aws_region=args.aws_region,
         aws_profile=args.aws_profile,
         max_iterations=args.max_iterations,
-        critic_cycles=args.critic_cycles,
+        run_critic=False if args.no_critic else None,
         sandbox_timeout=args.sandbox_timeout,
         enable_llm_logging=False if args.no_log else None,
     )

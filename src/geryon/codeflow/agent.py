@@ -393,7 +393,7 @@ class CodeWorkflow:
             if not hypotheses:
                 print(f"⚠ No hypotheses in iteration {i + 1}, continuing...")
                 continue
-            if self.config.critic_cycles > 0:
+            if self.config.run_critic:
                 self._critique_and_persist(hypotheses)
             all_hypotheses.extend(hypotheses)
             print(f"✓ Iteration {i + 1} complete: {len(hypotheses)} hypotheses")

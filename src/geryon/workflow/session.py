@@ -48,9 +48,8 @@ class SessionConfig(BaseModel):
         default=180,
         description="Wall-clock seconds before a sandboxed script is killed (codeflow)",
     )
-    critic_cycles: int = Field(
-        default=0,
-        description="Critique each hypothesis when > 0 (the count isn't used yet)",
+    run_critic: bool = Field(
+        default=True, description="Critique each hypothesis with the agentic critic"
     )
 
     # Line of investigation. Prior hypotheses are injected from this chain only, and the
