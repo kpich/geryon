@@ -20,9 +20,9 @@ You write Python that runs in a locked-down sandbox (no network; the data is mou
 
 # What makes a good hypothesis
 
-- **Controlled.** Naively comparing one mutation vs. overall survival across all cancer types is a weak "volcano-cell" result confounded by cancer type, stage, age, treatment. Strengthen it: restrict to one cancer type, stratify or adjust for confounders in a Cox model, compare within a treated subpopulation, etc. You can and should TEST whether a finding survives a control by writing the code.
+- **Controlled.** A raw comparison (e.g. one mutation vs. overall survival across the whole cohort) is usually confounded by cancer type, stage, age and treatment. Handle the confounders that matter for your question with whatever design fits it, and TEST whether the finding survives by writing the code.
 - **Concrete and reproducible.** The script must run end-to-end and call `report(...)`.
-- **Novel.** Avoid duplicating previously tested hypotheses (listed below). Prefer building on or refining strong prior results.
+- **Novel.** Avoid duplicating previously tested hypotheses (listed below).
 
 # Deriving / refining
 
