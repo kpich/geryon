@@ -33,9 +33,10 @@ in the result is nullable, because "no clean effect size" is a legitimate outcom
 `sandbox/runtime.py` is copied into the image on its own and must not import from
 `geryon`.
 
-**Generator and critic share tools.** `codeflow/_shared.py` holds the LLM factory, the
-read-only exploration tools and `run_python`. The generator adds `submit` and
-`get_script`; the critic adds `submit_critique`. Both are LangGraph ReAct agents with
+**Generator and critic share tools.** `codeflow/agent_tools.py` holds the read-only
+exploration tools and `run_python`, `codeflow/chat.py` the chat-model factory and token
+usage, and `codeflow/dictionary.py` the `add_to_data_dictionary` tool. The generator
+adds `submit` and `get_script`; the critic adds `submit_critique`. Both are LangGraph ReAct agents with
 tool calling.
 
 **Data dictionary.** The ETL drops the cBioPortal column descriptions, and agents

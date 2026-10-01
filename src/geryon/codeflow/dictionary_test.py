@@ -3,12 +3,13 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from geryon.codeflow._shared import data_dictionary_text, make_dictionary_tool
 from geryon.codeflow.dictionary import (
     DataDictionary,
     DictionaryEntry,
+    data_dictionary_text,
     format_entries,
     has_assert,
+    make_dictionary_tool,
 )
 from geryon.sandbox import SandboxLimits, ScriptRun
 from geryon.workflow.session import SessionConfig
@@ -66,7 +67,8 @@ def test_format_entries_is_none_when_empty() -> None:
 def _record(tmp_path: Path, run: ScriptRun, **kwargs) -> str:
     config = _config(tmp_path)
     tool = make_dictionary_tool(config, SandboxLimits(), "critic")
-    with patch("geryon.codeflow._shared.run_in_sandbox", return_value=run) as sandbox:
+    target = "geryon.codeflow.dictionary.run_in_sandbox"
+    with patch(target, return_value=run) as sandbox:
         out = tool.invoke({"entry": "f", "check_code": CHECK, **kwargs})
     kwargs.setdefault("sandbox", sandbox)
     return out
@@ -90,7 +92,7 @@ def test_failing_check_saves_nothing(tmp_path: Path) -> None:
 
 def test_check_without_assert_is_rejected_before_running(tmp_path: Path) -> None:
     tool = make_dictionary_tool(_config(tmp_path), SandboxLimits(), "generator")
-    with patch("geryon.codeflow._shared.run_in_sandbox") as sandbox:
+    with patch("geryon.codeflow.dictionary.run_in_sandbox") as sandbox:
         out = tool.invoke({"entry": "f", "check_code": "print(1)"})
     assert "no assert" in out
     sandbox.assert_not_called()

@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from geryon.codeflow._shared import build_chat_model
+from geryon.codeflow.chat import build_chat_model
 from geryon.workflow.session import SessionConfig
 
 
@@ -10,7 +10,7 @@ def _config(**kw) -> SessionConfig:
 
 
 def test_bedrock_chat_model_sends_effort():
-    with patch("geryon.codeflow._shared.ChatBedrock") as chat:
+    with patch("geryon.codeflow.chat.ChatBedrock") as chat:
         build_chat_model(_config(effort="xhigh"))
     model_kwargs = chat.call_args.kwargs["model_kwargs"]
     assert model_kwargs["output_config"] == {"effort": "xhigh"}
