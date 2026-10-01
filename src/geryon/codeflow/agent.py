@@ -4,8 +4,6 @@ The agent explores the data with read-only tools, writes Python that runs in the
 Docker sandbox, and submits scripts as hypotheses.
 """
 
-from __future__ import annotations
-
 import json
 from typing import Any
 import uuid

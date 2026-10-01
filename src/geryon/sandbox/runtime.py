@@ -18,8 +18,6 @@ Scripts use it like::
 ``INSERT`` only touch the in-memory catalog; the parquet is mounted read-only.
 """
 
-from __future__ import annotations
-
 import json
 import os
 from pathlib import Path

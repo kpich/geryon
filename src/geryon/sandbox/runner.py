@@ -4,8 +4,6 @@ The container sees only the data dir (read-only) and a fresh scratch dir, with n
 network and with resource limits applied. No other host files are mounted.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 import json
 from pathlib import Path

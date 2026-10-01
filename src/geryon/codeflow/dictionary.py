@@ -12,8 +12,6 @@ The store lives next to the sessions (``<output_dir>/data_dictionary.jsonl``), n
 the data: it is a record of what runs have learned, and it is backed up with them.
 """
 
-from __future__ import annotations
-
 import ast
 from datetime import UTC, datetime
 from pathlib import Path

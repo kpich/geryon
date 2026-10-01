@@ -5,10 +5,8 @@ can test a suspicion (e.g. re-run the analysis adjusting for a confounder) befor
 scoring the hypothesis.
 """
 
-from __future__ import annotations
-
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
@@ -29,11 +27,9 @@ from geryon.llm.caching import (
     supports_cache_control,
     tail_cache_pre_model_hook,
 )
+from geryon.llm.conversation_logger import SessionTracer
 from geryon.sandbox import SandboxLimits
 from geryon.workflow.session import SessionConfig
-
-if TYPE_CHECKING:
-    from geryon.llm.conversation_logger import SessionTracer
 
 _MAX_REACT_CYCLES = 40
 

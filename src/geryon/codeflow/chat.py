@@ -1,8 +1,6 @@
 """Chat models for the generator and critic, and token-usage accounting for all
 three LLM phases."""
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 from botocore.config import Config as BotoConfig

@@ -19,8 +19,6 @@ The file is optional. A chain with no file is a bare label with no focus and no
 pinned data version, which is why ``main`` has no ``chains/main.md``.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 import re

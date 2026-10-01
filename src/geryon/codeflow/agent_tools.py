@@ -1,8 +1,6 @@
 """LangChain tools the generator and critic both use: read-only data exploration and
 running a script in the sandbox."""
 
-from __future__ import annotations
-
 import json
 
 from langchain_core.tools import tool
