@@ -10,23 +10,13 @@ That alone leaves the biggest cost uncached: the growing tail of tool results,
 re-sent on every round-trip. ``tail_cache_pre_model_hook`` adds a second, sliding
 breakpoint on the latest tool result before each LLM call, so the whole
 conversation so far is read from cache.
-
-OpenAI caches prefixes automatically and rejects ``cache_control`` blocks, so
-caching is only applied for Bedrock.
 """
 
 from typing import Any
 
 from langchain_core.messages import BaseMessage, ToolMessage
 
-# Providers whose models honor Anthropic-style cache_control breakpoints.
-CACHE_CONTROL_PROVIDERS = frozenset({"aws_bedrock"})
-
 _EPHEMERAL = {"type": "ephemeral"}
-
-
-def supports_cache_control(provider_type: str) -> bool:
-    return provider_type in CACHE_CONTROL_PROVIDERS
 
 
 def cached_text_content(text: str) -> list[str | dict[str, Any]]:

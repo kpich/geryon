@@ -6,7 +6,6 @@ scoring the hypothesis.
 """
 
 import json
-from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
@@ -24,7 +23,6 @@ from geryon.codeflow.prompts import (
 from geryon.db import Database
 from geryon.llm.caching import (
     cached_text_content,
-    supports_cache_control,
     tail_cache_pre_model_hook,
 )
 from geryon.llm.conversation_logger import SessionTracer
@@ -60,11 +58,10 @@ class HypothesisCritic:
             make_dictionary_tool(self.config, self.limits, "critic"),
             self._make_submit_critique_tool(holder),
         ]
-        caching = supports_cache_control(self.config.provider_type)
         graph = create_react_agent(
             self.llm,
             ToolNode(tools),
-            pre_model_hook=tail_cache_pre_model_hook if caching else None,
+            pre_model_hook=tail_cache_pre_model_hook,
         )
 
         result_block = (
@@ -89,16 +86,8 @@ class HypothesisCritic:
             note=CRITIC_FOCUS_NOTE,
         )
 
-        sys_content: str | list[Any]
-        usr_content: str | list[Any]
-        if caching:
-            sys_content = cached_text_content(system_prompt)
-            usr_content = cached_text_content(user_text)
-        else:
-            sys_content = system_prompt
-            usr_content = user_text
-
-        steps_per_cycle = 3 if caching else 2
+        sys_content = cached_text_content(system_prompt)
+        usr_content = cached_text_content(user_text)
         result = graph.invoke(
             {
                 "messages": [
@@ -106,7 +95,8 @@ class HypothesisCritic:
                     HumanMessage(content=usr_content),
                 ]
             },
-            config={"recursion_limit": _MAX_REACT_CYCLES * steps_per_cycle},
+            # Each cycle is three graph steps: pre-model hook, model, tools.
+            config={"recursion_limit": _MAX_REACT_CYCLES * 3},
         )
         self._log_trace(result.get("messages", []))
 

@@ -5,7 +5,6 @@ from typing import NamedTuple
 
 from botocore.config import Config as BotoConfig
 from langchain_aws import ChatBedrock
-from langchain_openai import ChatOpenAI
 
 from geryon.llm.providers.base import LLMResponse
 from geryon.workflow.session import SessionConfig
@@ -66,38 +65,24 @@ def usage_from_response(response: LLMResponse) -> MessageUsage:
     )
 
 
-def build_chat_model(config: SessionConfig):
-    """Build a LangChain chat model from the session's provider config."""
-    if config.provider_type == "openai":
-        kwargs: dict = {
-            "model": config.model,
-            "temperature": 0.8,
+def build_chat_model(config: SessionConfig) -> ChatBedrock:
+    """Build the LangChain Bedrock chat model the generator and critic run on."""
+    boto_config = BotoConfig(
+        read_timeout=300, connect_timeout=30, retries={"max_attempts": 2}
+    )
+    kwargs: dict = {
+        "model_id": config.model,
+        # Current Claude models 400 on temperature/top_p/top_k, so none are sent.
+        "model_kwargs": {
             "max_tokens": 16384,
-        }
-        if config.base_url:
-            kwargs["openai_api_base"] = config.base_url
-        if config.api_key:
-            kwargs["openai_api_key"] = config.api_key
-        return ChatOpenAI(**kwargs)  # type: ignore[arg-type]
-    elif config.provider_type == "aws_bedrock":
-        boto_config = BotoConfig(
-            read_timeout=300, connect_timeout=30, retries={"max_attempts": 2}
-        )
-        kwargs = {
-            "model_id": config.model,
-            # Current Claude models 400 on temperature/top_p/top_k, so none are sent.
-            "model_kwargs": {
-                "max_tokens": 16384,
-                "output_config": {"effort": config.effort},
-            },
-            "config": boto_config,
-        }
-        if config.aws_region:
-            kwargs["region_name"] = config.aws_region
-        if config.aws_profile:
-            kwargs["credentials_profile_name"] = config.aws_profile
-        if "arn:" in config.model or "anthropic" in config.model.lower():
-            kwargs["provider"] = "anthropic"
-        return ChatBedrock(**kwargs)  # type: ignore[arg-type]
-    else:
-        raise ValueError(f"Unknown provider type: {config.provider_type}")
+            "output_config": {"effort": config.effort},
+        },
+        "config": boto_config,
+    }
+    if config.aws_region:
+        kwargs["region_name"] = config.aws_region
+    if config.aws_profile:
+        kwargs["credentials_profile_name"] = config.aws_profile
+    if "arn:" in config.model or "anthropic" in config.model.lower():
+        kwargs["provider"] = "anthropic"
+    return ChatBedrock(**kwargs)

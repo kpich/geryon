@@ -158,11 +158,8 @@ def run_workflow(
     focus_file: Path | None = None,
     prompts: Path | str | None = None,
     include_data_dictionary: bool | None = None,
-    provider: str | None = None,
     model: str | None = None,
     effort: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
     aws_region: str | None = None,
     aws_profile: str | None = None,
     max_iterations: int | None = None,
@@ -218,11 +215,8 @@ def run_workflow(
         "prompts": prompt_set,
         "include_data_dictionary": include_data_dictionary,
         "code_version": code_version(),
-        "provider_type": provider,
         "model": model,
         "effort": effort,
-        "base_url": base_url,
-        "api_key": api_key,
         "aws_region": aws_region,
         "aws_profile": aws_profile,
         "max_iterations": max_iterations,
@@ -299,7 +293,6 @@ def main() -> None:
         action="store_true",
         help="Leave the data dictionary out of the prompts",
     )
-    parser.add_argument("--provider", choices=["openai", "aws_bedrock"], default=None)
     parser.add_argument(
         "--model", default=None, help=f"default: {DEFAULT_BEDROCK_MODEL}"
     )
@@ -307,10 +300,8 @@ def main() -> None:
         "--effort",
         choices=["low", "medium", "high", "xhigh", "max"],
         default=None,
-        help="How much the model thinks (Bedrock only; default: medium)",
+        help="How much the model thinks (default: medium)",
     )
-    parser.add_argument("--base-url", default=None)
-    parser.add_argument("--api-key", default=None)
     parser.add_argument("--aws-region", default=None)
     parser.add_argument("--aws-profile", default=None)
     parser.add_argument("--max-iterations", type=int, default=None)
@@ -336,11 +327,8 @@ def main() -> None:
         focus_file=args.focus_file,
         prompts=args.prompts,
         include_data_dictionary=False if args.no_data_dictionary else None,
-        provider=args.provider,
         model=args.model,
         effort=args.effort,
-        base_url=args.base_url,
-        api_key=args.api_key,
         aws_region=args.aws_region,
         aws_profile=args.aws_profile,
         max_iterations=args.max_iterations,
