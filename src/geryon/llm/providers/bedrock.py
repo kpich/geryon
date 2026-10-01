@@ -29,7 +29,7 @@ class BedrockProvider:
         self,
         messages: list[ChatMessage],
         temperature: float = 0.7,
-        max_tokens: int = 4096,
+        max_tokens: int = 32000,
         cache_system: bool = False,
     ) -> LLMResponse:
         system_prompts: list[dict[str, Any]] = []
@@ -62,7 +62,21 @@ class BedrockProvider:
 
         response = self.client.converse(**kwargs)
 
-        content = response["output"]["message"]["content"][0]["text"]
+        # Models with thinking always on (Opus 5.5) put reasoningContent blocks
+        # before the text, and their thinking tokens count against maxTokens.
+        stop_reason = response.get("stopReason")
+        if stop_reason == "max_tokens":
+            raise RuntimeError(
+                f"{self.model} hit maxTokens={max_tokens}; the response is truncated"
+            )
+        blocks = response["output"]["message"]["content"]
+        texts = [b["text"] for b in blocks if "text" in b]
+        if not texts:
+            raise RuntimeError(
+                f"{self.model} returned no text (stopReason={stop_reason}, "
+                f"blocks={[next(iter(b)) for b in blocks]})"
+            )
+        content = "".join(texts)
 
         usage = None
         if "usage" in response:
