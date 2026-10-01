@@ -160,6 +160,7 @@ def run_workflow(
     include_data_dictionary: bool | None = None,
     provider: str | None = None,
     model: str | None = None,
+    effort: str | None = None,
     base_url: str | None = None,
     api_key: str | None = None,
     aws_region: str | None = None,
@@ -219,6 +220,7 @@ def run_workflow(
         "code_version": code_version(),
         "provider_type": provider,
         "model": model,
+        "effort": effort,
         "base_url": base_url,
         "api_key": api_key,
         "aws_region": aws_region,
@@ -301,6 +303,12 @@ def main() -> None:
     parser.add_argument(
         "--model", default=None, help=f"default: {DEFAULT_BEDROCK_MODEL}"
     )
+    parser.add_argument(
+        "--effort",
+        choices=["low", "medium", "high", "xhigh", "max"],
+        default=None,
+        help="How much the model thinks (Bedrock only; default: medium)",
+    )
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--api-key", default=None)
     parser.add_argument("--aws-region", default=None)
@@ -330,6 +338,7 @@ def main() -> None:
         include_data_dictionary=False if args.no_data_dictionary else None,
         provider=args.provider,
         model=args.model,
+        effort=args.effort,
         base_url=args.base_url,
         api_key=args.api_key,
         aws_region=args.aws_region,

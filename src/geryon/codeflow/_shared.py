@@ -257,7 +257,10 @@ def build_chat_model(config: SessionConfig):
         kwargs = {
             "model_id": config.model,
             # Current Claude models 400 on temperature/top_p/top_k, so none are sent.
-            "model_kwargs": {"max_tokens": 16384},
+            "model_kwargs": {
+                "max_tokens": 16384,
+                "output_config": {"effort": config.effort},
+            },
             "config": boto_config,
         }
         if config.aws_region:

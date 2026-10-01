@@ -11,6 +11,8 @@ from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.codeflow.prompts import PromptSet, load_prompt_set
 from geryon.llm import DEFAULT_BEDROCK_MODEL
 
+Effort = Literal["low", "medium", "high", "xhigh", "max"]
+
 
 class SessionConfig(BaseModel):
     """Configuration for a hypothesis generation session."""
@@ -25,6 +27,13 @@ class SessionConfig(BaseModel):
     model: str = Field(
         default=DEFAULT_BEDROCK_MODEL,
         description="Model identifier",
+    )
+    # Sent explicitly rather than left to the model's default, which differs by model
+    # (medium on Opus 5.5, high before it) and could change under us.
+    effort: Effort = Field(
+        default="medium",
+        description="Claude output_config.effort for generator, critic and narrator "
+        "(Bedrock only): how much the model thinks",
     )
     base_url: str | None = Field(
         default=None,
