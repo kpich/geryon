@@ -11,8 +11,6 @@ from before markers existed have none; ``read_data_version`` returns None for th
 and callers fall back to the directory name.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 import json
 from pathlib import Path

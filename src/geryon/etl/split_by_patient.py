@@ -20,8 +20,6 @@ the patient-level split with no leakage. Samples absent from ``clinical_sample``
 copied unchanged.
 """
 
-from __future__ import annotations
-
 import argparse
 import logging
 from pathlib import Path
