@@ -86,7 +86,6 @@ def _workflow(tmp_path: Path, chain: str) -> CodeWorkflow:
 
     with (
         patch("geryon.codeflow.agent.Database"),
-        patch("geryon.codeflow.agent.BedrockProvider"),
         patch("geryon.codeflow.agent.build_chat_model"),
         patch("geryon.codeflow.agent.make_explore_tools", return_value=[]),
     ):
