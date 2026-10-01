@@ -20,7 +20,13 @@ from pathlib import Path
 from typing import Literal
 import uuid
 
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+
+from geryon.codeflow.agent_tools import format_run, run_in_sandbox
+from geryon.etl.data_version import resolve_data_version
+from geryon.sandbox import SandboxLimits
+from geryon.workflow.session import SessionConfig
 
 DICTIONARY_FILENAME = "data_dictionary.jsonl"
 
@@ -94,3 +100,77 @@ def format_entries(entries: list[DictionaryEntry]) -> str | None:
     if not entries:
         return None
     return "\n".join(f"- [{e.short_id()}] {e.entry}" for e in entries)
+
+
+def session_data_version(config: SessionConfig) -> str:
+    return config.data_version or resolve_data_version(config.parquet_dir)
+
+
+def dictionary_store(config: SessionConfig) -> DataDictionary:
+    # Without an output dir (tests, ad-hoc runs) the dictionary stays with the session.
+    return DataDictionary(config.output_dir or config.storage_dir)
+
+
+def data_dictionary_text(config: SessionConfig) -> str | None:
+    """The data dictionary for this session's data version, rendered for a prompt."""
+    if not config.include_data_dictionary:
+        return None
+    store = dictionary_store(config)
+    return format_entries(store.current(session_data_version(config)))
+
+
+def make_dictionary_tool(
+    config: SessionConfig, limits: SandboxLimits, recorded_by: Recorder
+):
+    """A tool that adds a dictionary entry, once a script asserting it passes."""
+    store = dictionary_store(config)
+
+    @tool
+    def add_to_data_dictionary(
+        entry: str, check_code: str, supersedes: str | None = None
+    ) -> str:
+        """Add an entry to the data dictionary that every later session sees.
+
+        The ETL dropped the source's column descriptions, so this dictionary is
+        what agents have instead. Write an entry the way a codebook would: what a
+        table, column or value means, its units or coding, how tables join, what
+        time zero is, coverage or missingness, a trap that makes a naive query
+        wrong. It must hold whatever cancer type or question someone is studying.
+
+        What the data shows about patients is a finding, not an entry: rates or
+        counts within a cohort, relationships between variables ("X-mutant tumors
+        have higher Y"), effect sizes, or an interpretation ("consistent with a
+        non-secretor phenotype"). Findings go in hypotheses and critiques, where
+        they can be challenged; stored here, later agents would take them as
+        settled. If an entry only holds for one cancer type, it is a finding.
+
+        `check_code` must contain `assert` statements that establish the entry and
+        must run cleanly in the sandbox (`from geryon_runtime import db`). Set
+        `supersedes` to the id of an earlier entry this one corrects.
+        """
+        print("[TOOL] add_to_data_dictionary called")
+        if not has_assert(check_code):
+            return (
+                "✗ NOT SAVED: check_code has no assert statement (or doesn't parse). "
+                "Assert the entry against the data."
+            )
+        old = None
+        if supersedes:
+            old = store.find(supersedes)
+            if old is None:
+                return f"✗ NOT SAVED: no entry with id '{supersedes}' to supersede."
+        run = run_in_sandbox(config, check_code, limits)
+        if not run.success:
+            return "✗ NOT SAVED: the check failed.\n" + format_run(run)
+        saved = DictionaryEntry(
+            entry=entry,
+            check_code=check_code,
+            data_version=session_data_version(config),
+            session_id=config.session_id,
+            recorded_by=recorded_by,
+            supersedes=old.entry_id if old else None,
+        )
+        store.append(saved)
+        return f"✓ Entry saved [{saved.short_id()}]."
+
+    return add_to_data_dictionary

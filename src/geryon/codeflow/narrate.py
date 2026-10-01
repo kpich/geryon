@@ -4,7 +4,7 @@ import json
 
 from pydantic import ValidationError
 
-from geryon.codeflow._shared import MessageUsage, usage_from_response
+from geryon.codeflow.chat import MessageUsage, usage_from_response
 from geryon.codeflow.models import CodeNarrative
 from geryon.codeflow.prompts import with_data_dictionary, with_focus
 from geryon.llm.providers.base import ChatMessage, LLMProvider
