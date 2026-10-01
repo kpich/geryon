@@ -1,12 +1,10 @@
-"""Chat models for the generator and critic, and token-usage accounting for all
-three LLM phases."""
+"""The chat model all three LLM phases run on, and their token-usage accounting."""
 
 from typing import NamedTuple
 
 from botocore.config import Config as BotoConfig
 from langchain_aws import ChatBedrock
 
-from geryon.llm.providers.base import LLMResponse
 from geryon.workflow.session import SessionConfig
 
 
@@ -45,28 +43,8 @@ def sum_message_usage(messages: list) -> MessageUsage:
     return MessageUsage(inp, out, tot, cache_read, cache_create, calls)
 
 
-def usage_from_response(response: LLMResponse) -> MessageUsage:
-    """Map one provider ``LLMResponse.usage`` dict into a ``MessageUsage``.
-
-    ``prompt_tokens`` is the uncached input; ``cache_read_tokens`` and
-    ``cache_write_tokens`` are separate from it, as the cost plot expects.
-    """
-    usage = response.usage or {}
-    inp = int(usage.get("prompt_tokens", 0) or 0)
-    out = int(usage.get("completion_tokens", 0) or 0)
-    tot = int(usage.get("total_tokens", 0) or 0) or (inp + out)
-    return MessageUsage(
-        input_tokens=inp,
-        output_tokens=out,
-        total_tokens=tot,
-        cache_read_tokens=int(usage.get("cache_read_tokens", 0) or 0),
-        cache_creation_tokens=int(usage.get("cache_write_tokens", 0) or 0),
-        n_llm_calls=1,
-    )
-
-
 def build_chat_model(config: SessionConfig) -> ChatBedrock:
-    """Build the LangChain Bedrock chat model the generator and critic run on."""
+    """Build the LangChain Bedrock chat model all three roles run on."""
     boto_config = BotoConfig(
         read_timeout=300, connect_timeout=30, retries={"max_attempts": 2}
     )

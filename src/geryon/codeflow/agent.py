@@ -40,7 +40,6 @@ from geryon.llm.caching import (
     tail_cache_pre_model_hook,
 )
 from geryon.llm.conversation_logger import SessionTracer
-from geryon.llm.providers.bedrock import BedrockProvider
 from geryon.sandbox import SandboxLimits, ScriptRun, ensure_sandbox
 from geryon.workflow.session import Session, SessionConfig
 
@@ -95,13 +94,6 @@ class CodeWorkflow:
         )
 
         self.db = Database(config.parquet_dir)
-        self.provider = BedrockProvider(
-            model=config.model,
-            region=config.aws_region,
-            profile=config.aws_profile,
-            effort=config.effort,
-        )
-
         self.store = CodeHypothesisStore(config.storage_dir, chain=config.chain)
         self.sandbox_limits = SandboxLimits()
 
@@ -180,7 +172,7 @@ class CodeWorkflow:
             parent = self._lookup(refines, submitted) if refines else None
 
             narrator = CodeNarrator(
-                self.provider,
+                self.llm,
                 self.config.prompts.narrator,
                 focus=self.config.focus,
                 data_dictionary=data_dictionary_text(self.config),

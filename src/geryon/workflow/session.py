@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 
 from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.codeflow.prompts import PromptSet, load_prompt_set
-from geryon.llm import DEFAULT_BEDROCK_MODEL
+
+DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-5-5"
 
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 

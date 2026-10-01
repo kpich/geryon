@@ -22,8 +22,7 @@ from geryon.etl.data_version import (
     validate_version_name,
 )
 from geryon.etl.split_by_patient import EXPLORE_SPLIT, SPLIT_MARKER_FILENAME
-from geryon.llm import DEFAULT_BEDROCK_MODEL
-from geryon.workflow.session import SessionConfig
+from geryon.workflow.session import DEFAULT_BEDROCK_MODEL, SessionConfig
 
 _DATED_VERSION = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
