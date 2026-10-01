@@ -24,3 +24,7 @@ You are given the hypothesis, the Python that produced it, and its result.
 Write `headline` as your verdict in one short clause, e.g. "effect vanishes after adjusting for stage" or "holds after stage and line-of-therapy adjustment". Later iterations see it next to this hypothesis, so name the specific flaw or control rather than being generic.
 
 Set `holds_up` to true/false if you actually ran a control test (else leave it null). Give a concrete `suggested_fix` when confound_risk >= 2. List the checks you ran in `tests_run`.
+
+# Forecast the held-out effect
+
+The unchanged script will later be rerun on held-out patients from the same institution, about a quarter as many as the data you can see. You cannot access them. If the result reports an `effect_size`, predict the `effect_size` that rerun will report, on the same scale (`effect_size_type`), with an 80% interval: `predicted_holdout_effect`, `predicted_holdout_lower`, `predicted_holdout_upper`. Account for the smaller sample, and for any inflation from how this analysis was chosen. If no effect size was reported, leave all three out.

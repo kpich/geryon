@@ -3,8 +3,9 @@
 pointer to a parent hypothesis."""
 
 from datetime import UTC, datetime
+from typing import Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.sandbox.result import IterationResult
@@ -49,6 +50,40 @@ class CodeCritique(BaseModel):
     tests_run: list[str] = Field(
         default_factory=list, description="Short descriptions of checks the critic ran"
     )
+    # Scored later against a rerun of the unchanged script on the validation split,
+    # which the critic never sees. None when no effect size was reported, and on
+    # sessions predating the fields.
+    predicted_holdout_effect: float | None = Field(
+        default=None,
+        description="Forecast of effect_size on held-out patients, same scale",
+    )
+    predicted_holdout_lower: float | None = Field(
+        default=None, description="Lower bound of the forecast's 80% interval"
+    )
+    predicted_holdout_upper: float | None = Field(
+        default=None, description="Upper bound of the forecast's 80% interval"
+    )
+
+    @model_validator(mode="after")
+    def _forecast_is_complete_and_ordered(self) -> Self:
+        parts = (
+            self.predicted_holdout_lower,
+            self.predicted_holdout_effect,
+            self.predicted_holdout_upper,
+        )
+        if all(p is None for p in parts):
+            return self
+        lower, effect, upper = parts
+        if lower is None or effect is None or upper is None:
+            raise ValueError(
+                "give all three of predicted_holdout_effect/_lower/_upper, or none"
+            )
+        if not lower <= effect <= upper:
+            raise ValueError(
+                "need predicted_holdout_lower <= predicted_holdout_effect "
+                "<= predicted_holdout_upper"
+            )
+        return self
 
 
 class CodeHypothesis(BaseModel):
