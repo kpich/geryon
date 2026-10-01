@@ -153,6 +153,10 @@ function critiqueSection(c) {
     <span class="chip">Novelty <b class="${grade(c.novelty)}">${c.novelty}/3</b></span>
     <span class="chip">Control test: ${holds}</span>
   </div>`;
+  if (c.predicted_holdout_effect != null)
+    h += field("Held-out forecast (80% interval)", `<div class="prose">`
+      + `${fmt(c.predicted_holdout_effect)} (${fmt(c.predicted_holdout_lower)} – `
+      + `${fmt(c.predicted_holdout_upper)})</div>`);
   if (c.headline) h += field("Verdict", `<div class="prose">${esc(c.headline)}</div>`);
   if (c.notes) h += field("Notes", `<div class="prose">${esc(c.notes)}</div>`);
   if (c.suggested_fix) h += field("Suggested fix", `<div class="prose">${esc(c.suggested_fix)}</div>`);

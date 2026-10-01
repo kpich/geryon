@@ -10,6 +10,7 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode, create_react_agent
+from pydantic import ValidationError
 
 from geryon.codeflow.agent_tools import make_explore_tools, make_run_python_tool
 from geryon.codeflow.chat import build_chat_model, sum_message_usage
@@ -56,7 +57,11 @@ class HypothesisCritic:
         tools = self.explore_tools + [
             make_run_python_tool(self.config, self.limits),
             make_dictionary_tool(self.config, self.limits, "critic"),
-            self._make_submit_critique_tool(holder),
+            self._make_submit_critique_tool(
+                holder,
+                has_effect=hyp.result is not None
+                and hyp.result.effect_size is not None,
+            ),
         ]
         graph = create_react_agent(
             self.llm,
@@ -123,7 +128,7 @@ class HypothesisCritic:
         )
         self.tracer.log_raw_messages(messages, phase="critic")
 
-    def _make_submit_critique_tool(self, holder: list[CodeCritique]):
+    def _make_submit_critique_tool(self, holder: list[CodeCritique], has_effect: bool):
         @tool
         def submit_critique(
             trustworthiness: int,
@@ -134,6 +139,9 @@ class HypothesisCritic:
             holds_up: bool | None = None,
             suggested_fix: str | None = None,
             tests_run: list[str] | None = None,
+            predicted_holdout_effect: float | None = None,
+            predicted_holdout_lower: float | None = None,
+            predicted_holdout_upper: float | None = None,
         ) -> str:
             """Record the structured critique. Call exactly once when finished.
 
@@ -141,17 +149,45 @@ class HypothesisCritic:
             verdict in one short clause (under ~15 words); later iterations see it
             next to this hypothesis. Set holds_up only if you actually ran a control
             test. Give suggested_fix when confound_risk>=2.
+
+            predicted_holdout_effect/_lower/_upper: your forecast of effect_size,
+            with an 80% interval, when the unchanged script is rerun on held-out
+            patients. Required when the result reports an effect_size; omit
+            otherwise.
             """
-            critique = CodeCritique(
-                trustworthiness=_clamp(trustworthiness),
-                confound_risk=_clamp(confound_risk),
-                novelty=_clamp(novelty),
-                holds_up=holds_up,
-                headline=headline,
-                notes=notes,
-                suggested_fix=suggested_fix,
-                tests_run=tests_run or [],
+            forecast = (
+                predicted_holdout_effect,
+                predicted_holdout_lower,
+                predicted_holdout_upper,
             )
+            if has_effect and any(f is None for f in forecast):
+                return (
+                    "✗ The result reports an effect_size, so give "
+                    "predicted_holdout_effect, predicted_holdout_lower and "
+                    "predicted_holdout_upper. Call submit_critique again."
+                )
+            if not has_effect and any(f is not None for f in forecast):
+                return (
+                    "✗ The result reports no effect_size, so there is nothing to "
+                    "forecast. Leave the predicted_holdout_* fields out and call "
+                    "submit_critique again."
+                )
+            try:
+                critique = CodeCritique(
+                    trustworthiness=_clamp(trustworthiness),
+                    confound_risk=_clamp(confound_risk),
+                    novelty=_clamp(novelty),
+                    holds_up=holds_up,
+                    headline=headline,
+                    notes=notes,
+                    suggested_fix=suggested_fix,
+                    tests_run=tests_run or [],
+                    predicted_holdout_effect=predicted_holdout_effect,
+                    predicted_holdout_lower=predicted_holdout_lower,
+                    predicted_holdout_upper=predicted_holdout_upper,
+                )
+            except ValidationError as e:
+                return f"✗ {e}. Call submit_critique again."
             holder.append(critique)
             return "✓ critique recorded"
 

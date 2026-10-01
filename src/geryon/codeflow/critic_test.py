@@ -87,3 +87,73 @@ def test_critic_that_never_submits_raises_instead_of_inventing_scores(tmp_path):
         )
         with pytest.raises(RuntimeError, match="without calling submit_critique"):
             critic.critique(hyp)
+
+
+def _critique(
+    effect: float | None = None, lower: float | None = None, upper: float | None = None
+) -> CodeCritique:
+    return CodeCritique(
+        trustworthiness=2,
+        confound_risk=2,
+        novelty=2,
+        predicted_holdout_effect=effect,
+        predicted_holdout_lower=lower,
+        predicted_holdout_upper=upper,
+    )
+
+
+def test_forecast_must_be_complete_and_ordered():
+    _critique(0.8, 0.6, 1.0)
+    with pytest.raises(ValidationError, match="all three"):
+        _critique(0.8)
+    with pytest.raises(ValidationError, match="<="):
+        _critique(1.2, 0.6, 1.0)
+
+
+def _submit_tool(tmp_path, has_effect):
+    config = SessionConfig(
+        parquet_dir=Path(tmp_path), storage_dir=Path(tmp_path), enable_llm_logging=False
+    )
+    with (
+        patch("geryon.codeflow.critic.build_chat_model"),
+        patch("geryon.codeflow.critic.make_explore_tools", return_value=[]),
+    ):
+        critic = HypothesisCritic(config, db=MagicMock())
+    holder: list[CodeCritique] = []
+    return critic._make_submit_critique_tool(holder, has_effect=has_effect), holder
+
+
+_SCORES = {
+    "trustworthiness": 2,
+    "confound_risk": 2,
+    "novelty": 2,
+    "headline": "h",
+    "notes": "n",
+}
+_FORECAST = {
+    "predicted_holdout_effect": 0.8,
+    "predicted_holdout_lower": 0.6,
+    "predicted_holdout_upper": 1.0,
+}
+
+
+def test_submit_requires_forecast_when_effect_reported(tmp_path):
+    submit, holder = _submit_tool(tmp_path, has_effect=True)
+    assert submit.invoke(_SCORES).startswith("✗")
+    assert holder == []
+    assert submit.invoke({**_SCORES, **_FORECAST}).startswith("✓")
+    assert holder[0].predicted_holdout_effect == 0.8
+
+
+def test_submit_rejects_forecast_without_effect(tmp_path):
+    submit, holder = _submit_tool(tmp_path, has_effect=False)
+    assert submit.invoke({**_SCORES, **_FORECAST}).startswith("✗")
+    assert submit.invoke(_SCORES).startswith("✓")
+    assert holder[0].predicted_holdout_effect is None
+
+
+def test_submit_returns_bad_interval_to_model(tmp_path):
+    submit, holder = _submit_tool(tmp_path, has_effect=True)
+    reply = submit.invoke({**_SCORES, **_FORECAST, "predicted_holdout_lower": 0.9})
+    assert reply.startswith("✗")
+    assert holder == []
