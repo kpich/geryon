@@ -126,8 +126,9 @@ runs a copy that you've edited, and it must contain every template. Nothing is f
 from the default. If `generator_user.md` has no `{previous_hypotheses}` placeholder, no
 prior hypotheses are shown. `--no-data-dictionary` leaves the dictionary block out. The runner
 resolves everything into `SessionConfig`, so `config.json` records the full prompt texts,
-`include_data_dictionary`, and `code_version` (commit, plus `+dirty` if tracked files had
-changed). Put new steering in a template or behind a config field, never as hardcoded
+`include_data_dictionary`, `effort`, and `code_version` (commit, plus `+dirty` if tracked
+files had changed). `--effort` (default `medium`) is sent explicitly to all three agents
+because Opus 5.5 always thinks and the model's own default differs across versions. Put new steering in a template or behind a config field, never as hardcoded
 prose, so sessions stay comparable. The dictionary and focus blocks are still appended in code
 (`with_data_dictionary`, `with_focus`).
 

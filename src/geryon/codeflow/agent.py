@@ -105,6 +105,7 @@ class CodeWorkflow:
         if config.provider_type == "aws_bedrock":
             provider_kwargs["region"] = config.aws_region
             provider_kwargs["profile"] = config.aws_profile
+            provider_kwargs["effort"] = config.effort
         self.provider = create_provider(config.provider_type, **provider_kwargs)
 
         self.store = CodeHypothesisStore(config.storage_dir, chain=config.chain)

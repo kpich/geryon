@@ -15,9 +15,11 @@ class BedrockProvider:
         model: str,
         region: str | None = None,
         profile: str | None = None,
+        effort: str | None = None,
     ):
         self.model = model
         self.region = region
+        self.effort = effort
 
         session = boto3.Session(
             profile_name=profile,
@@ -55,6 +57,10 @@ class BedrockProvider:
                 "maxTokens": max_tokens,
             },
         }
+        if self.effort:
+            kwargs["additionalModelRequestFields"] = {
+                "output_config": {"effort": self.effort}
+            }
         if system_prompts:
             if cache_system:
                 system_prompts.append({"cachePoint": {"type": "default"}})
