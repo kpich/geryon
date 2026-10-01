@@ -1,16 +1,22 @@
 """Tests for cost_over_time pricing and cache-fraction calibration."""
 
+import pytest
+
 from geryon.plot.cost_over_time import (
     _cache_fractions,
     _estimated_cost,
     _event_cost,
     _input_volume,
+    _prices,
 )
+
+OPUS_4_8 = "us.anthropic.claude-opus-4-8"
 
 
 def test_event_cost_disjoint_buckets():
     # input/cache_read/cache_write are disjoint; each billed at its own rate.
     e = {
+        "_model": OPUS_4_8,
         "input_tokens": 1000,
         "cache_read_tokens": 2000,
         "cache_creation_tokens": 500,
@@ -21,7 +27,7 @@ def test_event_cost_disjoint_buckets():
 
 
 def test_event_cost_uncached_legacy_event():
-    e = {"input_tokens": 1000, "output_tokens": 100}
+    e = {"_model": OPUS_4_8, "input_tokens": 1000, "output_tokens": 100}
     expected = (1000 * 5.0 + 100 * 25.0) / 1_000_000
     assert abs(_event_cost(e) - expected) < 1e-12
 
@@ -63,7 +69,28 @@ def test_cache_fractions_none_without_cached_runs():
 
 def test_estimated_cost_applies_fractions_to_uncached_event():
     # uncached old event of 1000 input tokens, at 90% read / 5% write
-    e = {"input_tokens": 1000, "output_tokens": 100}
+    e = {"_model": OPUS_4_8, "input_tokens": 1000, "output_tokens": 100}
     cost = _estimated_cost(e, (0.9, 0.05))
     expected = (50 * 5.0 + 900 * 0.5 + 50 * 6.25 + 100 * 25.0) / 1_000_000
     assert abs(cost - expected) < 1e-12
+
+
+def test_event_cost_uses_session_model_rates():
+    e = {
+        "_model": "us.anthropic.claude-opus-5-5",
+        "input_tokens": 1000,
+        "cache_read_tokens": 2000,
+        "cache_creation_tokens": 500,
+        "output_tokens": 100,
+    }
+    expected = (1000 * 4.0 + 2000 * 0.2 + 500 * 5.0 + 100 * 20.0) / 1_000_000
+    assert abs(_event_cost(e) - expected) < 1e-12
+
+
+def test_prices_strips_bedrock_prefix_and_version_suffix():
+    assert _prices("us.anthropic.claude-opus-4-6-v1") == _prices("claude-opus-4-6")
+
+
+def test_prices_unknown_model_raises():
+    with pytest.raises(KeyError, match="claude-sonnet-9"):
+        _prices("us.anthropic.claude-sonnet-9")

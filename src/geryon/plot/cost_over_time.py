@@ -9,24 +9,46 @@ the cache hit-rate observed in the runs that did use caching.
 import argparse
 import json
 from pathlib import Path
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-# USD per token (Anthropic pricing). input_tokens, cache_read_tokens and
-# cache_creation_tokens are three DISJOINT buckets of the prompt: fresh input is
-# billed at 1x, cache reads at 0.1x, cache writes at 1.25x. (total_tokens only
-# sums input + output + cache_read, so it understates volume — don't use it.)
-_INPUT_PRICE = 5.00 / 1_000_000
-_OUTPUT_PRICE = 25.00 / 1_000_000
-_CACHE_READ_PRICE = 0.50 / 1_000_000
-_CACHE_WRITE_PRICE = 6.25 / 1_000_000  # 5-minute TTL
+# USD per million tokens at Anthropic list rates (Bedrock bills separately and
+# may differ): input, output, cache read. input_tokens, cache_read_tokens and
+# cache_creation_tokens are three DISJOINT buckets of the prompt. Cache writes
+# are 1.25x input (5-minute TTL); the cache-read multiple varies by model.
+# (total_tokens only sums input + output + cache_read, so it understates
+# volume — don't use it.)
+_PRICES_PER_MTOK: dict[str, tuple[float, float, float]] = {
+    "claude-opus-4-6": (5.00, 25.00, 0.50),
+    "claude-opus-4-8": (5.00, 25.00, 0.50),
+    "claude-opus-5": (5.00, 25.00, 0.50),
+    "claude-opus-5-5": (4.00, 20.00, 0.20),
+}
+_CACHE_WRITE_MULTIPLIER = 1.25
+
+
+def _prices(model: str) -> tuple[float, float, float, float]:
+    """Per-token (input, output, cache_read, cache_write) USD for a model id.
+
+    Accepts Bedrock ids like ``us.anthropic.claude-opus-4-6-v1``.
+    """
+    name = re.sub(r"-v\d+(:\d+)?$", "", model.split("anthropic.")[-1])
+    if name not in _PRICES_PER_MTOK:
+        raise KeyError(f"no price for model {model!r}; add it to _PRICES_PER_MTOK")
+    inp, out, read = (p / 1_000_000 for p in _PRICES_PER_MTOK[name])
+    return inp, out, read, inp * _CACHE_WRITE_MULTIPLIER
 
 
 def load_generation_usage(data_dir: Path) -> list[dict]:
-    """Collect generation_usage events across all sessions, ordered by timestamp."""
+    """Collect generation_usage events across all sessions, ordered by timestamp.
+
+    Each event is tagged with its session's model from the sibling config.json.
+    """
     events: list[dict] = []
     for trace_file in sorted((data_dir / "sessions").rglob("trace.jsonl")):
+        config = json.loads((trace_file.parent / "config.json").read_text())
         with open(trace_file) as f:
             for line in f:
                 line = line.strip()
@@ -38,6 +60,7 @@ def load_generation_usage(data_dir: Path) -> list[dict]:
                     continue
                 if rec.get("event") == "generation_usage":
                     rec["_session"] = str(trace_file)
+                    rec["_model"] = config["model"]
                     events.append(rec)
     events.sort(key=lambda r: r.get("ts", ""))
     return events
@@ -45,11 +68,12 @@ def load_generation_usage(data_dir: Path) -> list[dict]:
 
 def _event_cost(e: dict) -> float:
     """Actual USD cost of one generation_usage event."""
+    inp, out, read, write = _prices(e["_model"])
     return (
-        e.get("input_tokens", 0) * _INPUT_PRICE
-        + e.get("cache_creation_tokens", 0) * _CACHE_WRITE_PRICE
-        + e.get("cache_read_tokens", 0) * _CACHE_READ_PRICE
-        + e.get("output_tokens", 0) * _OUTPUT_PRICE
+        e.get("input_tokens", 0) * inp
+        + e.get("cache_creation_tokens", 0) * write
+        + e.get("cache_read_tokens", 0) * read
+        + e.get("output_tokens", 0) * out
     )
 
 
@@ -90,17 +114,13 @@ def _estimated_cost(e: dict, fractions: tuple[float, float]) -> float:
     if e.get("cache_read_tokens", 0) > 0:
         return _event_cost(e)
     f_read, f_write = fractions
+    inp, out_price, read_price, write_price = _prices(e["_model"])
     volume = _input_volume(e)  # uncached run: == input_tokens (full prompt)
     out = e.get("output_tokens", 0)
     read = f_read * volume
     write = f_write * volume
     fresh = max(volume - read - write, 0)
-    return (
-        fresh * _INPUT_PRICE
-        + write * _CACHE_WRITE_PRICE
-        + read * _CACHE_READ_PRICE
-        + out * _OUTPUT_PRICE
-    )
+    return fresh * inp + write * write_price + read * read_price + out * out_price
 
 
 def main() -> None:
