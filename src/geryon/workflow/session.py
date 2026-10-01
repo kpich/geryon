@@ -21,9 +21,6 @@ class SessionConfig(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # LLM configuration
-    provider_type: Literal["openai", "aws_bedrock"] = Field(
-        default="aws_bedrock", description="LLM provider type"
-    )
     model: str = Field(
         default=DEFAULT_BEDROCK_MODEL,
         description="Model identifier",
@@ -32,18 +29,11 @@ class SessionConfig(BaseModel):
     # (medium on Opus 5.5, high before it) and could change under us.
     effort: Effort = Field(
         default="medium",
-        description="Claude output_config.effort for generator, critic and narrator "
-        "(Bedrock only): how much the model thinks",
-    )
-    base_url: str | None = Field(
-        default=None,
-        description="Custom API endpoint (e.g., AWS-hosted inference server)",
-    )
-    api_key: str | None = Field(
-        default=None, description="API key for authentication (optional)"
+        description="Claude output_config.effort for generator, critic and narrator: "
+        "how much the model thinks",
     )
 
-    # AWS-specific configuration (for aws_bedrock provider)
+    # AWS Bedrock
     aws_region: str | None = Field(
         default="us-east-2", description="AWS region for Bedrock"
     )
@@ -101,7 +91,7 @@ class SessionConfig(BaseModel):
     )
 
     def to_config_dict(self) -> dict:
-        return self.model_dump(mode="json", exclude={"api_key"})
+        return self.model_dump(mode="json")
 
 
 class Session:

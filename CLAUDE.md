@@ -17,7 +17,7 @@ src/geryon/
 ├── tools/      # list_tables / describe_table / query_data for the agents
 ├── db/         # DuckDB over the parquet dir
 ├── etl/        # parquet conversion, profiling, patient split, data_version.py
-├── llm/        # providers (Bedrock, OpenAI), prompt caching, tracing
+├── llm/        # Bedrock provider (narrator), prompt caching, tracing
 ├── workflow/   # SessionConfig
 ├── cli/        # hypothesis viewer (flask), list_sessions
 └── plot/       # cost-over-time plot

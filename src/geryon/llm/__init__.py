@@ -1,6 +1,6 @@
 """LLM abstraction and generation layer."""
 
-from geryon.llm.provider import DEFAULT_BEDROCK_MODEL, create_provider
+from geryon.llm.provider import DEFAULT_BEDROCK_MODEL
 from geryon.llm.providers import ChatMessage, LLMProvider, LLMResponse
 
 __all__ = [
@@ -8,5 +8,4 @@ __all__ = [
     "ChatMessage",
     "LLMProvider",
     "LLMResponse",
-    "create_provider",
 ]

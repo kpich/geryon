@@ -5,7 +5,6 @@ Docker sandbox, and submits scripts as hypotheses.
 """
 
 import json
-from typing import Any
 import uuid
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -38,11 +37,10 @@ from geryon.etl.data_version import resolve_data_version
 from geryon.etl.split_by_patient import EXPLORE_SPLIT, read_split_marker
 from geryon.llm.caching import (
     cached_text_content,
-    supports_cache_control,
     tail_cache_pre_model_hook,
 )
 from geryon.llm.conversation_logger import SessionTracer
-from geryon.llm.provider import create_provider
+from geryon.llm.providers.bedrock import BedrockProvider
 from geryon.sandbox import SandboxLimits, ScriptRun, ensure_sandbox
 from geryon.workflow.session import Session, SessionConfig
 
@@ -97,12 +95,12 @@ class CodeWorkflow:
         )
 
         self.db = Database(config.parquet_dir)
-        provider_kwargs: dict = {"model": config.model}
-        if config.provider_type == "aws_bedrock":
-            provider_kwargs["region"] = config.aws_region
-            provider_kwargs["profile"] = config.aws_profile
-            provider_kwargs["effort"] = config.effort
-        self.provider = create_provider(config.provider_type, **provider_kwargs)
+        self.provider = BedrockProvider(
+            model=config.model,
+            region=config.aws_region,
+            profile=config.aws_profile,
+            effort=config.effort,
+        )
 
         self.store = CodeHypothesisStore(config.storage_dir, chain=config.chain)
         self.sandbox_limits = SandboxLimits()
@@ -112,7 +110,7 @@ class CodeWorkflow:
             self.llm_logger = SessionTracer(
                 storage_dir=config.storage_dir,
                 session_id=config.session_id,
-                model=f"{config.provider_type}/{config.model}",
+                model=f"aws_bedrock/{config.model}",
             )
 
         self.explore_tools = make_explore_tools(self.db)
@@ -224,7 +222,7 @@ class CodeWorkflow:
                 success=run.success,
                 duration_seconds=run.duration_seconds,
                 narrative=narrative,
-                llm_model=f"{self.config.provider_type}/{self.config.model}",
+                llm_model=f"aws_bedrock/{self.config.model}",
             )
             self.store.save(hyp)
             submitted.append(hyp)
@@ -286,7 +284,7 @@ class CodeWorkflow:
             )
 
         print("Generating a hypothesis...")
-        print(f"Using model: {self.config.provider_type}/{self.config.model}")
+        print(f"Using model: aws_bedrock/{self.config.model}")
 
         system_content = with_focus(
             with_data_dictionary(prompts.generator, data_dictionary_text(self.config)),
@@ -294,17 +292,8 @@ class CodeWorkflow:
         )
         user_text = prompts.render_generator_user(prev_ctx.text)
 
-        caching = supports_cache_control(self.config.provider_type)
-        sys_content: str | list[Any]
-        usr_content: str | list[Any]
-        if caching:
-            sys_content = cached_text_content(system_content)
-            usr_content = cached_text_content(user_text)
-        else:
-            sys_content = system_content
-            usr_content = user_text
-        system_message = SystemMessage(content=sys_content)
-        user_message = HumanMessage(content=usr_content)
+        system_message = SystemMessage(content=cached_text_content(system_content))
+        user_message = HumanMessage(content=cached_text_content(user_text))
 
         submitted: list[CodeHypothesis] = []
         try:
@@ -318,11 +307,11 @@ class CodeWorkflow:
             graph = create_react_agent(
                 self.llm,
                 tool_node,
-                pre_model_hook=tail_cache_pre_model_hook if caching else None,
+                pre_model_hook=tail_cache_pre_model_hook,
             )
 
-            steps_per_cycle = 3 if caching else 2
-            recursion_limit = _MAX_REACT_CYCLES * steps_per_cycle
+            # Each cycle is three graph steps: pre-model hook, model, tools.
+            recursion_limit = _MAX_REACT_CYCLES * 3
 
             result = graph.invoke(
                 {"messages": [system_message, user_message]},

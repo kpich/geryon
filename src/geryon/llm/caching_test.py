@@ -4,15 +4,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from geryon.llm.caching import (
     cached_text_content,
-    supports_cache_control,
     tail_cache_pre_model_hook,
 )
-
-
-def test_supports_cache_control():
-    assert supports_cache_control("aws_bedrock")
-    assert not supports_cache_control("openai")
-    assert not supports_cache_control("unknown")
 
 
 def test_cached_text_content_marks_breakpoint():
