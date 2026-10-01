@@ -101,24 +101,19 @@ limitations, context_summary.
 """
 
     def _parse(self, content: str) -> CodeNarrative:
+        text = content.strip()
+        # Strip only an outer fence. Splitting on the next ``` line would cut the JSON
+        # short if a string value contained a fenced block.
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else ""
+            if text.rstrip().endswith("```"):
+                text = text.rstrip()[:-3]
         try:
-            text = content.strip()
-            if text.startswith("```"):
-                lines = text.split("\n")
-                start, end = 0, len(lines)
-                for i, line in enumerate(lines):
-                    if line.strip().startswith("```"):
-                        if start == 0:
-                            start = i + 1
-                        else:
-                            end = i
-                            break
-                text = "\n".join(lines[start:end])
             return CodeNarrative(**json.loads(text))
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(
                 f"narrator returned unparseable output ({type(e).__name__}): "
-                f"{content[:500]!r}"
+                f"{content!r}"
             ) from e
 
 

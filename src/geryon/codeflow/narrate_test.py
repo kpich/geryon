@@ -17,6 +17,11 @@ def test_parse_fenced_json():
     assert _narrator()._parse(content).summary == "s"
 
 
+def test_parse_keeps_fenced_block_inside_a_string():
+    content = '```json\n{"summary": "s", "findings": "a\\n```\\nb"}\n```'
+    assert _narrator()._parse(content).findings == "a\n```\nb"
+
+
 def test_unparseable_output_raises_instead_of_storing_a_placeholder():
     with pytest.raises(ValueError, match="unparseable"):
         _narrator()._parse("Sure! Here's what I found...")
