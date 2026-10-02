@@ -1,6 +1,6 @@
 """Plot validation q-value by the critic's trustworthiness rating.
 
-Box plot plus jittered points of the BH q-value from the validation rerun, per
+Box plot plus jittered points of −log10 of the BH q-value from the validation rerun, per
 rating. Reruns that reported no p-value (script failed, or no test) are counted
 above each group rather than plotted.
 """
@@ -25,7 +25,7 @@ def main() -> None:
     rng = np.random.default_rng(42)
     for r in ratings:
         group = table[table["trustworthiness"] == r]
-        qs = group["val_q"].dropna().to_numpy(dtype=float)
+        qs = -np.log10(group["val_q"].dropna().to_numpy(dtype=float))
         if len(qs):
             ax.boxplot(
                 [qs],
@@ -54,12 +54,11 @@ def main() -> None:
             fontsize=8,
         )
 
-    ax.axhline(_Q_THRESHOLD, color="black", linestyle="--", linewidth=1)
-    ax.set_yscale("log")
+    ax.axhline(-np.log10(_Q_THRESHOLD), color="black", linestyle="--", linewidth=1)
     ax.set_xticks(ratings, [YTICK_LABELS["trustworthiness"][r] for r in ratings])
     ax.set_xlim(0.4, 3.6)
     ax.set_xlabel("Critic trustworthiness")
-    ax.set_ylabel("Validation rerun q-value (BH)")
+    ax.set_ylabel("Validation rerun  −log10 q (BH)")
     ax.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()

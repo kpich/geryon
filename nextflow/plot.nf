@@ -125,7 +125,10 @@ workflow CRITIC_HOLDOUT {
         .toSortedList()
     tables = holdoutTable(holdoutRerun(sessions_key, chainArg()))
     plotHoldout(
-        channel.of('holdout_effect', 'holdout_paired', 'holdout_coverage', 'holdout_q_by_trust')
+        channel.of(
+            'holdout_effect', 'holdout_paired', 'holdout_error_over_time',
+            'holdout_coverage', 'holdout_q_by_trust',
+        )
             .combine(tables)
     )
 }

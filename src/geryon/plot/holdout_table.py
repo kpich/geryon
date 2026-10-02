@@ -93,6 +93,7 @@ def build(data_dir: Path, runs_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
             {
                 "hypothesis_id": h.hypothesis_id,
                 "title": h.title,
+                "created_at": h.created_at.isoformat(),
                 "chain": h.chain,
                 "trustworthiness": c.trustworthiness if c else None,
                 "confound_risk": c.confound_risk if c else None,
