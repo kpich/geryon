@@ -57,7 +57,9 @@ class CodeNarrator:
             ]
         )
         self.last_usage = sum_message_usage([response])
-        return self._parse(_response_text(response))
+        narrative = self._parse(_response_text(response))
+        narrative.model = response.response_metadata.get("model_name")
+        return narrative
 
     def _build_user_prompt(
         self,
@@ -101,24 +103,19 @@ limitations, context_summary.
 """
 
     def _parse(self, content: str) -> CodeNarrative:
+        text = content.strip()
+        # Strip only an outer fence. Splitting on the next ``` line would cut the JSON
+        # short if a string value contained a fenced block.
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else ""
+            if text.rstrip().endswith("```"):
+                text = text.rstrip()[:-3]
         try:
-            text = content.strip()
-            if text.startswith("```"):
-                lines = text.split("\n")
-                start, end = 0, len(lines)
-                for i, line in enumerate(lines):
-                    if line.strip().startswith("```"):
-                        if start == 0:
-                            start = i + 1
-                        else:
-                            end = i
-                            break
-                text = "\n".join(lines[start:end])
             return CodeNarrative(**json.loads(text))
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(
                 f"narrator returned unparseable output ({type(e).__name__}): "
-                f"{content[:500]!r}"
+                f"{content!r}"
             ) from e
 
 
@@ -129,8 +126,6 @@ def _response_text(response: AIMessage) -> str:
     blocks before the text, and thinking tokens count against ``max_tokens``.
     """
     stop_reason = response.additional_kwargs.get("stop_reason")
-    if stop_reason == "max_tokens":
-        raise RuntimeError("narrator hit max_tokens; the response is truncated")
     content = response.content
     block_types: list[str | None]
     if isinstance(content, str):
@@ -139,6 +134,14 @@ def _response_text(response: AIMessage) -> str:
         blocks = [b for b in content if isinstance(b, dict)]
         text = "".join(b["text"] for b in blocks if b.get("type") == "text")
         block_types = [b.get("type") for b in blocks]
+    # Anything but end_turn can cut the JSON off mid-string (max_tokens, or a
+    # refusal stop, which ends the text where the classifier fired). Name the
+    # reason here rather than letting it surface as a JSONDecodeError.
+    if stop_reason != "end_turn":
+        raise RuntimeError(
+            f"narrator stopped with stop_reason={stop_reason!r}; the response is "
+            f"incomplete: {text!r}"
+        )
     if not text.strip():
         raise RuntimeError(
             f"narrator returned no text (stop_reason={stop_reason}, "

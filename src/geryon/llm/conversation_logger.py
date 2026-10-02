@@ -108,6 +108,10 @@ class SessionTracer:
             name = getattr(msg, "name", None)
             if name:
                 record["name"] = name
+            # A refusal fallback mixes two models in one transcript.
+            model = (getattr(msg, "response_metadata", None) or {}).get("model_name")
+            if model:
+                record["model"] = model
             self._write_detail(**record)
 
     # ------------------------------------------------------------------

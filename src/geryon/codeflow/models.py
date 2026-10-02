@@ -23,6 +23,9 @@ class CodeNarrative(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     # 1-2 sentences reinjected into later prompts so context doesn't carry full history.
     context_summary: str | None = None
+    # Set by the narrator, not the LLM: the model that wrote this, which is the
+    # fallback model when the primary refused.
+    model: str | None = None
 
 
 class CodeCritique(BaseModel):

@@ -22,7 +22,11 @@ from geryon.etl.data_version import (
     validate_version_name,
 )
 from geryon.etl.split_by_patient import EXPLORE_SPLIT, SPLIT_MARKER_FILENAME
-from geryon.workflow.session import DEFAULT_BEDROCK_MODEL, SessionConfig
+from geryon.workflow.session import (
+    DEFAULT_BEDROCK_MODEL,
+    DEFAULT_FALLBACK_MODEL,
+    SessionConfig,
+)
 
 _DATED_VERSION = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
@@ -158,6 +162,7 @@ def run_workflow(
     prompts: Path | str | None = None,
     include_data_dictionary: bool | None = None,
     model: str | None = None,
+    fallback_model: str | None = None,
     effort: str | None = None,
     aws_region: str | None = None,
     aws_profile: str | None = None,
@@ -215,6 +220,7 @@ def run_workflow(
         "include_data_dictionary": include_data_dictionary,
         "code_version": code_version(),
         "model": model,
+        "fallback_model": fallback_model,
         "effort": effort,
         "aws_region": aws_region,
         "aws_profile": aws_profile,
@@ -296,6 +302,11 @@ def main() -> None:
         "--model", default=None, help=f"default: {DEFAULT_BEDROCK_MODEL}"
     )
     parser.add_argument(
+        "--fallback-model",
+        default=None,
+        help=f"Model a refused call is re-sent to (default: {DEFAULT_FALLBACK_MODEL})",
+    )
+    parser.add_argument(
         "--effort",
         choices=["low", "medium", "high", "xhigh", "max"],
         default=None,
@@ -327,6 +338,7 @@ def main() -> None:
         prompts=args.prompts,
         include_data_dictionary=False if args.no_data_dictionary else None,
         model=args.model,
+        fallback_model=args.fallback_model,
         effort=args.effort,
         aws_region=args.aws_region,
         aws_profile=args.aws_profile,
