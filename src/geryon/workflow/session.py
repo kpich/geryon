@@ -11,6 +11,8 @@ from geryon.codeflow.chains import DEFAULT_CHAIN
 from geryon.codeflow.prompts import PromptSet, load_prompt_set
 
 DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-5-5"
+# Older models lack the classifiers that stop Opus 5.5 on some oncology text.
+DEFAULT_FALLBACK_MODEL = "us.anthropic.claude-opus-4-8"
 
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
@@ -25,6 +27,11 @@ class SessionConfig(BaseModel):
     model: str = Field(
         default=DEFAULT_BEDROCK_MODEL,
         description="Model identifier",
+    )
+    fallback_model: str = Field(
+        default=DEFAULT_FALLBACK_MODEL,
+        description="Model a call is re-sent to when the primary model's safety "
+        "classifier refuses it (stop_reason 'refusal')",
     )
     # Sent explicitly rather than left to the model's default, which differs by model
     # (medium on Opus 5.5, high before it) and could change under us.

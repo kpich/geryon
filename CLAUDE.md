@@ -129,7 +129,11 @@ prior hypotheses are shown. `--no-data-dictionary` leaves the dictionary block o
 resolves everything into `SessionConfig`, so `config.json` records the full prompt texts,
 `include_data_dictionary`, `effort`, and `code_version` (commit, plus `+dirty` if tracked
 files had changed). `--effort` (default `medium`) is sent explicitly to all three agents
-because Opus 5.5 always thinks and the model's own default differs across versions. Put new steering in a template or behind a config field, never as hardcoded
+because Opus 5.5 always thinks and the model's own default differs across versions.
+Opus 5.5's safety classifier stops some oncology text mid-output (`stop_reason`
+"refusal"). `chat.RefusalFallbackChat` re-sends just that call to `--fallback-model`
+(default Opus 4.8). A refusal from both raises, and `detail.jsonl` and
+`narrative.model` record which model wrote what. Put new steering in a template or behind a config field, never as hardcoded
 prose, so sessions stay comparable. The dictionary and focus blocks are still appended in code
 (`with_data_dictionary`, `with_focus`).
 

@@ -57,7 +57,9 @@ class CodeNarrator:
             ]
         )
         self.last_usage = sum_message_usage([response])
-        return self._parse(_response_text(response))
+        narrative = self._parse(_response_text(response))
+        narrative.model = response.response_metadata.get("model_name")
+        return narrative
 
     def _build_user_prompt(
         self,
@@ -124,8 +126,6 @@ def _response_text(response: AIMessage) -> str:
     blocks before the text, and thinking tokens count against ``max_tokens``.
     """
     stop_reason = response.additional_kwargs.get("stop_reason")
-    if stop_reason == "max_tokens":
-        raise RuntimeError("narrator hit max_tokens; the response is truncated")
     content = response.content
     block_types: list[str | None]
     if isinstance(content, str):
@@ -134,6 +134,14 @@ def _response_text(response: AIMessage) -> str:
         blocks = [b for b in content if isinstance(b, dict)]
         text = "".join(b["text"] for b in blocks if b.get("type") == "text")
         block_types = [b.get("type") for b in blocks]
+    # Anything but end_turn can cut the JSON off mid-string (max_tokens, or a
+    # refusal stop, which ends the text where the classifier fired). Name the
+    # reason here rather than letting it surface as a JSONDecodeError.
+    if stop_reason != "end_turn":
+        raise RuntimeError(
+            f"narrator stopped with stop_reason={stop_reason!r}; the response is "
+            f"incomplete: {text!r}"
+        )
     if not text.strip():
         raise RuntimeError(
             f"narrator returned no text (stop_reason={stop_reason}, "
