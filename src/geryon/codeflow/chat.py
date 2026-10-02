@@ -151,8 +151,12 @@ def _for_model(messages: list[BaseMessage], model_id: str) -> list[BaseMessage]:
 
 
 def _bedrock(config: SessionConfig, model_id: str) -> ChatBedrock:
+    # Bedrock 503s come in bursts; legacy mode's 2 quick retries let one burst end a
+    # multi-hour session. Adaptive backs off exponentially and still raises in the end.
     boto_config = BotoConfig(
-        read_timeout=300, connect_timeout=30, retries={"max_attempts": 2}
+        read_timeout=300,
+        connect_timeout=30,
+        retries={"mode": "adaptive", "max_attempts": 8},
     )
     kwargs: dict = {
         "model_id": model_id,
