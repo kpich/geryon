@@ -59,7 +59,7 @@ etl:
 
 .PHONY: plot
 plot:
-	./scripts/plot.sh
+	./scripts/plot.sh $(ARGS)
 
 .PHONY: data
 data:
