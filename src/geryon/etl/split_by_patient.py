@@ -56,7 +56,8 @@ def read_split_marker(parquet_dir: Path | str) -> str | None:
 # SAMPLE_ID, none a real patient id.
 #
 # Any table not listed here and lacking a real PATIENT_ID column is metadata and
-# copied verbatim.
+# copied verbatim into both splits. A sample-keyed table missing from this list
+# therefore leaks validation rows into explore/, with no error.
 SAMPLE_KEY_COLUMNS: dict[str, str] = {
     "data_CNA.parquet": "PATIENT_ID",
     "data_gene_matrix.parquet": "SAMPLE_ID",
