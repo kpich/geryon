@@ -28,6 +28,7 @@ from geryon.codeflow.models import (
     MAX_STORED_OUTPUT_CHARS,
     CodeCritique,
     CodeHypothesis,
+    SearchRun,
 )
 from geryon.codeflow.narrate import CodeNarrator
 from geryon.codeflow.prompts import with_data_dictionary, with_focus
@@ -142,7 +143,12 @@ class CodeWorkflow:
 
         return get_script
 
-    def _make_submit_tool(self, iteration: int, submitted: list[CodeHypothesis]):
+    def _make_submit_tool(
+        self,
+        iteration: int,
+        submitted: list[CodeHypothesis],
+        search: list[SearchRun],
+    ):
         @tool
         def submit(
             title: str,
@@ -213,6 +219,7 @@ class CodeWorkflow:
                 stderr=run.stderr[:MAX_STORED_OUTPUT_CHARS],
                 success=run.success,
                 duration_seconds=run.duration_seconds,
+                search=list(search),
                 narrative=narrative,
                 llm_model=f"aws_bedrock/{self.config.model}",
             )
@@ -288,12 +295,13 @@ class CodeWorkflow:
         user_message = HumanMessage(content=cached_text_content(user_text))
 
         submitted: list[CodeHypothesis] = []
+        search: list[SearchRun] = []
         try:
             tools = self.explore_tools + [
-                make_run_python_tool(self.config, self.sandbox_limits),
+                make_run_python_tool(self.config, self.sandbox_limits, record=search),
                 make_dictionary_tool(self.config, self.sandbox_limits, "generator"),
                 self._make_get_script_tool(submitted),
-                self._make_submit_tool(iteration or 0, submitted),
+                self._make_submit_tool(iteration or 0, submitted, search),
             ]
             tool_node = ToolNode(tools)
             graph = create_react_agent(

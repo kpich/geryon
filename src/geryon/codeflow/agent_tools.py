@@ -5,6 +5,7 @@ import json
 
 from langchain_core.tools import tool
 
+from geryon.codeflow.models import SEARCH_OUTPUT_TAIL_CHARS, SearchRun
 from geryon.db import Database
 from geryon.sandbox import SandboxLimits, ScriptRun, run_script
 from geryon.tools.database import describe_table, list_tables, query_data
@@ -20,16 +21,17 @@ def _tail(text: str, limit: int = _OUTPUT_TAIL_CHARS) -> str:
     return "...(truncated)...\n" + text[-limit:]
 
 
+def run_status(run: ScriptRun) -> str:
+    if run.timed_out:
+        return "TIMEOUT"
+    if run.success:
+        return "OK"
+    return f"EXIT {run.exit_code}"
+
+
 def format_run(run: ScriptRun) -> str:
     """Render a ScriptRun for an LLM agent to read."""
-    if run.timed_out:
-        status = "TIMEOUT"
-    elif run.success:
-        status = "OK"
-    else:
-        status = f"EXIT {run.exit_code}"
-
-    lines = [f"status: {status} ({run.duration_seconds:.1f}s)"]
+    lines = [f"status: {run_status(run)} ({run.duration_seconds:.1f}s)"]
     if run.error:
         lines.append(f"sandbox error: {run.error}")
     if run.result is not None:
@@ -77,17 +79,36 @@ def make_explore_tools(db: Database) -> list:
     return [list_tables_tool, describe_table_tool, query_data_tool]
 
 
-def make_run_python_tool(config: SessionConfig, limits: SandboxLimits):
-    """A run_python tool that executes a script in the sandbox (stores nothing)."""
+def make_run_python_tool(
+    config: SessionConfig,
+    limits: SandboxLimits,
+    record: list[SearchRun] | None = None,
+):
+    """A run_python tool that executes a script in the sandbox.
+
+    Nothing is stored as a hypothesis. With ``record``, each run is appended to it, so
+    the generator's search can be shown to the critic.
+    """
 
     @tool
     def run_python(code: str) -> str:
         """Execute a Python script in the sandbox and return its output.
 
         The script may `from geryon_runtime import db, report`. Use this to test an
-        analysis or probe a suspicion. Nothing is stored.
+        analysis or probe a suspicion. It is not saved as a hypothesis.
         """
         print("[TOOL] run_python called")
-        return format_run(run_in_sandbox(config, code, limits))
+        run = run_in_sandbox(config, code, limits)
+        if record is not None:
+            output = (run.stdout + "\n" + run.stderr).strip()
+            record.append(
+                SearchRun(
+                    code=code,
+                    status=run_status(run),
+                    result=run.result,
+                    output_tail=output[-SEARCH_OUTPUT_TAIL_CHARS:],
+                )
+            )
+        return format_run(run)
 
     return run_python

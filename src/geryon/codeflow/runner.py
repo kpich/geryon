@@ -161,6 +161,7 @@ def run_workflow(
     focus_file: Path | None = None,
     prompts: Path | str | None = None,
     include_data_dictionary: bool | None = None,
+    critic_sees_search: bool | None = None,
     model: str | None = None,
     fallback_model: str | None = None,
     effort: str | None = None,
@@ -218,6 +219,7 @@ def run_workflow(
         "data_version": resolved_version,
         "prompts": prompt_set,
         "include_data_dictionary": include_data_dictionary,
+        "critic_sees_search": critic_sees_search,
         "code_version": code_version(),
         "model": model,
         "fallback_model": fallback_model,
@@ -299,6 +301,11 @@ def main() -> None:
         help="Leave the data dictionary out of the prompts",
     )
     parser.add_argument(
+        "--no-critic-search",
+        action="store_true",
+        help="Don't show the critic the generator's exploratory runs",
+    )
+    parser.add_argument(
         "--model", default=None, help=f"default: {DEFAULT_BEDROCK_MODEL}"
     )
     parser.add_argument(
@@ -337,6 +344,7 @@ def main() -> None:
         focus_file=args.focus_file,
         prompts=args.prompts,
         include_data_dictionary=False if args.no_data_dictionary else None,
+        critic_sees_search=False if args.no_critic_search else None,
         model=args.model,
         fallback_model=args.fallback_model,
         effort=args.effort,

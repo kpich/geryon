@@ -6,9 +6,15 @@ from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 import pytest
 
-from geryon.codeflow.critic import HypothesisCritic, _clamp
-from geryon.codeflow.models import CodeCritique, CodeHypothesis
+from geryon.codeflow.critic import (
+    HypothesisCritic,
+    _clamp,
+    _make_get_search_script_tool,
+    format_search,
+)
+from geryon.codeflow.models import CodeCritique, CodeHypothesis, SearchRun
 from geryon.codeflow.store import CodeHypothesisStore
+from geryon.sandbox.result import IterationResult
 from geryon.workflow.session import SessionConfig
 
 
@@ -157,3 +163,86 @@ def test_submit_returns_bad_interval_to_model(tmp_path):
     reply = submit.invoke({**_SCORES, **_FORECAST, "predicted_holdout_lower": 0.9})
     assert reply.startswith("✗")
     assert holder == []
+
+
+# --- the generator's search ----------------------------------------------------
+
+_SEARCH = [
+    SearchRun(code="fit(a)", status="OK", output_tail="HR=0.90 p=0.40"),
+    SearchRun(code="fit(b)", status="EXIT 1", output_tail="KeyError"),
+    SearchRun(
+        code="fit(c)",
+        status="OK",
+        result=IterationResult(effect_size=0.7, p_value=0.04),
+        output_tail="HR=0.70 p=0.04",
+    ),
+]
+
+
+def test_format_search_lists_every_run():
+    text = format_search(_SEARCH)
+    assert "3 scripts" in text and "(1 did not exit cleanly)" in text
+    assert "## run 1: OK\nHR=0.90 p=0.40" in text
+    assert "## run 2: EXIT 1" in text
+    assert '"effect_size": 0.7' in text
+
+
+def test_format_search_says_when_nothing_was_run():
+    assert "ran no scripts" in format_search([])
+
+
+def _critic_user_text(tmp_path, search, sees_search=True) -> tuple[str, list]:
+    config = SessionConfig(
+        parquet_dir=Path(tmp_path),
+        storage_dir=Path(tmp_path),
+        enable_llm_logging=False,
+        critic_sees_search=sees_search,
+    )
+    graph = MagicMock()
+    graph.invoke.return_value = {"messages": []}
+    with (
+        patch("geryon.codeflow.critic.build_chat_model"),
+        patch("geryon.codeflow.critic.make_explore_tools", return_value=[]),
+        patch("geryon.codeflow.critic.ToolNode") as tool_node,
+        patch("geryon.codeflow.critic.create_react_agent", return_value=graph),
+    ):
+        critic = HypothesisCritic(config, db=MagicMock())
+        hyp = CodeHypothesis(
+            hypothesis_id="abc12345",
+            session_id="s",
+            title="t",
+            description="d",
+            rationale="r",
+            code="print(1)",
+            success=True,
+            search=search,
+        )
+        with pytest.raises(RuntimeError):
+            critic.critique(hyp)
+    user = graph.invoke.call_args.args[0]["messages"][1]
+    text = "".join(block["text"] for block in user.content)
+    return text, [t.name for t in tool_node.call_args.args[0]]
+
+
+def test_critic_is_shown_the_search(tmp_path):
+    text, tools = _critic_user_text(tmp_path, _SEARCH)
+    assert "# GENERATOR'S SEARCH" in text
+    assert "get_search_script" in tools
+
+
+def test_critic_search_lever_off(tmp_path):
+    text, tools = _critic_user_text(tmp_path, _SEARCH, sees_search=False)
+    assert "GENERATOR'S SEARCH" not in text
+    assert "get_search_script" not in tools
+
+
+def test_hypothesis_predating_search_shows_no_section(tmp_path):
+    text, tools = _critic_user_text(tmp_path, None)
+    assert "GENERATOR'S SEARCH" not in text
+    assert "get_search_script" not in tools
+
+
+def test_get_search_script_returns_code_and_rejects_bad_run():
+    tool = _make_get_search_script_tool(_SEARCH)
+    assert "fit(c)" in tool.invoke({"run": 3})
+    assert tool.invoke({"run": 4}).startswith("✗")
