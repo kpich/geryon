@@ -21,8 +21,11 @@ make etl             # raw TSVs -> parquet, with a held-out validation split
 ```bash
 make run ITERS=3     # run a session (billable LLM calls)
 make viewer          # browse results at http://localhost:8765
+make plot            # plots of geryon_data/sessions/ into plots/
 make check           # lint, types, tests
 ```
+
+`make plot ARGS=-resume` reuses the cached validation rerun, which is the slow step.
 
 More options: `uv run python -m geryon.codeflow.runner --help`.
 
