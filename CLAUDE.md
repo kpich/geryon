@@ -125,7 +125,9 @@ set, a directory of templates: `generator.md`, `generator_user.md`, `critic.md` 
 `narrator.md`. `codeflow/prompt_sets/default/` ships with the package. `--prompts <dir>`
 runs a copy that you've edited, and it must contain every template. Nothing is filled in
 from the default. If `generator_user.md` has no `{previous_hypotheses}` placeholder, no
-prior hypotheses are shown. `--no-data-dictionary` leaves the dictionary block out. The runner
+prior hypotheses are shown. `--no-data-dictionary` leaves the dictionary block out.
+Each hypothesis stores its `search`, which is every generator `run_python` call in that
+iteration up to the submit. The critic sees it unless `--no-critic-search` is set. The runner
 resolves everything into `SessionConfig`, so `config.json` records the full prompt texts,
 `include_data_dictionary`, `effort`, and `code_version` (commit, plus `+dirty` if tracked
 files had changed). `--effort` (default `medium`) is sent explicitly to all three agents

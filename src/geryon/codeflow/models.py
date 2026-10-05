@@ -13,6 +13,19 @@ from geryon.sandbox.result import IterationResult
 # Cap stored stdout/stderr so a chatty script can't bloat the JSONL. The full
 # transcript still lands in the tracer's detail log.
 MAX_STORED_OUTPUT_CHARS = 20_000
+# Per exploratory run in a hypothesis's search: estimates are usually printed last.
+SEARCH_OUTPUT_TAIL_CHARS = 2_000
+
+
+class SearchRun(BaseModel):
+    """One ``run_python`` call the generator made in the iteration that produced a
+    hypothesis. Most exploratory scripts print their estimates rather than calling
+    ``report()``, so the output tail is kept alongside the result."""
+
+    code: str
+    status: str = Field(..., description="'OK', 'EXIT <code>' or 'TIMEOUT'")
+    result: IterationResult | None = None
+    output_tail: str = Field(default="", description="End of stdout then stderr")
 
 
 class CodeNarrative(BaseModel):
@@ -124,6 +137,11 @@ class CodeHypothesis(BaseModel):
     stderr: str = ""
     success: bool = Field(..., description="Script exited cleanly")
     duration_seconds: float = 0.0
+    search: list[SearchRun] | None = Field(
+        default=None,
+        description="Generator's run_python calls in this iteration up to this "
+        "submit, in order; None on sessions predating the field",
+    )
 
     # Narration
     narrative: CodeNarrative | None = None

@@ -80,6 +80,11 @@ class SessionConfig(BaseModel):
     include_data_dictionary: bool = Field(
         default=True, description="Show the data dictionary in all three prompts"
     )
+    critic_sees_search: bool = Field(
+        default=True,
+        description="Show the critic the generator's run_python calls that led to "
+        "the hypothesis",
+    )
     code_version: str | None = Field(
         default=None,
         description="git commit of the geryon checkout, '+dirty' if it had changes",

@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from geryon.codeflow.agent_tools import make_explore_tools, make_run_python_tool
 from geryon.codeflow.chat import build_chat_model, sum_message_usage
 from geryon.codeflow.dictionary import data_dictionary_text, make_dictionary_tool
-from geryon.codeflow.models import CodeCritique, CodeHypothesis
+from geryon.codeflow.models import CodeCritique, CodeHypothesis, SearchRun
 from geryon.codeflow.prompts import (
     CRITIC_FOCUS_NOTE,
     with_data_dictionary,
@@ -31,6 +31,35 @@ from geryon.sandbox import SandboxLimits
 from geryon.workflow.session import SessionConfig
 
 _MAX_REACT_CYCLES = 40
+# Per run in the search listing; the full stored tail is behind get_search_script.
+_SEARCH_LISTING_TAIL_CHARS = 600
+
+
+def format_search(search: list[SearchRun]) -> str:
+    """The generator's exploratory runs, as the critic's user message shows them."""
+    if not search:
+        return (
+            "# GENERATOR'S SEARCH\nThe generator ran no scripts with run_python "
+            "before submitting the CODE above."
+        )
+    failed = sum(r.status != "OK" for r in search)
+    parts = [
+        f"# GENERATOR'S SEARCH\nThe generator ran {len(search)} scripts with "
+        f"run_python before submitting the CODE above ({failed} did not exit "
+        f"cleanly). Each shows its status, its report() result if it called one, "
+        f"and the end of its output. get_search_script(run) returns a run's code."
+    ]
+    for i, run in enumerate(search, start=1):
+        lines = [f"## run {i}: {run.status}"]
+        if run.result is not None:
+            lines.append(
+                "reported: " + json.dumps(run.result.model_dump(), default=str)
+            )
+        tail = run.output_tail[-_SEARCH_LISTING_TAIL_CHARS:].strip()
+        if tail:
+            lines.append(tail)
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
 
 
 class HypothesisCritic:
@@ -54,6 +83,7 @@ class HypothesisCritic:
     def critique(self, hyp: CodeHypothesis) -> CodeCritique:
         """Return a structured critique, running controls in the sandbox as needed."""
         holder: list[CodeCritique] = []
+        search = hyp.search if self.config.critic_sees_search else None
         tools = self.explore_tools + [
             make_run_python_tool(self.config, self.limits),
             make_dictionary_tool(self.config, self.limits, "critic"),
@@ -63,6 +93,8 @@ class HypothesisCritic:
                 and hyp.result.effect_size is not None,
             ),
         ]
+        if search:
+            tools.append(_make_get_search_script_tool(search))
         graph = create_react_agent(
             self.llm,
             ToolNode(tools),
@@ -74,11 +106,13 @@ class HypothesisCritic:
             if hyp.result
             else "(no reported result)"
         )
+        search_block = f"{format_search(search)}\n\n" if search is not None else ""
         user_text = (
             f"# HYPOTHESIS [{hyp.short_id()}]\n{hyp.title}\n{hyp.description}\n\n"
             f"**Rationale**: {hyp.rationale}\n\n"
             f"# RESULT\n{result_block}\n\n"
             f"# CODE\n```python\n{hyp.code}\n```\n\n"
+            f"{search_block}"
             f"Scrutinize this. Run controls with run_python if you suspect "
             f"confounding, then call submit_critique."
         )
@@ -192,6 +226,27 @@ class HypothesisCritic:
             return "✓ critique recorded"
 
         return submit_critique
+
+
+def _make_get_search_script_tool(search: list[SearchRun]):
+    @tool
+    def get_search_script(run: int) -> str:
+        """Return the code and output of one of the generator's exploratory runs.
+
+        run is the 1-based number shown in the GENERATOR'S SEARCH listing.
+        """
+        if not 1 <= run <= len(search):
+            return f"✗ No run {run}; the search has runs 1 to {len(search)}."
+        r = search[run - 1]
+        reported = (
+            json.dumps(r.result.model_dump(), default=str) if r.result else "(none)"
+        )
+        return (
+            f"run {run}: {r.status}\nreported: {reported}\n\n"
+            f"```python\n{r.code}\n```\n\noutput (end):\n{r.output_tail}"
+        )
+
+    return get_search_script
 
 
 def _clamp(value: int) -> int:

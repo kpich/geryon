@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from geryon.codeflow.agent import CodeWorkflow, format_run
-from geryon.codeflow.models import CodeCritique, CodeHypothesis
+from geryon.codeflow.agent_tools import make_run_python_tool
+from geryon.codeflow.models import CodeCritique, CodeHypothesis, SearchRun
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.etl.data_version import write_version_marker
 from geryon.etl.split_by_patient import SPLIT_MARKER_FILENAME
@@ -186,7 +187,9 @@ def test_critic_error_aborts_but_keeps_earlier_critiques(tmp_path: Path):
 _SUBMIT_ARGS = {"title": "t", "description": "d", "rationale": "r", "code": "x"}
 
 
-def _submit(wf: CodeWorkflow, run: ScriptRun) -> tuple[str, list, MagicMock]:
+def _submit(
+    wf: CodeWorkflow, run: ScriptRun, search: list[SearchRun] | None = None
+) -> tuple[str, list, MagicMock]:
     submitted: list[CodeHypothesis] = []
     with (
         patch.object(wf, "_run_in_sandbox", return_value=run),
@@ -194,7 +197,7 @@ def _submit(wf: CodeWorkflow, run: ScriptRun) -> tuple[str, list, MagicMock]:
     ):
         narrator_cls.return_value.narrate.return_value = None
         narrator_cls.return_value.last_usage = None
-        out = wf._make_submit_tool(1, submitted).invoke(_SUBMIT_ARGS)
+        out = wf._make_submit_tool(1, submitted, search or []).invoke(_SUBMIT_ARGS)
     return out, submitted, narrator_cls
 
 
@@ -231,3 +234,29 @@ def test_submit_stores_a_successful_script(tmp_path: Path):
     assert out.startswith("✓ Saved")
     assert len(submitted) == 1
     assert [h.hypothesis_id for h in wf.store.load()] == [submitted[0].hypothesis_id]
+
+
+def test_submit_records_the_search_so_far(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    search = [SearchRun(code="print(0.7)", status="OK", output_tail="0.7")]
+    run = ScriptRun(success=True, exit_code=0, result=IterationResult(summary="HR 0.6"))
+
+    _, submitted, _ = _submit(wf, run, search)
+    search.append(SearchRun(code="later", status="OK"))
+
+    assert [r.code for r in wf.store.load()[0].search or []] == ["print(0.7)"]
+    assert len(submitted[0].search or []) == 1
+
+
+def test_run_python_records_each_run(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    record: list[SearchRun] = []
+    tool = make_run_python_tool(wf.config, wf.sandbox_limits, record=record)
+    run = ScriptRun(success=False, exit_code=1, stdout="HR=0.71 p=0.04", stderr="boom")
+
+    with patch("geryon.codeflow.agent_tools.run_script", return_value=run):
+        tool.invoke({"code": "fit()"})
+
+    assert record == [
+        SearchRun(code="fit()", status="EXIT 1", output_tail="HR=0.71 p=0.04\nboom")
+    ]
