@@ -127,7 +127,8 @@ workflow CRITIC_HOLDOUT {
     plotHoldout(
         channel.of(
             'holdout_effect', 'holdout_paired', 'holdout_error_over_time',
-            'holdout_coverage', 'holdout_q_by_trust',
+            'holdout_coverage', 'holdout_q_by_trust', 'holdout_q_vs_explore',
+            'holdout_forest', 'holdout_scores', 'holdout_replication',
         )
             .combine(tables)
     )

@@ -29,11 +29,11 @@ jobs:
 
       - name: Ruff lint
         if: ${{ !cancelled() }}
-        run: uv run --no-sync ruff check src/
+        run: uv run --no-sync ruff check .
 
       - name: Ruff format
         if: ${{ !cancelled() }}
-        run: uv run --no-sync ruff format --check src/
+        run: uv run --no-sync ruff format --check .
 
       # Persist mypy's incremental cache between runs (a fresh runner has none, so
       # mypy is ~25x slower cold). Stays out of git; lives in GitHub's cache store.

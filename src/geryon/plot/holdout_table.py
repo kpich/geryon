@@ -3,8 +3,8 @@
 Writes two CSVs for the holdout plots:
 
 - ``--table``: one row per rerun hypothesis, with its explore result, validation
-  result, critic scores, and the validation q-value (BH across every rerun that
-  reported a p-value).
+  result, critic scores, and BH q-values for each split (across every rerun
+  hypothesis that reported a p-value on that split).
 - ``--forecasts``: long format, one row per (hypothesis, method), with a forecast of
   the validation effect size and an 80% interval. Rows exist only where the explore
   run reported an effect size. The methods:
@@ -80,6 +80,15 @@ def explore_forecast(
     return effect, effect - half, effect + half
 
 
+def bh_q(p: pd.Series) -> pd.Series:
+    """BH q-values over the non-null p-values; null where p is null."""
+    q = pd.Series(None, index=p.index, dtype=float)
+    has_p = p.notna()
+    if has_p.any():
+        q[has_p] = multipletests(p[has_p], method="fdr_bh")[1]
+    return q
+
+
 def build(data_dir: Path, runs_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     hyps = {h.hypothesis_id: h for h in load_hypotheses(data_dir)}
     runs = [json.loads(line) for line in runs_path.read_text().splitlines()]
@@ -133,12 +142,8 @@ def build(data_dir: Path, runs_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
             )
 
     table = pd.DataFrame(rows)
-    has_p = table["val_p"].notna()
-    table["val_q"] = None
-    if has_p.any():
-        table.loc[has_p, "val_q"] = multipletests(
-            table.loc[has_p, "val_p"], method="fdr_bh"
-        )[1]
+    for split in ["explore", "val"]:
+        table[f"{split}_q"] = bh_q(table[f"{split}_p"])
     fc = pd.DataFrame(
         forecasts, columns=["hypothesis_id", "method", "predicted", "lower", "upper"]
     )

@@ -33,13 +33,13 @@ mypy:
 
 .PHONY: format
 format:
-	uv run --extra dev ruff format src/
+	uv run --extra dev ruff format .
 
 # Lint + format check, no changes made. `make format` is the one that rewrites.
 .PHONY: ruff
 ruff:
-	uv run --extra dev ruff check src/
-	uv run --extra dev ruff format --check src/
+	uv run --extra dev ruff check .
+	uv run --extra dev ruff format --check .
 
 # Everything CI runs. Add integration tests here once the first one exists.
 .PHONY: check
