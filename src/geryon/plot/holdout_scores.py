@@ -16,13 +16,13 @@ import pandas as pd
 from geryon.plot._holdout import (
     METHOD_COLORS,
     METHOD_LABELS,
-    METHODS,
     parse_args,
     ratio_forecasts,
 )
 from geryon.plot.holdout_table import LEVEL
 
 _BOOT = 4000
+_METHODS = ["critic", "explore", "no_effect"]
 
 
 def interval_score(
@@ -44,13 +44,14 @@ def bootstrap_mean(x: np.ndarray, rng: np.random.Generator) -> tuple[float, floa
 def main() -> None:
     args = parse_args("Score the critic's forecast against naive baselines")
     df = ratio_forecasts(pd.read_csv(args.table), pd.read_csv(args.forecasts))
+    df = df[df["method"].isin(_METHODS)]
     has_interval = df.loc[df["lower"].notna()].groupby("hypothesis_id")["method"]
     paired = has_interval.nunique()
     df = df[df["hypothesis_id"].isin(paired[paired == 2].index)]
     wide = df.pivot(index="hypothesis_id", columns="method")
     y = wide[("val_effect", "critic")].to_numpy()
 
-    errors = {m: np.abs(wide[("predicted", m)].to_numpy() - y) for m in METHODS}
+    errors = {m: np.abs(wide[("predicted", m)].to_numpy() - y) for m in _METHODS}
     scores = {
         m: interval_score(
             wide[("lower", m)].to_numpy(), wide[("upper", m)].to_numpy(), y

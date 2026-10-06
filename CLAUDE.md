@@ -9,9 +9,9 @@ usage; this file covers what matters for changing the code.
 
 ```
 src/geryon/
-├── codeflow/   # the loop: agent.py (generator), critic.py, narrate.py, prompts.py,
-│               #   chains.py, context.py (prior-hypothesis summaries), store.py (JSONL),
-│               #   runner.py (CLI entry point, data-dir resolution)
+├── codeflow/   # the loop: agent.py (generator), critic.py, narrate.py, expectation.py,
+│               #   prompts.py, chains.py, context.py (prior-hypothesis summaries),
+│               #   store.py (JSONL), runner.py (CLI entry point, data-dir resolution)
 ├── sandbox/    # runner.py (host-side docker run), runtime.py (in-container
 │               #   `geryon_runtime`: db() + report()), result.py, Dockerfile
 ├── tools/      # list_tables / describe_table / query_data for the agents
@@ -138,6 +138,20 @@ Opus 5.5's safety classifier stops some oncology text mid-output (`stop_reason`
 `narrative.model` record which model wrote what. Put new steering in a template or behind a config field, never as hardcoded
 prose, so sessions stay comparable. The dictionary and focus blocks are still appended in code
 (`with_data_dictionary`, `with_focus`).
+
+**Blind expectation.** A null is a finding only if an effect was
+expected. So at submit, every hypothesis that reports an `effect_size` also gets an
+`Expectation`: the effect the model expected, with an 80% interval
+(`codeflow/expectation.py`). It must be asked blind, and titles usually state the
+result, so it takes two plain calls. The first rewrites the analysis as a neutral
+question. The second sees only that question and the effect measure. Its prompts live
+in code, not in the prompt set, because this is a measurement: sessions are
+comparable only if they all ask the same way. `plot.holdout_table` scores it as one
+more forecast of the validation effect, beside the critic and the baselines, so
+`holdout_effect` shows whether the model's prior alone predicts held-out results.
+`prediction_z` (|observed − expected| over the combined SD, both read as normal) is in
+the table; it is a z-score, not a surprisal. The generator and critic never see
+either value.
 
 ## Known loose ends
 

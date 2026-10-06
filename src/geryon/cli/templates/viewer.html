@@ -141,6 +141,13 @@ function narrativeSection(n) {
   return h + `</div>`;
 }
 
+function expectationField(e) {
+  if (!e) return "";
+  return field("Expected blind (80% interval)", `<div class="prose">`
+    + `${fmt(e.effect)} (${fmt(e.lower)} – ${fmt(e.upper)})</div>`
+    + `<div class="prose" style="margin-top:4px">${esc(e.question)}</div>`);
+}
+
 function critiqueSection(c) {
   if (!c) return "";
   const holds = c.holds_up === true ? `<span class="holds-yes">held up ✓</span>`
@@ -176,6 +183,7 @@ function card(h) {
     field("Rationale", `<div class="prose">${esc(h.rationale)}</div>`) +
     field("Result", resultTable(h.result) +
       (h.result?.summary ? `<div class="prose" style="margin-top:6px">${esc(h.result.summary)}</div>` : "")) +
+    expectationField(h.expectation) +
     narrativeSection(h.narrative) +
     critiqueSection(h.critique) +
     field("Code", `<pre class="code">${esc(h.code.trim())}</pre>`) +

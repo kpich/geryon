@@ -4,7 +4,14 @@ import math
 
 import pytest
 
-from geryon.plot.holdout_table import explore_forecast, explore_se, is_ratio
+from geryon.codeflow.models import Expectation
+from geryon.plot.holdout_table import (
+    explore_forecast,
+    explore_se,
+    is_ratio,
+    prediction_z,
+)
+from geryon.sandbox.result import IterationResult
 
 
 @pytest.mark.parametrize(
@@ -46,3 +53,39 @@ def test_explore_interval_is_widened_by_root_five_and_symmetric_on_log_scale():
 
 def test_no_ci_or_p_gives_point_only():
     assert explore_forecast(-1.5, None, None, None, False) == (-1.5, None, None)
+
+
+def _hr(effect: float, lo: float, hi: float) -> IterationResult:
+    return IterationResult(
+        effect_size=effect, effect_size_type="hazard_ratio", ci_lower=lo, ci_upper=hi
+    )
+
+
+def _expect(effect: float, lo: float, hi: float) -> Expectation:
+    return Expectation(question="q", effect=effect, lower=lo, upper=hi)
+
+
+def test_tight_null_against_an_expected_effect_scores_high():
+    se = math.log(1.1 / 0.9) / (2 * 1.95996)
+    spread = math.log(0.72 / 0.5) / (2 * 1.28155)
+    got = prediction_z(_hr(1.0, 0.9, 1.1), _expect(0.6, 0.5, 0.72))
+    assert got is not None
+    assert got == pytest.approx(math.log(1 / 0.6) / math.hypot(se, spread), rel=1e-3)
+    assert got > 3
+
+
+def test_null_where_none_was_expected_scores_zero():
+    assert prediction_z(_hr(1.0, 0.9, 1.1), _expect(1.0, 0.8, 1.25)) == 0
+
+
+def test_a_vague_expectation_lowers_z():
+    result = _hr(1.0, 0.9, 1.1)
+    sharp = prediction_z(result, _expect(0.6, 0.5, 0.72))
+    vague = prediction_z(result, _expect(0.6, 0.2, 1.8))
+    assert sharp is not None and vague is not None and vague < sharp
+
+
+def test_prediction_z_is_none_without_an_se_or_an_expectation():
+    no_se = IterationResult(effect_size=1.0, effect_size_type="hazard_ratio")
+    assert prediction_z(no_se, _expect(0.6, 0.5, 0.72)) is None
+    assert prediction_z(_hr(1.0, 0.9, 1.1), None) is None

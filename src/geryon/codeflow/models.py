@@ -102,6 +102,28 @@ class CodeCritique(BaseModel):
         return self
 
 
+class Expectation(BaseModel):
+    """The effect an analysis was expected to report, asked without showing its result
+    (see ``codeflow/expectation.py``). How far the result lands from it is what
+    separates a surprising null or effect from an expected one."""
+
+    question: str = Field(
+        ..., description="The analysis restated as a question, with the result removed"
+    )
+    effect: float = Field(..., description="Expected effect_size, same scale")
+    lower: float = Field(..., description="Lower bound of the 80% interval")
+    upper: float = Field(..., description="Upper bound of the 80% interval")
+    model: str | None = Field(
+        default=None, description="Model that gave the expectation"
+    )
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        if not self.lower <= self.effect <= self.upper:
+            raise ValueError("need lower <= effect <= upper")
+        return self
+
+
 class CodeHypothesis(BaseModel):
     """A single code-first hypothesis: proposal → execution → narrative."""
 
@@ -149,6 +171,9 @@ class CodeHypothesis(BaseModel):
 
     # Critique (agentic critic that can run code to test suspicions)
     critique: CodeCritique | None = None
+
+    # None when no effect_size was reported, and on hypotheses that predate the field.
+    expectation: Expectation | None = None
 
     notes: str | None = None
 

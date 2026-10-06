@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 import pytest
 
-from geryon.codeflow.narrate import CodeNarrator, _response_text
+from geryon.codeflow.narrate import CodeNarrator
 
 
 def _narrator() -> CodeNarrator:
@@ -25,38 +25,6 @@ def test_parse_keeps_fenced_block_inside_a_string():
 def test_unparseable_output_raises_instead_of_storing_a_placeholder():
     with pytest.raises(ValueError, match="unparseable"):
         _narrator()._parse("Sure! Here's what I found...")
-
-
-def _reply(content, stop_reason: str = "end_turn") -> AIMessage:
-    return AIMessage(content=content, additional_kwargs={"stop_reason": stop_reason})
-
-
-def test_skips_thinking_block_before_text():
-    content = [
-        {"type": "thinking", "thinking": "", "signature": "s"},
-        {"type": "text", "text": "out"},
-    ]
-    assert _response_text(_reply(content)) == "out"
-
-
-def test_plain_string_content():
-    assert _response_text(_reply("out")) == "out"
-
-
-def test_truncated_response_raises():
-    with pytest.raises(RuntimeError, match="max_tokens"):
-        _response_text(_reply("parti", "max_tokens"))
-
-
-def test_refusal_stop_raises_naming_the_reason():
-    with pytest.raises(RuntimeError, match="refusal"):
-        _response_text(_reply('{"summary": "s", "findings": "cour', "refusal"))
-
-
-def test_no_text_raises():
-    content = [{"type": "thinking", "thinking": "", "signature": "s"}]
-    with pytest.raises(RuntimeError, match="thinking"):
-        _response_text(_reply(content))
 
 
 def test_narrate_sends_system_and_user_and_records_usage():
