@@ -4,9 +4,16 @@ from unittest.mock import patch
 from langchain_aws import ChatBedrock
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import Runnable
+from pydantic import BaseModel
 import pytest
 
-from geryon.codeflow.chat import RefusalFallbackChat, _bedrock, build_chat_model
+from geryon.codeflow.chat import (
+    RefusalFallbackChat,
+    _bedrock,
+    build_chat_model,
+    parse_reply,
+    reply_text,
+)
 from geryon.workflow.session import SessionConfig
 
 
@@ -105,3 +112,83 @@ def test_fallback_model_is_built_from_config():
         "older",
     )
     assert isinstance(chat.fallback, ChatBedrock) and chat.fallback.model_id == "older"
+
+
+def _text_reply(content, stop_reason: str = "end_turn") -> AIMessage:
+    return AIMessage(content=content, additional_kwargs={"stop_reason": stop_reason})
+
+
+def test_skips_thinking_block_before_text():
+    content = [
+        {"type": "thinking", "thinking": "", "signature": "s"},
+        {"type": "text", "text": "out"},
+    ]
+    assert reply_text(_text_reply(content), "narrator") == "out"
+
+
+def test_plain_string_content():
+    assert reply_text(_text_reply("out"), "narrator") == "out"
+
+
+def test_truncated_response_raises():
+    with pytest.raises(RuntimeError, match="max_tokens"):
+        reply_text(_text_reply("parti", "max_tokens"), "narrator")
+
+
+def test_refusal_stop_raises_naming_the_reason():
+    with pytest.raises(RuntimeError, match="refusal"):
+        reply_text(
+            _text_reply('{"summary": "s", "findings": "cour', "refusal"), "narrator"
+        )
+
+
+def test_no_text_raises():
+    content = [{"type": "thinking", "thinking": "", "signature": "s"}]
+    with pytest.raises(RuntimeError, match="thinking"):
+        reply_text(_text_reply(content), "narrator")
+
+
+class _Reply(BaseModel):
+    value: int
+
+
+class _Reply2(BaseModel):
+    value: int
+    x: str
+
+
+def test_parse_reply_strips_an_outer_fence():
+    assert parse_reply('```json\n{"value": 3}\n```', _Reply, "r").value == 3
+
+
+def test_parse_reply_takes_a_fenced_block_after_reasoning():
+    content = 'I expect about 0.7.\n\n- prior: ...\n\n```json\n{"value": 7}\n```'
+    assert parse_reply(content, _Reply, "r").value == 7
+
+
+def test_parse_reply_takes_unfenced_json_after_reasoning():
+    content = (
+        "TP53 is adverse on CDK4/6i ({Razavi 2018}); HR roughly 1.5\u20132.0.\n\n"
+        '{"value": 7}'
+    )
+    assert parse_reply(content, _Reply, "r").value == 7
+
+
+def test_parse_reply_keeps_braces_inside_string_values():
+    reply = parse_reply('Note.\n{"value": 7, "x": "a {b} }"}', _Reply2, "r")
+    assert reply.x == "a {b} }"
+
+
+def test_parse_reply_rejects_prose_without_a_closing_json_block():
+    with pytest.raises(ValueError, match="unparseable"):
+        parse_reply('About 0.7.\n```json\n{"value": 7}\n```\nThen more.', _Reply, "r")
+
+
+def test_parse_reply_names_the_role_when_unparseable():
+    with pytest.raises(ValueError, match="guesser returned unparseable"):
+        parse_reply('{"value": "lots"}', _Reply, "guesser")
+
+
+def test_parse_reply_rejects_a_non_object():
+    with pytest.raises(ValueError, match="unparseable"):
+        parse_reply("[1, 2]", _Reply, "r")

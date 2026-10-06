@@ -24,6 +24,7 @@ from geryon.codeflow.context import (
 )
 from geryon.codeflow.critic import HypothesisCritic
 from geryon.codeflow.dictionary import data_dictionary_text, make_dictionary_tool
+from geryon.codeflow.expectation import elicit_expectation
 from geryon.codeflow.models import (
     MAX_STORED_OUTPUT_CHARS,
     CodeCritique,
@@ -203,6 +204,26 @@ class CodeWorkflow:
                     n_llm_calls=nu.n_llm_calls,
                 )
 
+            expectation = None
+            if run.result is not None and run.result.effect_size is not None:
+                expectation, eu = elicit_expectation(
+                    self.llm,
+                    title=title,
+                    description=description,
+                    effect_size_type=run.result.effect_size_type,
+                )
+                if self.llm_logger:
+                    self.llm_logger.log_generation_usage(
+                        iteration=iteration,
+                        phase="expectation",
+                        input_tokens=eu.input_tokens,
+                        output_tokens=eu.output_tokens,
+                        total_tokens=eu.total_tokens,
+                        cache_read_tokens=eu.cache_read_tokens,
+                        cache_creation_tokens=eu.cache_creation_tokens,
+                        n_llm_calls=eu.n_llm_calls,
+                    )
+
             hyp = CodeHypothesis(
                 hypothesis_id=str(uuid.uuid4()),
                 session_id=self.session.session_id,
@@ -221,6 +242,7 @@ class CodeWorkflow:
                 duration_seconds=run.duration_seconds,
                 search=list(search),
                 narrative=narrative,
+                expectation=expectation,
                 llm_model=f"aws_bedrock/{self.config.model}",
             )
             self.store.save(hyp)

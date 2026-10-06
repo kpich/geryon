@@ -16,6 +16,10 @@ Writes two CSVs for the holdout plots:
     interval is the explore SE widened by √5. The SE comes from the explore CI, read as
     95%, or from the p-value when there's no CI. Ratio effects use the log scale.
   - ``no_effect``: no effect (1 for a ratio, 0 otherwise), a point with no interval.
+  - ``expectation``: the blind expectation and its 80% interval, which was asked for
+    the explore estimate, so it is narrower than one for the smaller validation set.
+
+The table also carries each hypothesis's blind expectation and its ``prediction_z``.
 """
 
 import argparse
@@ -28,7 +32,9 @@ from statistics import NormalDist
 import pandas as pd
 from statsmodels.stats.multitest import multipletests  # type: ignore[import-untyped]
 
+from geryon.codeflow.models import Expectation
 from geryon.plot._critiques import load_hypotheses
+from geryon.sandbox.result import IterationResult
 
 LEVEL = 0.8
 # Explore patients per validation patient (create_patient_split holds out 20%).
@@ -61,6 +67,39 @@ def explore_se(
     if p is not None and 0 < p < 1 and f(effect) != 0:
         return abs(f(effect)) / _Z(1 - p / 2)
     return None
+
+
+def expectation_sd(lower: float, upper: float, ratio: bool) -> float:
+    """SD of the blind expectation on the analysis scale, its 80% interval read as
+    normal."""
+    f = math.log if ratio else float
+    return (f(upper) - f(lower)) / (2 * _Z(0.5 + LEVEL / 2))
+
+
+def prediction_z(
+    result: IterationResult | None, expectation: Expectation | None
+) -> float | None:
+    """|explore estimate − blind expectation| in SDs: a z-score, not a surprisal.
+
+    The SD combines the estimate's SE with the expectation's own spread, both read as
+    normal on the analysis scale (log for ratios), so neither a noisy estimate nor a
+    vague expectation scores high. Absolute, since which group is the reference is
+    arbitrary. None without an expectation or an SE.
+    """
+    if result is None or expectation is None or result.effect_size is None:
+        return None
+    ratio = is_ratio(result.effect_size_type)
+    values = [result.effect_size, expectation.effect, expectation.lower]
+    if ratio and min(values) <= 0:
+        raise ValueError(f"ratio effect or expectation <= 0: {values}")
+    se = explore_se(
+        result.effect_size, result.ci_lower, result.ci_upper, result.p_value, ratio
+    )
+    if se is None:
+        return None
+    f = math.log if ratio else float
+    spread = expectation_sd(expectation.lower, expectation.upper, ratio)
+    return abs(f(result.effect_size) - f(expectation.effect)) / math.hypot(se, spread)
 
 
 def explore_forecast(
@@ -118,6 +157,10 @@ def build(data_dir: Path, runs_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "val_lower": val.get("ci_lower"),
                 "val_upper": val.get("ci_upper"),
                 "val_p": val.get("p_value"),
+                "expected_effect": h.expectation.effect if h.expectation else None,
+                "expected_lower": h.expectation.lower if h.expectation else None,
+                "expected_upper": h.expectation.upper if h.expectation else None,
+                "prediction_z": prediction_z(ex, h.expectation),
             }
         )
         if ex is None or ex.effect_size is None:
@@ -130,6 +173,9 @@ def build(data_dir: Path, runs_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         hid = h.hypothesis_id
         forecasts.append((hid, "explore", point, lo, hi))
         forecasts.append((hid, "no_effect", 1.0 if ratio else 0.0, None, None))
+        if h.expectation is not None:
+            e = h.expectation
+            forecasts.append((hid, "expectation", e.effect, e.lower, e.upper))
         if c is not None and c.predicted_holdout_effect is not None:
             forecasts.append(
                 (

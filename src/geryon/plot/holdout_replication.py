@@ -8,7 +8,8 @@ Left: AUC for replication of each predictor, with 95% bootstrap intervals. The n
 one is explore |z|. "Critic forecast" is the replication probability implied by the
 critic's predicted held-out effect, at the validation SE (2× the explore SE, since
 validation is a quarter the size). "|z| + ratings" is a ridge logistic regression on
-|z| and the three ratings, scored leave-one-out. An AUC below 0.5 means a higher
+|z| and the three ratings, scored leave-one-out; it is left out until at least two
+hypotheses replicated and two didn't. An AUC below 0.5 means a higher
 rating goes with *less* replication.
 Right: the number of replications expected if the explore estimates were true, if
 the critic's forecasts were true, and observed.
@@ -56,7 +57,13 @@ def ridge_logistic(x: np.ndarray, y: np.ndarray, lam: float = _RIDGE) -> np.ndar
 
 
 def loo_logistic(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    x = (x - x.mean(axis=0)) / x.std(axis=0)
+    # Holding out the only member of a class leaves a one-class fit whose
+    # unpenalized intercept diverges.
+    if min(y.sum(), (~y).sum()) < 2:
+        raise ValueError("LOO logistic needs at least two of each class")
+    # A constant column (every critic gave novelty 2) can't be standardized.
+    sd = x.std(axis=0)
+    x = (x[:, sd > 0] - x[:, sd > 0].mean(axis=0)) / sd[sd > 0]
     out = np.empty(len(y))
     for i in range(len(y)):
         keep = np.arange(len(y)) != i
@@ -112,6 +119,22 @@ def main() -> None:
     args = parse_args("Plot how well each signal predicts replication")
     df = build_frame(pd.read_csv(args.table), pd.read_csv(args.forecasts))
     y = df["replicated"].to_numpy()
+    if len(df) == 0 or y.all() or not y.any():
+        # An AUC needs a replicated and a non-replicated hypothesis; early in a batch
+        # there may be neither.
+        fig, ax = plt.subplots(figsize=(10, 3.8))
+        ax.axis("off")
+        ax.text(
+            0.5,
+            0.5,
+            f"Not enough hypotheses yet: {len(df)} explore-significant with a "
+            f"validation result, {int(y.sum())} replicated.\nNeeds at least one "
+            f"that replicated and one that didn't.",
+            ha="center",
+            va="center",
+        )
+        plt.savefig(args.output, bbox_inches="tight", transparent=True)
+        return
     ratings = ["trustworthiness", "confound_risk", "novelty"]
     predictors = {
         "Explore |z|  (naive)": df["z"].to_numpy(),
@@ -119,9 +142,13 @@ def main() -> None:
         "Trustworthiness": df["trustworthiness"].to_numpy(),
         "Confound risk": df["confound_risk"].to_numpy(),
         "Novelty": df["novelty"].to_numpy(),
-        "|z| + ratings  (LOO)": loo_logistic(df[["z", *ratings]].to_numpy(), y),
     }
-    colors = [METHOD_COLORS["explore"], GOOD, GOOD, GOOD, GOOD, NEUTRAL]
+    colors = [METHOD_COLORS["explore"], GOOD, GOOD, GOOD, GOOD]
+    if min(y.sum(), (~y).sum()) >= 2:
+        predictors["|z| + ratings  (LOO)"] = loo_logistic(
+            df[["z", *ratings]].to_numpy(), y
+        )
+        colors.append(NEUTRAL)
 
     rng = np.random.default_rng(42)
     fig, (ax_auc, ax_n) = plt.subplots(

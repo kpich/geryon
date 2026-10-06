@@ -8,13 +8,19 @@ import pandas as pd
 
 from geryon.plot._critiques import BAD, GOOD, NEUTRAL
 
-METHODS = ["critic", "explore", "no_effect"]
+METHODS = ["critic", "expectation", "explore", "no_effect"]
 METHOD_LABELS = {
     "critic": "Critic forecast",
     "explore": "Baseline: explore estimate",
     "no_effect": "Baseline: no effect",
+    "expectation": "Blind expectation",
 }
-METHOD_COLORS = {"critic": GOOD, "explore": NEUTRAL, "no_effect": BAD}
+METHOD_COLORS = {
+    "critic": GOOD,
+    "explore": NEUTRAL,
+    "no_effect": BAD,
+    "expectation": "#009E73",
+}
 
 
 def parse_args(description: str) -> argparse.Namespace:

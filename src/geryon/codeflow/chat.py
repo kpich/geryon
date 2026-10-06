@@ -1,7 +1,9 @@
-"""The chat model all three LLM phases run on, and their token-usage accounting."""
+"""The chat model every LLM phase runs on, its token-usage accounting, and parsing
+of the plain (tool-less) JSON replies."""
 
 from collections.abc import Callable, Sequence
-from typing import Any, NamedTuple
+import json
+from typing import Any, NamedTuple, TypeVar
 
 from botocore.config import Config as BotoConfig
 from langchain_aws import ChatBedrock
@@ -10,6 +12,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
+from pydantic import BaseModel, ValidationError
 
 from geryon.workflow.session import SessionConfig
 
@@ -47,6 +50,71 @@ def sum_message_usage(messages: list) -> MessageUsage:
         cache_create += int(details.get("cache_creation", 0) or 0)
         calls += 1
     return MessageUsage(inp, out, tot, cache_read, cache_create, calls)
+
+
+M = TypeVar("M", bound=BaseModel)
+
+
+def reply_text(response: AIMessage, role: str) -> str:
+    """Text of a reply, raising if it was truncated or held no text.
+
+    With thinking on (Opus 5.5 always), the content is a block list with thinking
+    blocks before the text, and thinking tokens count against ``max_tokens``.
+    """
+    stop_reason = response.additional_kwargs.get("stop_reason")
+    content = response.content
+    block_types: list[str | None]
+    if isinstance(content, str):
+        text, block_types = content, ["text"]
+    else:
+        blocks = [b for b in content if isinstance(b, dict)]
+        text = "".join(b["text"] for b in blocks if b.get("type") == "text")
+        block_types = [b.get("type") for b in blocks]
+    # Anything but end_turn can cut the JSON off mid-string (max_tokens, or a
+    # refusal stop, which ends the text where the classifier fired). Name the
+    # reason here rather than letting it surface as a JSONDecodeError.
+    if stop_reason != "end_turn":
+        raise RuntimeError(
+            f"{role} stopped with stop_reason={stop_reason!r}; the response is "
+            f"incomplete: {text!r}"
+        )
+    if not text.strip():
+        raise RuntimeError(
+            f"{role} returned no text (stop_reason={stop_reason}, blocks={block_types})"
+        )
+    return text
+
+
+def parse_reply(content: str, model: type[M], role: str) -> M:
+    """Validate the JSON object that ends a reply against ``model``.
+
+    Models told to return only JSON still often write their reasoning first, in no
+    fixed shape, and fence the JSON or not. So the rule is just that the reply ends
+    in a JSON object (optionally closing a code fence); whatever precedes it is
+    ignored. Text after the object is still an error.
+    """
+    text = content.strip()
+    if text.endswith("```"):
+        text = text[:-3].rstrip()
+    decoder = json.JSONDecoder()
+    obj: Any = None
+    # The leftmost "{" whose object runs to the end is the outermost one.
+    for start in (i for i, ch in enumerate(text) if ch == "{"):
+        try:
+            candidate, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            continue
+        if end == len(text):
+            obj = candidate
+            break
+    try:
+        if not isinstance(obj, dict):
+            raise TypeError("the reply does not end in a JSON object")
+        return model(**obj)
+    except (TypeError, ValidationError) as e:
+        raise ValueError(
+            f"{role} returned unparseable output ({type(e).__name__}): {content!r}"
+        ) from e
 
 
 class RefusalFallbackChat(BaseChatModel):

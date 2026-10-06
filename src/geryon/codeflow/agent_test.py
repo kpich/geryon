@@ -7,7 +7,8 @@ import pytest
 
 from geryon.codeflow.agent import CodeWorkflow, format_run
 from geryon.codeflow.agent_tools import make_run_python_tool
-from geryon.codeflow.models import CodeCritique, CodeHypothesis, SearchRun
+from geryon.codeflow.chat import MessageUsage
+from geryon.codeflow.models import CodeCritique, CodeHypothesis, Expectation, SearchRun
 from geryon.codeflow.store import CodeHypothesisStore
 from geryon.etl.data_version import write_version_marker
 from geryon.etl.split_by_patient import SPLIT_MARKER_FILENAME
@@ -234,6 +235,34 @@ def test_submit_stores_a_successful_script(tmp_path: Path):
     assert out.startswith("✓ Saved")
     assert len(submitted) == 1
     assert [h.hypothesis_id for h in wf.store.load()] == [submitted[0].hypothesis_id]
+
+
+def test_submit_records_a_blind_expectation_only_with_an_effect(tmp_path: Path):
+    wf = _workflow(tmp_path, chain="main")
+    expectation = Expectation(question="q", effect=0.8, lower=0.6, upper=1.0)
+    usage = MessageUsage(1, 1, 2, 0, 0, 2)
+    no_effect = ScriptRun(success=True, exit_code=0, result=IterationResult())
+    effect = ScriptRun(
+        success=True,
+        exit_code=0,
+        result=IterationResult(effect_size=0.6, effect_size_type="hazard_ratio"),
+    )
+
+    with patch(
+        "geryon.codeflow.agent.elicit_expectation", return_value=(expectation, usage)
+    ) as elicit:
+        _, without, _ = _submit(wf, no_effect)
+        elicit.assert_not_called()
+        _, with_effect, _ = _submit(wf, effect)
+
+    assert elicit.call_args.kwargs == {
+        "title": "t",
+        "description": "d",
+        "effect_size_type": "hazard_ratio",
+    }
+    assert without[0].expectation is None
+    assert with_effect[0].expectation == expectation
+    assert wf.store.load()[1].expectation == expectation
 
 
 def test_submit_records_the_search_so_far(tmp_path: Path):

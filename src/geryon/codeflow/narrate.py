@@ -3,10 +3,14 @@
 import json
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from pydantic import ValidationError
+from langchain_core.messages import HumanMessage, SystemMessage
 
-from geryon.codeflow.chat import MessageUsage, sum_message_usage
+from geryon.codeflow.chat import (
+    MessageUsage,
+    parse_reply,
+    reply_text,
+    sum_message_usage,
+)
 from geryon.codeflow.models import CodeNarrative
 from geryon.codeflow.prompts import with_data_dictionary, with_focus
 from geryon.sandbox.result import IterationResult
@@ -57,7 +61,7 @@ class CodeNarrator:
             ]
         )
         self.last_usage = sum_message_usage([response])
-        narrative = self._parse(_response_text(response))
+        narrative = self._parse(reply_text(response, "narrator"))
         narrative.model = response.response_metadata.get("model_name")
         return narrative
 
@@ -103,48 +107,4 @@ limitations, context_summary.
 """
 
     def _parse(self, content: str) -> CodeNarrative:
-        text = content.strip()
-        # Strip only an outer fence. Splitting on the next ``` line would cut the JSON
-        # short if a string value contained a fenced block.
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else ""
-            if text.rstrip().endswith("```"):
-                text = text.rstrip()[:-3]
-        try:
-            return CodeNarrative(**json.loads(text))
-        except (json.JSONDecodeError, ValidationError) as e:
-            raise ValueError(
-                f"narrator returned unparseable output ({type(e).__name__}): "
-                f"{content!r}"
-            ) from e
-
-
-def _response_text(response: AIMessage) -> str:
-    """Text of a narrator reply, raising if it was truncated or held no text.
-
-    With thinking on (Opus 5.5 always), the content is a block list with thinking
-    blocks before the text, and thinking tokens count against ``max_tokens``.
-    """
-    stop_reason = response.additional_kwargs.get("stop_reason")
-    content = response.content
-    block_types: list[str | None]
-    if isinstance(content, str):
-        text, block_types = content, ["text"]
-    else:
-        blocks = [b for b in content if isinstance(b, dict)]
-        text = "".join(b["text"] for b in blocks if b.get("type") == "text")
-        block_types = [b.get("type") for b in blocks]
-    # Anything but end_turn can cut the JSON off mid-string (max_tokens, or a
-    # refusal stop, which ends the text where the classifier fired). Name the
-    # reason here rather than letting it surface as a JSONDecodeError.
-    if stop_reason != "end_turn":
-        raise RuntimeError(
-            f"narrator stopped with stop_reason={stop_reason!r}; the response is "
-            f"incomplete: {text!r}"
-        )
-    if not text.strip():
-        raise RuntimeError(
-            f"narrator returned no text (stop_reason={stop_reason}, "
-            f"blocks={block_types})"
-        )
-    return text
+        return parse_reply(content, CodeNarrative, "narrator")

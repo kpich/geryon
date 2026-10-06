@@ -50,8 +50,9 @@ class SessionTracer:
     ) -> None:
         """Token usage for one LLM phase of an iteration.
 
-        ``phase`` is ``generation``, ``critic`` or ``narration``. All phases share the
-        ``generation_usage`` event so the cost plot sums the whole run.
+        ``phase`` is ``generation``, ``critic``, ``narration`` or ``expectation``.
+        All phases share the ``generation_usage`` event so the cost plot sums the
+        whole run.
         ``input_tokens`` is uncached input only; the two cache counts are separate
         from it.
         """
