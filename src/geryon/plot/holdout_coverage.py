@@ -1,7 +1,7 @@
 """Plot how well the 80% forecast intervals cover the validation effect.
 
 Left: share of validation effects inside each method's interval, with a Wilson 95%
-interval; the dashed line is the nominal 0.8. Right: interval widths in log units,
+interval; the dashed line is the nominal 0.8. Right: interval widths as upper ÷ lower,
 since a wide enough interval always covers. Ratio effects only.
 """
 
@@ -15,9 +15,11 @@ from statsmodels.stats.proportion import (  # type: ignore[import-untyped]
 from geryon.plot._holdout import (
     METHOD_COLORS,
     METHOD_LABELS,
+    fold_axis,
     parse_args,
     ratio_forecasts,
 )
+from geryon.plot._save import save
 from geryon.plot.holdout_table import LEVEL
 
 _INTERVAL_METHODS = ["critic", "explore"]
@@ -75,11 +77,12 @@ def main() -> None:
             zorder=3,
         )
     ax_w.set_xticks(xs, [METHOD_LABELS[m] for m in _INTERVAL_METHODS], fontsize=9)
-    ax_w.set_ylabel("Interval width  (log units)")
+    ax_w.set_ylabel("Interval width  (upper ÷ lower)")
+    fold_axis(ax_w.yaxis)
     ax_w.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

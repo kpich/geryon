@@ -1,7 +1,9 @@
 """Plot forecast vs observed validation effect, one panel per forecasting method.
 
-Ratio effects only (HRs, ORs), on the log scale. Horizontal bars are each method's
-80% interval. The panel title gives the mean absolute error in log units.
+Ratio effects only (HRs, ORs), on a log-spaced axis labelled in ratios. Horizontal
+bars are each method's 80% interval. The panel title gives the typical miss: the
+geometric-mean fold difference between forecast and validation, so 1.35× means the
+forecast was off by about 35% in either direction.
 """
 
 import matplotlib.pyplot as plt
@@ -12,9 +14,12 @@ from geryon.plot._holdout import (
     METHOD_COLORS,
     METHOD_LABELS,
     METHODS,
+    fold,
     parse_args,
+    ratio_axis,
     ratio_forecasts,
 )
+from geryon.plot._save import save
 
 
 def main() -> None:
@@ -54,15 +59,20 @@ def main() -> None:
         ax.plot(lim, lim, color="black", linewidth=1, alpha=0.5, zorder=1)
         ax.axhline(0, color="gray", linewidth=0.5, alpha=0.5)
         mae = (m["predicted"] - m["val_effect"]).abs().mean()
-        ax.set_title(f"{METHOD_LABELS[method]}\nN={len(m)}  MAE={mae:.2f}", fontsize=10)
-        ax.set_xlabel("Forecast  log(effect)")
+        ax.set_title(
+            f"{METHOD_LABELS[method]}\nN={len(m)}  typical miss {fold(mae)}",
+            fontsize=10,
+        )
+        ax.set_xlabel("Forecast  (ratio)")
+        ratio_axis(ax.xaxis)
+        ratio_axis(ax.yaxis)
         ax.grid(True, alpha=0.3)
-    axes[0].set_ylabel("Validation rerun  log(effect)")
+    axes[0].set_ylabel("Validation rerun  (ratio)")
     axes[0].set_xlim(lim)
     axes[0].set_ylim(lim)
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

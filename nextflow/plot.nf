@@ -10,7 +10,8 @@ params.chain      = ""  // empty = pool every chain; cost ignores it
 // published file (tables, rerun results) goes in its data/.
 
 // One process for every plot: each is `python -m geryon.plot.<module>` writing
-// <module>.pdf. Extra CLI args ride along with the module name. Plots are cheap and
+// <module>.pdf, and an .svg beside it for the index page. Extra CLI args ride along
+// with the module name. Plots are cheap and
 // their only input is a path string, so caching them would make `-resume` serve
 // stale plots after new sessions land.
 process plot {
@@ -24,7 +25,7 @@ process plot {
     tuple val(subdir), val(module), val(extra_args)
 
     output:
-    path "${subdir}/${module}.pdf"
+    path "${subdir}/${module}.{pdf,svg}"
 
     script:
     """
@@ -89,7 +90,7 @@ process plotHoldout {
     tuple val(module), path(table), path(forecasts)
 
     output:
-    path "${module}.pdf"
+    path "${module}.{pdf,svg}"
 
     script:
     """
@@ -127,7 +128,7 @@ workflow CRITIC_HOLDOUT {
     plotHoldout(
         channel.of(
             'holdout_effect', 'holdout_paired', 'holdout_error_over_time',
-            'holdout_coverage', 'holdout_q_by_trust', 'holdout_q_vs_explore',
+            'holdout_coverage', 'holdout_z_by_trust', 'holdout_q_vs_explore',
             'holdout_forest', 'holdout_scores', 'holdout_replication',
         )
             .combine(tables)

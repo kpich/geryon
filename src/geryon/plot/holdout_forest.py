@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from geryon.plot._holdout import METHOD_COLORS, parse_args
+from geryon.plot._save import save
 from geryon.plot.holdout_table import explore_se
 
 _TITLE_CHARS = 70
@@ -118,7 +119,7 @@ def main() -> None:
     )
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

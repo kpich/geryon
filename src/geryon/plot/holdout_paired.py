@@ -2,20 +2,27 @@
 
 Three panels, each point one hypothesis, each with the identity line:
 
-- Point forecast. A point between the diagonal and y=0 is a forecast the critic
-  shrank toward no effect.
-- 80% interval width.
-- Absolute error against the validation effect. Below the diagonal, the critic was
-  closer.
+- Point forecast, as a ratio. A point between the diagonal and y=1 is a forecast
+  the critic shrank toward no effect.
+- 80% interval width, as upper ÷ lower.
+- Fold error against the validation effect, max(forecast/validation,
+  validation/forecast). Below the diagonal, the critic was closer.
 
-Ratio effects only, on the log scale.
+Ratio effects only, on log-spaced axes.
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from geryon.plot._holdout import METHOD_COLORS, parse_args, ratio_forecasts
+from geryon.plot._holdout import (
+    METHOD_COLORS,
+    fold_axis,
+    parse_args,
+    ratio_axis,
+    ratio_forecasts,
+)
+from geryon.plot._save import save
 
 
 def _identity(ax, xs: np.ndarray, ys: np.ndarray) -> None:
@@ -41,17 +48,17 @@ def main() -> None:
     observed = col("val_effect", "critic")
     panels = [
         (
-            "Point forecast  log(effect)",
+            "Point forecast  (ratio)",
             col("predicted", "explore"),
             col("predicted", "critic"),
         ),
         (
-            "80% interval width  (log units)",
+            "80% interval width  (upper ÷ lower)",
             col("upper", "explore") - col("lower", "explore"),
             col("upper", "critic") - col("lower", "critic"),
         ),
         (
-            "|forecast − validation|  (log units)",
+            "Fold error vs validation",
             np.abs(col("predicted", "explore") - observed),
             np.abs(col("predicted", "critic") - observed),
         ),
@@ -64,6 +71,9 @@ def main() -> None:
         ax.set_title(label, fontsize=10)
         ax.set_xlabel("Baseline: explore estimate")
         ax.set_ylabel("Critic")
+        set_axis = ratio_axis if ax is axes[0] else fold_axis
+        set_axis(ax.xaxis)
+        set_axis(ax.yaxis)
     axes[0].axhline(0, color="gray", linewidth=0.5)
     axes[0].axvline(0, color="gray", linewidth=0.5)
     closer = int((panels[2][2] < panels[2][1]).sum())
@@ -72,7 +82,7 @@ def main() -> None:
     )
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

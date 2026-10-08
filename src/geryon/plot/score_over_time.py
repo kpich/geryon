@@ -12,6 +12,7 @@ from geryon.plot._critiques import (
     plot_rolling_mean,
     score,
 )
+from geryon.plot._save import save
 
 
 def main() -> None:
@@ -34,7 +35,7 @@ def main() -> None:
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

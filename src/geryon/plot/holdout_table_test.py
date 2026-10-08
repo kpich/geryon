@@ -10,6 +10,7 @@ from geryon.plot.holdout_table import (
     explore_se,
     is_ratio,
     prediction_z,
+    replication_z,
 )
 from geryon.sandbox.result import IterationResult
 
@@ -89,3 +90,35 @@ def test_prediction_z_is_none_without_an_se_or_an_expectation():
     no_se = IterationResult(effect_size=1.0, effect_size_type="hazard_ratio")
     assert prediction_z(no_se, _expect(0.6, 0.5, 0.72)) is None
     assert prediction_z(_hr(1.0, 0.9, 1.1), None) is None
+
+
+def test_replicated_null_scores_like_replicated_effect():
+    null_val = {"effect_size": 1.0, "ci_lower": 0.8, "ci_upper": 1.25}
+    effect_val = {"effect_size": 2.0, "ci_lower": 1.6, "ci_upper": 2.5}
+    null_z = replication_z(_hr(1.0, 0.9, 1.1), null_val, True)
+    effect_z = replication_z(_hr(2.0, 1.8, 2.2), effect_val, True)
+    assert null_z == 0 and effect_z == 0
+
+
+def test_replication_z_combines_both_ses():
+    se_ex = math.log(2.2 / 1.8) / (2 * 1.95996)
+    se_val = math.log(1.25 / 0.8) / (2 * 1.95996)
+    got = replication_z(
+        _hr(2.0, 1.8, 2.2),
+        {"effect_size": 1.0, "ci_lower": 0.8, "ci_upper": 1.25},
+        True,
+    )
+    assert got == pytest.approx(math.log(2) / math.hypot(se_ex, se_val), rel=1e-3)
+
+
+@pytest.mark.parametrize(
+    "val",
+    [
+        {},
+        {"effect_size": 1.0},
+        {"effect_size": 0.0, "ci_lower": 0.0, "ci_upper": float("inf")},
+        {"effect_size": 1.0, "ci_lower": 0.5, "ci_upper": float("inf")},
+    ],
+)
+def test_replication_z_is_none_without_a_usable_rerun(val):
+    assert replication_z(_hr(1.0, 0.9, 1.1), val, True) is None
