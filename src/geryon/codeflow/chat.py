@@ -3,9 +3,12 @@ of the plain (tool-less) JSON replies."""
 
 from collections.abc import Callable, Sequence
 import json
+import random
+import time
 from typing import Any, NamedTuple, TypeVar
 
 from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError, ConnectionError, HTTPClientError
 from langchain_aws import ChatBedrock
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
@@ -177,13 +180,59 @@ class RefusalFallbackChat(BaseChatModel):
         messages: list[BaseMessage],
         stop: list[str] | None,
     ) -> AIMessage:
-        reply = (
-            model.invoke(_for_model(messages, model_id), stop=stop)
-            if stop
-            else model.invoke(_for_model(messages, model_id))
+        sent = _for_model(messages, model_id)
+        reply = _with_capacity_retries(
+            lambda: model.invoke(sent, stop=stop) if stop else model.invoke(sent),
+            model_id,
         )
         assert isinstance(reply, AIMessage)
         return reply
+
+
+# Bedrock answers a capacity shortage with these, and an outage can last many minutes.
+# botocore's own retries cap each wait at 20s and give up within about a minute, so
+# they absorb blips; this outer loop waits out the outage and still raises in the end.
+_CAPACITY_CODES = frozenset(
+    {
+        "ThrottlingException",
+        "ServiceUnavailableException",
+        "ModelNotReadyException",
+        "InternalServerException",
+        "TooManyRequestsException",
+    }
+)
+CAPACITY_WAIT_BUDGET_S = 45 * 60
+_CAPACITY_FIRST_WAIT_S = 30.0
+_CAPACITY_MAX_WAIT_S = 300.0
+
+
+def _is_capacity_error(e: Exception) -> bool:
+    if isinstance(e, ClientError):
+        return e.response.get("Error", {}).get("Code") in _CAPACITY_CODES
+    # ConnectionError covers connect/read timeouts and dropped connections.
+    return isinstance(e, (ConnectionError, HTTPClientError))
+
+
+T = TypeVar("T")
+
+
+def _with_capacity_retries(call: Callable[[], T], model_id: str) -> T:
+    waited = 0.0
+    wait = _CAPACITY_FIRST_WAIT_S
+    while True:
+        try:
+            return call()
+        except Exception as e:
+            if not _is_capacity_error(e) or waited >= CAPACITY_WAIT_BUDGET_S:
+                raise
+            pause = min(wait * random.uniform(0.75, 1.25), _CAPACITY_MAX_WAIT_S)
+            print(
+                f"⚠ {model_id}: {type(e).__name__}: {e}; waiting {pause:.0f}s "
+                f"({waited / 60:.0f} of {CAPACITY_WAIT_BUDGET_S // 60} min used)"
+            )
+            time.sleep(pause)
+            waited += pause
+            wait = min(wait * 2, _CAPACITY_MAX_WAIT_S)
 
 
 def _refused(reply: AIMessage) -> bool:
