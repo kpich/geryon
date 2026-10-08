@@ -13,6 +13,7 @@ from geryon.plot._critiques import (
     parse_args,
     plot_rolling_mean,
 )
+from geryon.plot._save import save
 
 Y_LO, Y_HI = 0.5, 3.5
 
@@ -72,7 +73,7 @@ def main() -> None:
     axes[-1].set_xlabel("Hypothesis sequence")
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

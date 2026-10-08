@@ -1,19 +1,25 @@
 """Plot validation q-value against explore q-value, one point per hypothesis.
 
 Both axes are −log10 of the BH q-value, with the 0.05 threshold dashed on each.
-Treating the validation rerun as truth, a point right of the vertical line and below
-the horizontal one is a false positive: significant on explore, not on validation.
-Points are drawn as the critic's trustworthiness rating (1-3, "–" if unrated),
-black if significant on validation and gray if not. Counts per quadrant sit in the
-corners, and the false positive rate per rating beside the plot. Reruns that reported no
-p-value can't be scored and are only counted.
+Treating the validation rerun as truth, an explore-significant hypothesis claims an
+effect and an explore null claims none, and either can fail: an effect that is not
+significant on validation (bottom right), or a null that is (top left). Points are
+drawn as the critic's trustworthiness rating (1-3, "–" if unrated), black where the
+rerun agreed and red where it didn't. Counts per quadrant sit in the corners, and
+the failure rate of each kind of claim per rating beside the plot. Reruns that
+reported no p-value can't be scored and are only counted.
+
+Significance is a coarse test of a null, since an underpowered rerun "confirms" one by
+default; ``holdout_z_by_trust`` scores agreement on the effect itself.
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from geryon.plot._critiques import BAD
 from geryon.plot._holdout import parse_args
+from geryon.plot._save import save
 
 _Q_THRESHOLD = 0.05
 
@@ -31,26 +37,45 @@ def main() -> None:
     line = -np.log10(_Q_THRESHOLD)
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    for xi, yi, sig, trust in zip(
-        x, y, df["val_sig"], df["trustworthiness"], strict=True
-    ):
+    agreed = df["explore_sig"] == df["val_sig"]
+    for xi, yi, ok, trust in zip(x, y, agreed, df["trustworthiness"], strict=True):
         label = "–" if pd.isna(trust) else str(int(trust))
         ax.scatter(
             xi,
             yi,
             marker=f"${label}$",
             s=70,
-            color="black" if sig else "0.65",
+            color="black" if ok else BAD,
             zorder=3,
         )
     ax.axvline(line, color="black", linestyle="--", linewidth=1)
     ax.axhline(line, color="black", linestyle="--", linewidth=1)
 
     quadrants = {
-        "TP": (df["explore_sig"] & df["val_sig"], (0.98, 0.98), "right", "top"),
-        "FP": (df["explore_sig"] & ~df["val_sig"], (0.98, 0.02), "right", "bottom"),
-        "FN": (~df["explore_sig"] & df["val_sig"], (0.02, 0.98), "left", "top"),
-        "TN": (~df["explore_sig"] & ~df["val_sig"], (0.02, 0.02), "left", "bottom"),
+        "effect replicated": (
+            df["explore_sig"] & df["val_sig"],
+            (0.98, 0.98),
+            "right",
+            "top",
+        ),
+        "effect failed": (
+            df["explore_sig"] & ~df["val_sig"],
+            (0.98, 0.02),
+            "right",
+            "bottom",
+        ),
+        "null failed": (
+            ~df["explore_sig"] & df["val_sig"],
+            (0.02, 0.98),
+            "left",
+            "top",
+        ),
+        "null replicated": (
+            ~df["explore_sig"] & ~df["val_sig"],
+            (0.02, 0.02),
+            "left",
+            "bottom",
+        ),
     }
     for name, (mask, xy, ha, va) in quadrants.items():
         ax.annotate(
@@ -60,18 +85,24 @@ def main() -> None:
             ha=ha,
             va=va,
             fontsize=9,
-            color="black" if name in ("TP", "FN") else "0.4",
+            color=BAD if name.endswith("failed") else "black",
         )
 
-    called = df[df["explore_sig"]]
-    by_trust = [
-        f"trust {r:.0f}: {int((~g['val_sig']).sum())}/{len(g)}"
-        for r, g in called.groupby("trustworthiness")
-    ]
+    def rates(claims: pd.DataFrame, failed: pd.Series) -> list[str]:
+        return [
+            f"  trust {r:.0f}: {int(failed[g.index].sum())}/{len(g)}"
+            for r, g in claims.groupby("trustworthiness")
+        ]
+
+    effects = df[df["explore_sig"]]
+    nulls = df[~df["explore_sig"]]
     ax.text(
         1.03,
         0.0,
-        "FP / explore-significant\n" + "\n".join(by_trust),
+        "Effects failed\n"
+        + "\n".join(rates(effects, ~df["val_sig"]))
+        + "\nNulls failed\n"
+        + "\n".join(rates(nulls, df["val_sig"])),
         transform=ax.transAxes,
         ha="left",
         va="bottom",
@@ -79,11 +110,11 @@ def main() -> None:
         bbox={"facecolor": "white", "edgecolor": "0.7", "alpha": 0.9},
     )
 
-    n_fp = int(quadrants["FP"][0].sum())
-    n_called = len(called)
+    n_effect_failed = int(quadrants["effect failed"][0].sum())
+    n_null_failed = int(quadrants["null failed"][0].sum())
     title = (
-        f"False positives (validation as truth): {n_fp}/{n_called} "
-        f"explore-significant at q<{_Q_THRESHOLD}"
+        f"Failed on validation at q<{_Q_THRESHOLD}: {n_effect_failed}/{len(effects)} "
+        f"effects, {n_null_failed}/{len(nulls)} nulls"
     )
     if len(no_val):
         untested = int((no_val["explore_q"] < _Q_THRESHOLD).sum())
@@ -103,7 +134,7 @@ def main() -> None:
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

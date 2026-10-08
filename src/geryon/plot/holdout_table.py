@@ -19,7 +19,8 @@ Writes two CSVs for the holdout plots:
   - ``expectation``: the blind expectation and its 80% interval, which was asked for
     the explore estimate, so it is narrower than one for the smaller validation set.
 
-The table also carries each hypothesis's blind expectation and its ``prediction_z``.
+The table also carries each hypothesis's blind expectation, its ``prediction_z``, and
+its ``replication_z``.
 """
 
 import argparse
@@ -102,6 +103,41 @@ def prediction_z(
     return abs(f(result.effect_size) - f(expectation.effect)) / math.hypot(se, spread)
 
 
+def replication_z(
+    explore: IterationResult | None, val: dict, ratio: bool
+) -> float | None:
+    """|explore − validation| over the SE of their difference.
+
+    Scores a null and an effect alike: a hypothesis replicates when the rerun lands
+    near its explore estimate, wherever that is. Significance would call a replicated
+    null a failure. None when either split lacks an effect or an SE, or a ratio rerun
+    came out degenerate (an effect or bound <= 0, or not finite, e.g. no events).
+    """
+    if explore is None or explore.effect_size is None:
+        return None
+    v_effect, v_lo, v_hi, v_p = (
+        val.get("effect_size"),
+        val.get("ci_lower"),
+        val.get("ci_upper"),
+        val.get("p_value"),
+    )
+    if v_effect is None:
+        return None
+    v_values = [x for x in (v_effect, v_lo, v_hi) if x is not None]
+    if not all(math.isfinite(x) for x in v_values):
+        return None
+    if ratio and min(v_values) <= 0:
+        return None
+    se_ex = explore_se(
+        explore.effect_size, explore.ci_lower, explore.ci_upper, explore.p_value, ratio
+    )
+    se_val = explore_se(v_effect, v_lo, v_hi, v_p, ratio)
+    if se_ex is None or se_val is None:
+        return None
+    f = math.log if ratio else float
+    return abs(f(explore.effect_size) - f(v_effect)) / math.hypot(se_ex, se_val)
+
+
 def explore_forecast(
     effect: float,
     lower: float | None,
@@ -161,6 +197,7 @@ def build(data_dir: Path, runs_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "expected_lower": h.expectation.lower if h.expectation else None,
                 "expected_upper": h.expectation.upper if h.expectation else None,
                 "prediction_z": prediction_z(ex, h.expectation),
+                "replication_z": replication_z(ex, val, ratio),
             }
         )
         if ex is None or ex.effect_size is None:

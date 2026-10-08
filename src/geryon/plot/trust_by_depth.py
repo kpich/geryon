@@ -16,6 +16,7 @@ from geryon.plot._critiques import (
     load_hypotheses,
     parse_args,
 )
+from geryon.plot._save import save
 
 _DOT_X = -0.18  # dots sit left of the depth tick
 _BAR_LEFT = -0.02  # proportion bars start just right of the dots
@@ -64,7 +65,7 @@ def main() -> None:
     ax.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

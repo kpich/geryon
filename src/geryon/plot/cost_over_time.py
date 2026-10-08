@@ -14,6 +14,8 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 
+from geryon.plot._save import save
+
 # USD per million tokens at Anthropic list rates (Bedrock bills separately and
 # may differ): input, output, cache read. input_tokens, cache_read_tokens and
 # cache_creation_tokens are three DISJOINT buckets of the prompt. Cache writes
@@ -47,7 +49,7 @@ def load_generation_usage(data_dir: Path) -> list[dict]:
     Each event is tagged with its session's model from the sibling config.json.
     """
     events: list[dict] = []
-    for trace_file in sorted((data_dir / "sessions").rglob("trace.jsonl")):
+    for trace_file in sorted(data_dir.rglob("trace.jsonl")):
         config = json.loads((trace_file.parent / "config.json").read_text())
         with open(trace_file) as f:
             for line in f:
@@ -132,69 +134,70 @@ def main() -> None:
     args = parser.parse_args()
 
     events = load_generation_usage(args.data_dir)
+    if not events:
+        raise SystemExit(f"no generation_usage events under {args.data_dir}")
 
     fig, (ax_cost, ax_tok) = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
 
-    if events:
-        x = np.arange(1, len(events) + 1)
-        out = np.array([e.get("output_tokens", 0) for e in events], dtype=float)
-        # Full input volume per call: fresh + cache read + cache write.
-        volume = np.array([_input_volume(e) for e in events], dtype=float)
+    x = np.arange(1, len(events) + 1)
+    out = np.array([e.get("output_tokens", 0) for e in events], dtype=float)
+    # Full input volume per call: fresh + cache read + cache write.
+    volume = np.array([_input_volume(e) for e in events], dtype=float)
 
-        cum_cost = np.cumsum([_event_cost(e) for e in events])
-        cum_inp = np.cumsum(volume)
-        cum_out = np.cumsum(out)
+    cum_cost = np.cumsum([_event_cost(e) for e in events])
+    cum_inp = np.cumsum(volume)
+    cum_out = np.cumsum(out)
 
-        ax_cost.plot(x, cum_cost, color="#0072B2", linewidth=1.8, label="actual")
-        ax_cost.fill_between(x, cum_cost, color="#0072B2", alpha=0.15)
+    ax_cost.plot(x, cum_cost, color="#0072B2", linewidth=1.8, label="actual")
+    ax_cost.fill_between(x, cum_cost, color="#0072B2", alpha=0.15)
+    ax_cost.text(
+        0.98,
+        0.05,
+        f"actual: ${cum_cost[-1]:,.2f}",
+        transform=ax_cost.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=9,
+        color="#0072B2",
+    )
+
+    fractions = _cache_fractions(events)
+    any_uncached = any(e.get("cache_read_tokens", 0) == 0 for e in events)
+    if fractions is not None and any_uncached:
+        cum_est = np.cumsum([_estimated_cost(e, fractions) for e in events])
+        ax_cost.plot(
+            x,
+            cum_est,
+            color="#D55E00",
+            linewidth=1.5,
+            linestyle="--",
+            label=f"est. with caching (cache hit {fractions[0]:.0%})",
+        )
         ax_cost.text(
             0.98,
-            0.05,
-            f"actual: ${cum_cost[-1]:,.2f}",
+            0.16,
+            f"est. with caching: ${cum_est[-1]:,.2f}",
             transform=ax_cost.transAxes,
             ha="right",
             va="bottom",
             fontsize=9,
-            color="#0072B2",
+            color="#D55E00",
         )
+    ax_cost.legend(loc="upper left", fontsize=9)
 
-        fractions = _cache_fractions(events)
-        any_uncached = any(e.get("cache_read_tokens", 0) == 0 for e in events)
-        if fractions is not None and any_uncached:
-            cum_est = np.cumsum([_estimated_cost(e, fractions) for e in events])
-            ax_cost.plot(
-                x,
-                cum_est,
-                color="#D55E00",
-                linewidth=1.5,
-                linestyle="--",
-                label=f"est. with caching (cache hit {fractions[0]:.0%})",
-            )
-            ax_cost.text(
-                0.98,
-                0.16,
-                f"est. with caching: ${cum_est[-1]:,.2f}",
-                transform=ax_cost.transAxes,
-                ha="right",
-                va="bottom",
-                fontsize=9,
-                color="#D55E00",
-            )
-        ax_cost.legend(loc="upper left", fontsize=9)
-
-        ax_tok.plot(x, cum_inp + cum_out, color="black", linewidth=1.8, label="total")
-        ax_tok.plot(x, cum_inp, color="#0072B2", linewidth=1.3, label="input")
-        ax_tok.plot(x, cum_out, color="#D55E00", linewidth=1.3, label="output")
-        ax_tok.legend(loc="upper left", fontsize=9)
-        ax_tok.text(
-            0.98,
-            0.05,
-            f"total: {(cum_inp[-1] + cum_out[-1]):,.0f} tokens",
-            transform=ax_tok.transAxes,
-            ha="right",
-            va="bottom",
-            fontsize=9,
-        )
+    ax_tok.plot(x, cum_inp + cum_out, color="black", linewidth=1.8, label="total")
+    ax_tok.plot(x, cum_inp, color="#0072B2", linewidth=1.3, label="input")
+    ax_tok.plot(x, cum_out, color="#D55E00", linewidth=1.3, label="output")
+    ax_tok.legend(loc="upper left", fontsize=9)
+    ax_tok.text(
+        0.98,
+        0.05,
+        f"total: {(cum_inp[-1] + cum_out[-1]):,.0f} tokens",
+        transform=ax_tok.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=9,
+    )
 
     ax_cost.set_ylabel("Cumulative cost (USD)")
     ax_cost.grid(True, alpha=0.3)
@@ -203,7 +206,7 @@ def main() -> None:
     ax_tok.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ from geryon.plot._critiques import (
     parse_args,
     score,
 )
+from geryon.plot._save import save
 
 
 def main() -> None:
@@ -55,7 +56,7 @@ def main() -> None:
     ax.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

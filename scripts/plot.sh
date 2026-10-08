@@ -49,8 +49,20 @@ if ! uv run python -c "import geryon.plot; import matplotlib" 2>/dev/null; then
     exit 1
 fi
 
-# Ensure output directory exists
-mkdir -p "${PROJECT_ROOT}/plots"
+# Mirrors params.output_dir in plot.nf; override it the same way.
+OUTPUT_DIR="${PROJECT_ROOT}/plots"
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+    case "${args[i]}" in
+        --output_dir) OUTPUT_DIR="${args[i + 1]}" ;;
+        --output_dir=*) OUTPUT_DIR="${args[i]#--output_dir=}" ;;
+    esac
+done
+# Nextflow resolves a relative path against its launch dir, which is NEXTFLOW_DIR.
+[[ "${OUTPUT_DIR}" = /* ]] || OUTPUT_DIR="${NEXTFLOW_DIR}/${OUTPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
+OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
+START_TIME="$(date +%s)"
 
 log_info "Starting plot pipeline..."
 log_info "Project root: ${PROJECT_ROOT}"
@@ -65,6 +77,12 @@ nextflow run plot.nf \
 
 if [ $EXIT_CODE -eq 0 ]; then
     log_info "Pipeline completed successfully!"
+    INDEX="$(cd "${PROJECT_ROOT}" && uv run python -m geryon.plot.index \
+        --output-dir "${OUTPUT_DIR}" --since "${START_TIME}")"
+    log_info "Index: ${INDEX}"
+    if command -v open &> /dev/null; then
+        open "${INDEX}"
+    fi
 else
     log_error "Pipeline failed with exit code: ${EXIT_CODE}"
 fi

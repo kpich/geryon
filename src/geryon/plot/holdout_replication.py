@@ -24,6 +24,7 @@ import pandas as pd
 
 from geryon.plot._critiques import BAD, GOOD, NEUTRAL
 from geryon.plot._holdout import METHOD_COLORS, parse_args
+from geryon.plot._save import save
 from geryon.plot.holdout_table import SIZE_RATIO, explore_se
 
 _N = NormalDist()
@@ -133,7 +134,7 @@ def main() -> None:
             ha="center",
             va="center",
         )
-        plt.savefig(args.output, bbox_inches="tight", transparent=True)
+        save(args.output)
         return
     ratings = ["trustworthiness", "confound_risk", "novelty"]
     predictors = {
@@ -198,7 +199,7 @@ def main() -> None:
     ax_n.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,15 @@
 """Is the critic's forecast of the held-out effect better than the naive baselines?
 
 Scored over the hypotheses where both the critic and the explore estimate gave an
-80% interval, so the comparison is paired. Left: mean absolute error in log units,
-for the critic, the explore estimate and no effect. Right: mean 80% interval score
-(width, plus 2/α times any miss), which rewards narrow intervals and punishes ones
-that miss; no effect has no interval. Bars carry 95% bootstrap intervals, and each
-panel's title gives the paired difference critic − explore estimate with its own
-bootstrap interval: negative means the critic was better. Ratio effects only.
+80% interval, so the comparison is paired. Left: typical miss, the geometric-mean
+fold error max(forecast/validation, validation/forecast), for the critic, the
+explore estimate and no effect; its title gives the critic's typical miss as a
+multiple of the explore estimate's, so below 1× means the critic was closer. Right:
+mean 80% interval score on the log scale (width, plus 2/α times any miss), which
+rewards narrow intervals and punishes ones that miss; no effect has no interval. Its
+title gives the paired difference critic − explore estimate: negative means the
+critic was better. Bars and differences carry 95% bootstrap intervals. Ratio effects
+only.
 """
 
 import matplotlib.pyplot as plt
@@ -16,9 +19,11 @@ import pandas as pd
 from geryon.plot._holdout import (
     METHOD_COLORS,
     METHOD_LABELS,
+    fold_axis,
     parse_args,
     ratio_forecasts,
 )
+from geryon.plot._save import save
 from geryon.plot.holdout_table import LEVEL
 
 _BOOT = 4000
@@ -62,8 +67,8 @@ def main() -> None:
     rng = np.random.default_rng(42)
     fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
     panels = [
-        (axes[0], errors, "Mean absolute error  (log units)"),
-        (axes[1], scores, f"Mean {LEVEL:.0%} interval score  (log units)"),
+        (axes[0], errors, "Typical miss  (geometric-mean fold error)"),
+        (axes[1], scores, f"Mean {LEVEL:.0%} interval score  (log, lower is better)"),
     ]
     for ax, values, ylabel in panels:
         methods = list(values)
@@ -77,10 +82,13 @@ def main() -> None:
             )
         diff = values["critic"] - values["explore"]
         lo, hi = bootstrap_mean(diff, rng)
-        ax.set_title(
-            f"critic − explore: {diff.mean():+.2f}  [{lo:+.2f}, {hi:+.2f}]",
-            fontsize=10,
-        )
+        if values is errors:
+            ratio = np.exp([diff.mean(), lo, hi])
+            title = "critic ÷ explore miss: {:.2f}×  [{:.2f}, {:.2f}]".format(*ratio)
+            fold_axis(ax.yaxis)
+        else:
+            title = f"critic − explore: {diff.mean():+.2f}  [{lo:+.2f}, {hi:+.2f}]"
+        ax.set_title(title, fontsize=10)
         ax.set_xticks(xs, [METHOD_LABELS[m] for m in methods], fontsize=8)
         ax.set_ylabel(ylabel)
         ax.grid(True, alpha=0.3, axis="y")
@@ -89,7 +97,7 @@ def main() -> None:
     )
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":

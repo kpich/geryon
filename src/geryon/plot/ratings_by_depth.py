@@ -13,6 +13,7 @@ from geryon.plot._critiques import (
     load_hypotheses,
     parse_args,
 )
+from geryon.plot._save import save
 
 
 def main() -> None:
@@ -57,7 +58,7 @@ def main() -> None:
     axes[-1].set_xlabel(DEPTH_LABEL)
 
     plt.tight_layout()
-    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    save(args.output)
 
 
 if __name__ == "__main__":
