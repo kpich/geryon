@@ -1,6 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
+from botocore.exceptions import ClientError, ReadTimeoutError
 from langchain_aws import ChatBedrock
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import Runnable
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 import pytest
 
 from geryon.codeflow.chat import (
+    CAPACITY_WAIT_BUDGET_S,
     RefusalFallbackChat,
     _bedrock,
     build_chat_model,
@@ -192,3 +194,58 @@ def test_parse_reply_names_the_role_when_unparseable():
 def test_parse_reply_rejects_a_non_object():
     with pytest.raises(ValueError, match="unparseable"):
         parse_reply("[1, 2]", _Reply, "r")
+
+
+def _client_error(code: str) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": "x"}}, "InvokeModel")
+
+
+class _Flaky(_Fake):
+    """Raises each queued error once, then answers."""
+
+    def __init__(self, reply: AIMessage, errors: list[Exception]):
+        super().__init__(reply)
+        self.errors = errors
+
+    def invoke(self, input, config=None, **kwargs):
+        self.sent.append(input)
+        if self.errors:
+            raise self.errors.pop(0)
+        return self.reply
+
+
+def test_capacity_errors_are_waited_out():
+    primary = _Flaky(
+        _reply("new"),
+        [
+            _client_error("ServiceUnavailableException"),
+            ReadTimeoutError(endpoint_url="u"),
+        ],
+    )
+    with patch("geryon.codeflow.chat.time.sleep") as sleep:
+        reply = _chat(primary, _Fake(_reply("old"))).invoke([HumanMessage("hi")])
+    assert reply.response_metadata["model_name"] == "new"
+    assert len(primary.sent) == 3
+    assert sleep.call_count == 2
+
+
+def test_other_client_errors_raise_at_once():
+    primary = _Flaky(_reply("new"), [_client_error("ValidationException")])
+    with (
+        patch("geryon.codeflow.chat.time.sleep") as sleep,
+        pytest.raises(ClientError),
+    ):
+        _chat(primary, _Fake(_reply("old"))).invoke([HumanMessage("hi")])
+    sleep.assert_not_called()
+
+
+def test_capacity_wait_gives_up_after_the_budget():
+    errors: list[Exception] = [_client_error("ThrottlingException")] * 100
+    primary = _Flaky(_reply("new"), errors)
+    with (
+        patch("geryon.codeflow.chat.time.sleep") as sleep,
+        pytest.raises(ClientError),
+    ):
+        _chat(primary, _Fake(_reply("old"))).invoke([HumanMessage("hi")])
+    waited = sum(c.args[0] for c in sleep.call_args_list)
+    assert CAPACITY_WAIT_BUDGET_S <= waited < CAPACITY_WAIT_BUDGET_S + 400
